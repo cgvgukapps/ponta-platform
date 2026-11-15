@@ -1,0 +1,136 @@
+"""semantic_builder on a small synthetic match: schema, determinism, privacy, not-scored rules."""
+
+import numpy as np
+import pandas as pd
+import pytest
+from matrix_engine.match import from_wide_frames
+from matrix_engine.parity import ParityInputs, classify
+from matrix_engine.pitch_config import PitchConfig
+from plaiq_engine.match_analysis import MatchAnalysis
+from plaiq_engine.semantic_builder import (
+    SEMANTIC_COLUMNS,
+    SemanticBuilder,
+    dq_band,
+    nested_record,
+    pitch_zone,
+)
+
+N = 250  # 10 s at 25 Hz
+FPS = 25.0
+
+
+def _team(prefix: str, sign: float, rng) -> dict:
+    cols = {}
+    base = [(-48, 0)] + [(-30 + 6 * i, -25 + 5 * i) for i in range(10)]  # a goalkeeper deepest, then outfield
+    for k, (bx, by) in enumerate(base, start=1):
+        drift = np.linspace(0, 3, N)[:, None] * rng.normal(0, 1, 2)
+        cols[f"{prefix}_{k}_x"] = sign * (bx + drift[:, 0])
+        cols[f"{prefix}_{k}_y"] = sign * (by + drift[:, 1])
+    return cols
+
+
+@pytest.fixture(scope="module")
+def built():
+    rng = np.random.default_rng(3)
+    idx = pd.Index(np.arange(1, N + 1), name="Frame")
+    clock = {"Period": np.ones(N, int), "Time [s]": np.arange(N) / FPS}
+    home = pd.DataFrame({**clock, **_team("Home", 1.0, rng)}, index=idx)
+    away = pd.DataFrame({**clock, **_team("Away", -1.0, rng)}, index=idx)
+    ball_x = np.interp(np.arange(N), [0, 60, 120, 180, 249], [-24, -12, 0, 6, 12])
+    ball_y = np.interp(np.arange(N), [0, 60, 120, 180, 249], [-20, -10, -5, 0, 5])
+    away["ball_x"], away["ball_y"] = ball_x, ball_y
+    events = pd.DataFrame([
+        # A set piece then the pass that takes it: the pass is not scored.
+        {"Type": "SET PIECE", "Subtype": "THROW IN", "Period": 1, "From": "Player 3", "To": np.nan, "Team": "Home", "Start Frame": 1, "Start Time [s]": 0.0, "Start X": -18.0, "Start Y": -15.0, "End Frame": 1, "End Time [s]": 0.0, "End X": np.nan, "End Y": np.nan},
+        {"Type": "PASS", "Subtype": np.nan, "Period": 1, "From": "Player 3", "To": "Player 4", "Team": "Home", "Start Frame": 1, "Start Time [s]": 0.0, "Start X": -18.0, "Start Y": -15.0, "End Frame": 40, "End Time [s]": 1.56, "End X": -12.0, "End Y": -10.0},
+        {"Type": "PASS", "Subtype": np.nan, "Period": 1, "From": "Player 4", "To": "Player 6", "Team": "Home", "Start Frame": 61, "Start Time [s]": 2.4, "Start X": -12.0, "Start Y": -10.0, "End Frame": 120, "End Time [s]": 4.76, "End X": 0.0, "End Y": -5.0},
+        {"Type": "CARRY", "Subtype": np.nan, "Period": 1, "From": "Player 6", "To": np.nan, "Team": "Home", "Start Frame": 121, "Start Time [s]": 4.8, "Start X": 0.0, "Start Y": -5.0, "End Frame": 180, "End Time [s]": 7.16, "End X": 6.0, "End Y": 0.0},
+        {"Type": "PASS", "Subtype": np.nan, "Period": 1, "From": "Player 1", "To": "Player 2", "Team": "Home", "Start Frame": 181, "Start Time [s]": 7.2, "Start X": 6.0, "Start Y": 0.0, "End Frame": 220, "End Time [s]": 8.76, "End X": 10.0, "End Y": 4.0},
+        {"Type": "RECOVERY", "Subtype": np.nan, "Period": 1, "From": "Player 5", "To": np.nan, "Team": "Away", "Start Frame": 230, "Start Time [s]": 9.16, "Start X": 12.0, "Start Y": 5.0, "End Frame": 230, "End Time [s]": 9.16, "End X": 12.0, "End Y": 5.0},
+    ])
+    match = from_wide_frames(home, away, events, provider="synthetic", match_id="1", fps=FPS, pitch=PitchConfig(fps=FPS))
+    analysis = MatchAnalysis(match)
+    parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
+                                   player_dropout=0.0, has_events=True, has_shot_events=False))
+    builder = SemanticBuilder(analysis, parity)
+    return analysis, builder, builder.semantic_events()
+
+
+def test_schema_columns_and_versions(built):
+    _, _, sem = built
+    assert list(sem.columns) == list(SEMANTIC_COLUMNS)
+    assert sem["schema_version"].eq("1.0").all()
+    assert sem["engine_version"].str.startswith("plaiq-").all()
+    assert sem["match_id"].eq("synthetic_1").all()
+    assert sem["event_id"].is_unique
+
+
+def test_deterministic(built):
+    _, builder, sem = built
+    pd.testing.assert_frame_equal(sem, builder.semantic_events())
+
+
+def test_no_names_and_no_coordinate_arrays(built):
+    _, _, sem = built
+    refs = pd.concat([sem[c] for c in ("actor_player_ref", "target_player_ref", "best_option_player_ref", "inferred_intended_ref")]).dropna()
+    assert refs.str.fullmatch(r"(home|away)_\w+").all()
+    assert not sem.astype(str).apply(lambda s: s.str.contains("Player ")).any().any()
+    for col in sem.columns:
+        assert not sem[col].map(lambda v: isinstance(v, (list, tuple, np.ndarray))).any(), col
+    assert not {"x", "y", "Start X", "End X"} & set(sem.columns)
+
+
+def test_goalkeeper_and_set_piece_are_not_scored(built):
+    _, builder, sem = built
+    assert "home_1" in builder.goalkeepers
+    gk = sem.loc[(sem["actor_player_ref"] == "home_1") & (sem["action_type"] == "pass")]
+    assert len(gk) == 1 and gk["not_scored"].all() and gk["dq_score"].isna().all() and gk["dq_band"].eq("not_scored").all()
+    sp = sem.loc[(sem["event_idx"] == 1) & (sem["action_type"] == "pass")]
+    assert len(sp) == 1
+    assert sp["not_scored"].all() and sp["not_scored_reason"].str.startswith("set piece").all()
+
+
+def test_physiological_context_is_null_not_zero(built):
+    _, _, sem = built
+    assert sem["physiological_context"].isna().all()
+    assert sem["parity_physiological"].eq("blocked").all()
+
+
+def test_scores_equal_the_engine(built):
+    analysis, _, sem = built
+    pov = analysis.event_pov()
+    scored = sem.loc[(sem["action_type"].isin(["pass", "carry"])) & sem["dq_score"].notna()]
+    assert len(scored) >= 1
+    for _, r in scored.iterrows():
+        team, jersey = r["actor_player_ref"].split("_", 1)
+        hit = pov.loc[(pov["event_idx"] == r["event_idx"]) & (pov["team"].str.lower() == team) & (pov["jersey"].astype(str) == jersey)]
+        assert abs(float(hit["decision_quality"].iloc[0]) - r["dq_score"]) < 1e-4
+        assert r["dq_band"] == dq_band(r["dq_score"])
+
+
+def test_defensive_action_and_zones(built):
+    _, _, sem = built
+    d = sem.loc[sem["action_type"] == "defensive_action"]
+    assert len(d) == 1 and d["action_outcome"].iloc[0] == "won" and d["actor_player_ref"].iloc[0] == "away_5"
+    assert pitch_zone(30.0, 0.0, "home") == "centre_final_third"
+    assert pitch_zone(30.0, 0.0, "away") == "centre_defensive_third"
+    assert pitch_zone(0.0, 25.0, "home") == "left_wing_middle_third"
+
+
+def test_bands_are_the_engines():
+    assert [dq_band(v) for v in (0.2, 0.55, 0.79, 0.8, 0.95, 1.3)] == ["poor", "suboptimal", "suboptimal", "good", "optimal", "optimal"]
+    assert dq_band(None) is None
+
+
+def test_nested_record_shape(built):
+    _, _, sem = built
+    rec = nested_record(sem.iloc[0].to_dict())
+    assert set(rec) >= {"actor", "action", "spatial_intelligence", "physiological_context", "quality_gate"}
+
+
+def test_trajectories_have_refs_and_no_physiological_columns(built):
+    _, builder, _ = built
+    tr = builder.trajectories()
+    assert {"frame", "time_s", "player_ref", "x", "y", "speed", "source_attribution"} <= set(tr.columns)
+    assert not {"heart_rate", "hr", "load"} & set(tr.columns)
+    assert tr["player_ref"].str.fullmatch(r"(home|away)_\w+|ball").all()
