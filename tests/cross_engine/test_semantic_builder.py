@@ -29,8 +29,8 @@ def _team(prefix: str, sign: float, rng) -> dict:
     return cols
 
 
-@pytest.fixture(scope="module")
-def built():
+def synthetic_match():
+    """A 10-second synthetic match: fictional players, no sample data. Also feeds the UI's sample match page."""
     rng = np.random.default_rng(3)
     idx = pd.Index(np.arange(1, N + 1), name="Frame")
     clock = {"Period": np.ones(N, int), "Time [s]": np.arange(N) / FPS}
@@ -48,8 +48,12 @@ def built():
         {"Type": "PASS", "Subtype": np.nan, "Period": 1, "From": "Player 1", "To": "Player 2", "Team": "Home", "Start Frame": 181, "Start Time [s]": 7.2, "Start X": 6.0, "Start Y": 0.0, "End Frame": 220, "End Time [s]": 8.76, "End X": 10.0, "End Y": 4.0},
         {"Type": "RECOVERY", "Subtype": np.nan, "Period": 1, "From": "Player 5", "To": np.nan, "Team": "Away", "Start Frame": 230, "Start Time [s]": 9.16, "Start X": 12.0, "Start Y": 5.0, "End Frame": 230, "End Time [s]": 9.16, "End X": 12.0, "End Y": 5.0},
     ])
-    match = from_wide_frames(home, away, events, provider="synthetic", match_id="1", fps=FPS, pitch=PitchConfig(fps=FPS))
-    analysis = MatchAnalysis(match)
+    return from_wide_frames(home, away, events, provider="synthetic", match_id="1", fps=FPS, pitch=PitchConfig(fps=FPS))
+
+
+@pytest.fixture(scope="module")
+def built():
+    analysis = MatchAnalysis(synthetic_match())
     parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
                                    player_dropout=0.0, has_events=True, has_shot_events=False))
     builder = SemanticBuilder(analysis, parity)
