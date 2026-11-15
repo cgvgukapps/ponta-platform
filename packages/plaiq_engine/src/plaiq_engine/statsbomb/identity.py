@@ -111,7 +111,6 @@ def resolve_identities(
     ff_players: list[dict],
     event: dict | pd.Series,
     lineup: dict,
-    prev_event: dict | pd.Series | None = None,
     prev_ff_identified: list[dict] | None = None,
 ) -> list[dict]:
     """
@@ -127,7 +126,6 @@ def resolve_identities(
     lineup              : {"home": [...], "away": [...]}
                           Each player: {"name": str, "jersey_number": int,
                                         "position": str | None}
-    prev_event          : previous event dict (optional, for Tier 4)
     prev_ff_identified  : previous event's identified FF (optional, for Tier 4)
 
     Returns
