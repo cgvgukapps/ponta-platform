@@ -64,29 +64,29 @@ from matrix_engine.schema import (
 from matrix_engine.sync import ClockAlignment, SyncResult, refine_alignment, synchronize
 
 __all__ = [
-    "UnifiedTrackingEngine",
-    "ReconciliationResult",
-    "ClockAlignment",
-    "SyncResult",
-    "IdentityResult",
-    "FusionResult",
-    "QualityReport",
-    "DriftReport",
-    "SchemaError",
     "OPTIONAL_COLUMNS",
-    "validate_schema",
-    "validate_pitch_bounds",
-    "native_quality_summary",
-    "synchronize",
-    "refine_alignment",
-    "match_identities",
-    "apply_mapping",
-    "fuse",
-    "estimate_source_noise",
-    "score_confidence",
-    "assess_quality",
+    "ClockAlignment",
+    "DriftReport",
+    "FusionResult",
+    "IdentityResult",
+    "QualityReport",
+    "ReconciliationResult",
+    "SchemaError",
+    "SyncResult",
+    "UnifiedTrackingEngine",
     "add_kinematics",
+    "apply_mapping",
+    "assess_quality",
+    "estimate_source_noise",
     "export_fused",
+    "fuse",
+    "match_identities",
+    "native_quality_summary",
+    "refine_alignment",
+    "score_confidence",
+    "synchronize",
+    "validate_pitch_bounds",
+    "validate_schema",
 ]
 
 
@@ -183,7 +183,7 @@ class UnifiedTrackingEngine:
 
     # -- inputs -------------------------------------------------------------
 
-    def add_source(self, name: str, df: pd.DataFrame) -> "UnifiedTrackingEngine":
+    def add_source(self, name: str, df: pd.DataFrame) -> UnifiedTrackingEngine:
         """
         Register a source, validating it against the common schema up front.
 

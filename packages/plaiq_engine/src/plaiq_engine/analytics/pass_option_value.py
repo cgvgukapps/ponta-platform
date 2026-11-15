@@ -63,16 +63,19 @@ moment of decision (event start). Two branches:
 
 import numpy as np
 import pandas as pd
+from matrix_engine.pitch_config import DEFAULT_FPS, DEFAULT_PITCH
 from scipy.spatial import cKDTree
 
-from plaiq_engine.analytics.pitch_control import (
-    player_travel_time,
-    MIN_BALL_SPEED,
-    BALL_SPEED_GRAD,
+from plaiq_engine.analytics.event_stitch import (
+    ball_xy_from_tracking,
+    build_pass_receipt_lookup,
 )
-from plaiq_engine.analytics.event_stitch import build_pass_receipt_lookup, ball_xy_from_tracking
 from plaiq_engine.analytics.hex_analytics import cartesian_to_hex
-from matrix_engine.pitch_config import DEFAULT_PITCH, DEFAULT_FPS
+from plaiq_engine.analytics.pitch_control import (
+    BALL_SPEED_GRAD,
+    MIN_BALL_SPEED,
+    player_travel_time,
+)
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -40,14 +40,14 @@ import json
 import os
 import random
 from collections import Counter
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-
-from plaiq_engine.roster.player_db import PLAYER_DB, get_player
-from plaiq_engine.analytics.pitch_control import DEFAULT_PROFILE
 from matrix_engine.sample_data import processed_dir
+
+from plaiq_engine.analytics.pitch_control import DEFAULT_PROFILE
+from plaiq_engine.roster.player_db import PLAYER_DB, get_player
 
 # Processed-data directory, resolved outside the repo (see matrix_engine.sample_data).
 # Defined locally so the Second Spectrum roster path stays free of any demo-script import.
@@ -161,7 +161,7 @@ def _build_spells(player_events: pd.DataFrame,
             "period":         int(period),
             "start_s":        float(g_dom["t"].min()),
             "end_s":          float(g_dom["t"].max()),
-            "n_events":       int(len(g_dom)),
+            "n_events":       len(g_dom),
             "slot_agreement": float(n_dom / len(g)),
         })
 
@@ -268,7 +268,7 @@ def build_team_roster(game_id: int, side_label: str, team_key: str,
             "primary_slot":  primary_slot,
             "first_event_s": first_evt_s,
             "last_event_s":  last_evt_s,
-            "n_events":      int(len(evs)),
+            "n_events":      len(evs),
             "spells":        spells,
         })
 

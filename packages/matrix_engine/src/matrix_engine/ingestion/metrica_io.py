@@ -8,11 +8,14 @@ Applies coordinate conversion, playing direction normalisation, and column renam
 Data source: https://github.com/metrica-sports/sample-data
 """
 
-import pandas as pd
 import csv
-import numpy as np
 
-from matrix_engine.pitch_config import FIELD_DIMENSIONS  # metres (length, width); Metrica default 106 x 68
+import numpy as np
+import pandas as pd
+
+from matrix_engine.pitch_config import (
+    FIELD_DIMENSIONS,  # metres (length, width); Metrica default 106 x 68
+)
 
 MAX_SPEED = 12.0  # m/s — above this is treated as a tracking error
 

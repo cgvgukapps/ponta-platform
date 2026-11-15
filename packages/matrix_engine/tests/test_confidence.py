@@ -10,7 +10,6 @@ inter-source disagreement against agreement, on the same run.
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine.confidence import (
     DEFAULT_DISAGREEMENT_SCALE_M,
     confidence_summary,

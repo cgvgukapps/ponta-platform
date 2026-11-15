@@ -47,12 +47,14 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-from matrix_engine.ingestion.second_spectrum_io import EVENT_COLUMNS, _period_time_seconds
+from matrix_engine.ingestion.second_spectrum_io import (
+    EVENT_COLUMNS,
+    _period_time_seconds,
+)
 from matrix_engine.pitch_config import PitchConfig
 
 # ---------------------------------------------------------------------------
@@ -707,7 +709,7 @@ def _map_sc_event(
     end_type: str,
     start_type: str,
     pass_outcome: str,
-) -> tuple[Optional[str], Optional[str]]:
+) -> tuple[str | None, str | None]:
     """
     Map a SkillCorner player_possession ``end_type`` / ``pass_outcome`` to a
     (PLAIQ Type, PLAIQ Subtype) pair for the *completion* event.
@@ -715,7 +717,7 @@ def _map_sc_event(
     Carry events are generated separately in the loop before calling this.
     Returns (None, None) to indicate no completion event should be emitted.
     """
-    subtype: Optional[str] = _START_TYPE_SUBTYPE.get(start_type)
+    subtype: str | None = _START_TYPE_SUBTYPE.get(start_type)
 
     if end_type in ("pass", "header"):
         if pass_outcome == "successful":
@@ -749,7 +751,7 @@ def _map_sc_event(
 # Helper utilities
 # ---------------------------------------------------------------------------
 
-def _find_col(df: pd.DataFrame, candidates: list[str]) -> Optional[str]:
+def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
     """Return the first candidate column name present in df, else None."""
     cols = set(df.columns)
     for c in candidates:
@@ -758,7 +760,7 @@ def _find_col(df: pd.DataFrame, candidates: list[str]) -> Optional[str]:
     return None
 
 
-def _int_or_none(val) -> Optional[int]:
+def _int_or_none(val) -> int | None:
     try:
         return int(val)
     except (TypeError, ValueError):
@@ -808,9 +810,9 @@ class SkillCornerAdapter:
         match_id: int,
         *,
         normalize_playing_direction: bool = True,
-        match_file: Optional[str] = None,
-        tracking_file: Optional[str] = None,
-        events_file: Optional[str] = None,
+        match_file: str | None = None,
+        tracking_file: str | None = None,
+        events_file: str | None = None,
     ):
         self.match_dir  = match_dir
         self.match_id   = int(match_id)

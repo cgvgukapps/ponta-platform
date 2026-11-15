@@ -24,7 +24,6 @@ nobody wrote an assertion tight enough to catch a small drift:
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine import fuse, synchronize
 from matrix_engine.confidence import (
     DISAGREEMENT_TOLERANCE,

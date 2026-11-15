@@ -2,9 +2,11 @@
 
 import numpy as np
 import pytest
-
 from matrix_engine.ingestion.metrica_velocities import calc_player_velocities
-from matrix_engine.ingestion.second_spectrum_io import SecondSpectrumAdapter, load_secondspectrum_game
+from matrix_engine.ingestion.second_spectrum_io import (
+    SecondSpectrumAdapter,
+    load_secondspectrum_game,
+)
 from ss_fixture import write_ss_fixture
 
 

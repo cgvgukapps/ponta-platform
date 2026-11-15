@@ -10,9 +10,7 @@ Accuracy is measured and asserted against a stated bar rather than assumed, and
 the measured value is printed into the failure message when it falls short.
 """
 
-import numpy as np
 import pytest
-
 from matrix_engine.identity import (
     apply_mapping,
     match_identities,

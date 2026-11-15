@@ -2,8 +2,10 @@
 
 import numpy as np
 import pandas as pd
-
-from matrix_engine.ingestion.metrica_io import to_metric_coordinates, to_single_playing_direction
+from matrix_engine.ingestion.metrica_io import (
+    to_metric_coordinates,
+    to_single_playing_direction,
+)
 
 
 def test_normalized_to_metric_corners():

@@ -5,30 +5,25 @@ These tests use synthetic event/freeze-frame data so they run offline
 without any network call to the StatsBomb GitHub repository.
 """
 
-import math
 import numpy as np
 import pandas as pd
 import pytest
-
-from plaiq_engine.ingestion.statsbomb_io import (
-    sb_coords_to_plaiq,
-    sb_coords_array_to_plaiq,
-    sb_events_to_plaiq,
-    load_sb_match,
-    load_sb_match_meta,
-    SB_PITCH,
-    SB_PITCH_LENGTH_UNITS,
-    SB_PITCH_WIDTH_UNITS,
-    SB_EVENT_COLUMNS,
-    _timestamp_to_seconds,
-)
 from matrix_engine.pitch_config import PitchConfig
 from plaiq_engine.analytics.pitch_control import (
-    compute_freeze_frame_control,
     build_pitch_hex_grid,
+    compute_freeze_frame_control,
     player_zone_outlines,
 )
-
+from plaiq_engine.ingestion.statsbomb_io import (
+    SB_EVENT_COLUMNS,
+    SB_PITCH,
+    _timestamp_to_seconds,
+    load_sb_match,
+    load_sb_match_meta,
+    sb_coords_array_to_plaiq,
+    sb_coords_to_plaiq,
+    sb_events_to_plaiq,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers to build synthetic StatsBomb event rows
@@ -355,7 +350,6 @@ def test_sb_event_columns_include_plaiq_schema():
 
 def test_meta_fallback_probes_360_when_competition_unknown(monkeypatch):
     """When competition_id=0, has_360 must come from open-data probe, not metadata API."""
-    from plaiq_engine.ingestion.statsbomb_io import load_sb_match_meta
 
     monkeypatch.setattr(
         "plaiq_engine.ingestion.statsbomb_io._load_360_raw_records",
@@ -367,7 +361,6 @@ def test_meta_fallback_probes_360_when_competition_unknown(monkeypatch):
 
 def test_load_sb_match_sets_has_360_from_loaded_frames(monkeypatch):
     """has_360 in returned meta must reflect successfully loaded freeze frames."""
-    from plaiq_engine.ingestion.statsbomb_io import load_sb_match
 
     fake_ff = {
         "uuid-1": {

@@ -55,11 +55,9 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Optional
 
 import numpy as np
 import pandas as pd
-
 from matrix_engine.pitch_config import PitchConfig
 
 # ---------------------------------------------------------------------------
@@ -271,7 +269,7 @@ def _compute_match_time(events_df: pd.DataFrame) -> pd.Series:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _extract_location(loc) -> tuple[Optional[float], Optional[float]]:
+def _extract_location(loc) -> tuple[float | None, float | None]:
     """Safely unpack a StatsBomb [x, y] location (may be NaN/None/list)."""
     if loc is None or (isinstance(loc, float) and np.isnan(loc)):
         return None, None
@@ -281,7 +279,7 @@ def _extract_location(loc) -> tuple[Optional[float], Optional[float]]:
         return None, None
 
 
-def _safe_str(v) -> Optional[str]:
+def _safe_str(v) -> str | None:
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return None
     s = str(v).strip()
@@ -350,7 +348,7 @@ def sb_events_to_plaiq(
             ex, ey = sb_coords_to_plaiq(ex, ey, period, pitch)
 
         # --- Pass-specific: refine Type and derive Subtype ---
-        subtype: Optional[str] = None
+        subtype: str | None = None
         outcome = _safe_str(ev.get("pass_outcome"))
 
         if sb_type == "Pass":

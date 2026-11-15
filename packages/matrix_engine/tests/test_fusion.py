@@ -15,9 +15,7 @@ information, and the error should approach the 1/sqrt(2) that inverse-variance
 weighting predicts for two equally noisy feeds.
 """
 
-import numpy as np
 import pytest
-
 from matrix_engine.fusion import estimate_source_noise, fuse
 from matrix_engine.schema import validate_schema
 from matrix_engine.testing import DegradationParams, degrade

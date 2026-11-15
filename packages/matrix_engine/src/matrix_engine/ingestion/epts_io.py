@@ -27,12 +27,13 @@ events_df columns: Type, Subtype, Period, From, To, Team,
                    End Frame,   End Time [s],   End X,   End Y
 """
 
-import xml.etree.ElementTree as ET
 import json
+import xml.etree.ElementTree as ET
+
 import numpy as np
 import pandas as pd
 
-from matrix_engine.pitch_config import FIELD_LENGTH, FIELD_WIDTH, DEFAULT_FPS
+from matrix_engine.pitch_config import DEFAULT_FPS, FIELD_LENGTH, FIELD_WIDTH
 
 FPS          = int(DEFAULT_FPS)
 

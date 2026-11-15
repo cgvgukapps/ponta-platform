@@ -9,10 +9,9 @@ first. That claim is the justification for running sync twice at all.
 
 import numpy as np
 import pytest
-
+from matrix_engine.identity import match_identities, split_sources
 from matrix_engine.schema import validate_schema
 from matrix_engine.sync import estimate_clock_alignment, refine_alignment, synchronize
-from matrix_engine.identity import match_identities, split_sources
 from matrix_engine.testing import DegradationParams, degrade
 
 #: Accuracy the centroid-based first pass is expected to reach on this window.

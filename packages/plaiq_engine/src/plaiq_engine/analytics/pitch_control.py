@@ -32,9 +32,8 @@ A 2-D control array on a regular (x, y) grid suitable for go.Heatmap:
 
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree
-
 from matrix_engine.pitch_config import FIELD_LENGTH, FIELD_WIDTH
+from scipy.spatial import cKDTree
 
 # ---------------------------------------------------------------------------
 # Physical constants

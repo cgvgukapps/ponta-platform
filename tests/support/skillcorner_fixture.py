@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
-
 
 # ---------------------------------------------------------------------------
 # Match IDs + player IDs used across fixtures
@@ -96,7 +94,7 @@ def _player(pid, team_id, number, acronym, name, *, is_gk):
     return {
         "id":           pid,
         "first_name":   f"Player{pid}",
-        "last_name":    f"Test",
+        "last_name":    "Test",
         "short_name":   f"P{number}",
         "number":       number,
         "team_id":      team_id,
@@ -243,8 +241,7 @@ def write_fixture_dir(
 
     # tracking JSONL
     with open(os.path.join(match_dir, f"{match_id}_tracking_extrapolated.jsonl"), "w") as f:
-        for rec in tracking_records:
-            f.write(json.dumps(rec) + "\n")
+        f.writelines(json.dumps(rec) + "\n" for rec in tracking_records)
 
     # dynamic_events CSV
     with open(os.path.join(match_dir, f"{match_id}_dynamic_events.csv"), "w") as f:

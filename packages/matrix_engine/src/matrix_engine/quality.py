@@ -322,7 +322,7 @@ def coverage_summary(sources: dict[str, pd.DataFrame]) -> pd.DataFrame:
             {
                 "source": name,
                 "players": players,
-                "rows": int(len(df)),
+                "rows": len(df),
                 "span_s": span,
                 "sample_rate_hz": rate,
                 "coverage": float(len(df) / expected) if expected > 0 else 0.0,
@@ -380,7 +380,7 @@ def native_quality_summary(
         rows.append(
             {
                 "source": name,
-                "rows": int(len(df)),
+                "rows": len(df),
                 "reported": int(known.size),
                 "mean_quality": float(known.mean()),
                 "p10_quality": float(np.percentile(known, 10)),

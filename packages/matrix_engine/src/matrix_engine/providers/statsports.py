@@ -99,12 +99,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import (
     UNKNOWN_TEAM,
     coerce_schema,
     validate_schema,
 )
-from matrix_engine.pitch_config import PitchConfig
 
 #: Raw export this adapter was written against. Fetched on access; see the
 #: module docstring for the handling rules that come with it.
@@ -377,7 +377,7 @@ def anonymize_name(name: str) -> str:
     property that matters for a dataset that should not have been republished
     in the first place.
     """
-    digest = hashlib.sha256(f"{_ID_SALT}:{name}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{_ID_SALT}:{name}".encode()).hexdigest()
     return f"sp_{digest[:_ID_LENGTH]}"
 
 

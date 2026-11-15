@@ -143,6 +143,5 @@ def write_genius_events_fixture(path: str) -> str:
     """Write the synthetic event feed as JSONL to ``path``."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        for ev in build_events():
-            fh.write(json.dumps(ev) + "\n")
+        fh.writelines(json.dumps(ev) + "\n" for ev in build_events())
     return path

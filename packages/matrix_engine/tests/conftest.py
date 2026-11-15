@@ -11,7 +11,6 @@ import os
 
 import numpy as np
 import pytest
-
 from matrix_engine import UnifiedTrackingEngine
 from matrix_engine.providers import load_metrica_source
 from matrix_engine.sample_data import sample_data_dir

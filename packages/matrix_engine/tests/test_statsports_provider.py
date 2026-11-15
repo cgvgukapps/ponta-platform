@@ -27,9 +27,7 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine.confidence import score_confidence
-from matrix_engine.sample_data import repo_root as _repo_root
 from matrix_engine.providers.statsports import (
     COL_HACC,
     COL_HDOP,
@@ -55,6 +53,7 @@ from matrix_engine.providers.statsports import (
     statsports_pitch,
 )
 from matrix_engine.quality import detect_gaps, native_quality_summary
+from matrix_engine.sample_data import repo_root as _repo_root
 from matrix_engine.schema import UNKNOWN_TEAM, SchemaError, validate_schema
 
 #: Obviously fake names for the unconditional fixtures. Never a real person, so

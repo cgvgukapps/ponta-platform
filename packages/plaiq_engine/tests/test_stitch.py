@@ -1,13 +1,11 @@
 """Tests for statsbomb/stitch.py event stitching."""
 import math
-import numpy as np
-import pandas as pd
-import pytest
 
+import pandas as pd
 from plaiq_engine.statsbomb.stitch import (
     build_stitch_graph,
-    get_possession_chains,
     end_proxy_ff,
+    get_possession_chains,
     stitch_coverage_summary,
 )
 

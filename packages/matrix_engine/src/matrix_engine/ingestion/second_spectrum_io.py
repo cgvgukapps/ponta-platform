@@ -35,7 +35,6 @@ Output conventions match epts_io / metrica_io:
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -70,10 +69,10 @@ EVENT_COLUMNS = [
 def load_secondspectrum_tracking(
     meta_data: FileLike,
     raw_data: FileLike,
-    additional_meta_data: Optional[FileLike] = None,
+    additional_meta_data: FileLike | None = None,
     *,
-    sample_rate: Optional[float] = None,
-    limit: Optional[int] = None,
+    sample_rate: float | None = None,
+    limit: int | None = None,
     only_alive: bool = False,
     coordinates: str = SECONDSPECTRUM_COORDINATES,
 ) -> TrackingDataset:
@@ -117,7 +116,7 @@ def _tracked_players(dataset: TrackingDataset, team) -> list:
     )
 
 
-def _player_position(player) -> Optional[str]:
+def _player_position(player) -> str | None:
     pos = getattr(player, "starting_position", None)
     if pos is None:
         return None
@@ -287,9 +286,9 @@ class SecondSpectrumAdapter:
         *,
         meta_file: str = DEFAULT_META_FILE,
         tracking_file: str = DEFAULT_TRACKING_FILE,
-        additional_meta_file: Optional[str] = DEFAULT_ADDITIONAL_META_FILE,
-        sample_rate: Optional[float] = None,
-        limit: Optional[int] = None,
+        additional_meta_file: str | None = DEFAULT_ADDITIONAL_META_FILE,
+        sample_rate: float | None = None,
+        limit: int | None = None,
         only_alive: bool = False,
         normalize_playing_direction: bool = True,
     ):
@@ -341,9 +340,9 @@ def load_secondspectrum_game(
     *,
     meta_file: str = SecondSpectrumAdapter.DEFAULT_META_FILE,
     tracking_file: str = SecondSpectrumAdapter.DEFAULT_TRACKING_FILE,
-    additional_meta_file: Optional[str] = SecondSpectrumAdapter.DEFAULT_ADDITIONAL_META_FILE,
-    sample_rate: Optional[float] = None,
-    limit: Optional[int] = None,
+    additional_meta_file: str | None = SecondSpectrumAdapter.DEFAULT_ADDITIONAL_META_FILE,
+    sample_rate: float | None = None,
+    limit: int | None = None,
     only_alive: bool = False,
     normalize_playing_direction: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:

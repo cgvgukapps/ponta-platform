@@ -27,12 +27,10 @@ Notes
 """
 from __future__ import annotations
 
-import math
 import copy
-from typing import Optional
+import math
 
 import pandas as pd
-
 
 # Maximum distance (metres) to accept a spatial anchor match (Tier 2)
 _TIER2_MAX_M = 3.0
@@ -49,7 +47,7 @@ def _closest_dot(
     target_xy: list[float],
     dots: list[dict],
     max_dist: float = float("inf"),
-) -> Optional[int]:
+) -> int | None:
     """Return index of closest unassigned dot within max_dist, or None."""
     best_i, best_d = None, float("inf")
     for i, d in enumerate(dots):
@@ -113,8 +111,8 @@ def resolve_identities(
     ff_players: list[dict],
     event: dict | pd.Series,
     lineup: dict,
-    prev_event: Optional[dict | pd.Series] = None,
-    prev_ff_identified: Optional[list[dict]] = None,
+    prev_event: dict | pd.Series | None = None,
+    prev_ff_identified: list[dict] | None = None,
 ) -> list[dict]:
     """
     Assign player names to freeze-frame dots using the 5-tier cascade.
@@ -284,14 +282,14 @@ def identity_summary(dots: list[dict]) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _safe_str(v) -> Optional[str]:
+def _safe_str(v) -> str | None:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return None
     s = str(v).strip()
     return s if s and s.lower() not in ("nan", "none", "") else None
 
 
-def _find_player_by_name(name: str, pool: list[dict]) -> Optional[dict]:
+def _find_player_by_name(name: str, pool: list[dict]) -> dict | None:
     name_l = name.lower()
     for p in pool:
         if p.get("name", "").lower() == name_l:

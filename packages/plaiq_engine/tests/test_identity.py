@@ -1,11 +1,10 @@
 """Tests for statsbomb/identity.py identity assignment."""
-import pytest
 from plaiq_engine.statsbomb.identity import (
-    resolve_identities,
-    identity_summary,
-    identified_by_confidence,
     _find_player_by_name,
     _is_gk,
+    identified_by_confidence,
+    identity_summary,
+    resolve_identities,
 )
 
 

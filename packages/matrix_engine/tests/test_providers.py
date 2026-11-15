@@ -12,14 +12,17 @@ measured in the same units.
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine.providers import (
     load_metrica_source,
     load_skillcorner_source,
     metrica_pitch,
     skillcorner_pitch,
 )
-from matrix_engine.schema import REQUIRED_COLUMNS, validate_pitch_bounds, validate_schema
+from matrix_engine.schema import (
+    REQUIRED_COLUMNS,
+    validate_pitch_bounds,
+    validate_schema,
+)
 
 
 @pytest.fixture(scope="module")

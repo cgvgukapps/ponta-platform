@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-
+from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import (
     REQUIRED_COLUMNS,
     SchemaError,
@@ -12,7 +12,6 @@ from matrix_engine.schema import (
     validate_pitch_bounds,
     validate_schema,
 )
-from matrix_engine.pitch_config import PitchConfig
 
 
 def _good(n=4):

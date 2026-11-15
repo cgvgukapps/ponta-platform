@@ -10,7 +10,6 @@ that isolates dropout has to be able to turn everything else off.
 
 import numpy as np
 import pytest
-
 from matrix_engine.schema import validate_schema
 from matrix_engine.testing import DegradationParams, degrade
 

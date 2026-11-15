@@ -20,11 +20,9 @@ the only glue between the SB pipeline and the analytics engines.
 """
 from __future__ import annotations
 
-from typing import Optional
 import numpy as np
 
 from plaiq_engine.analytics.pitch_control import DEFAULT_PROFILE
-
 
 DEFAULT_ADAPTER_PROFILE = DEFAULT_PROFILE.copy()
 
@@ -32,7 +30,7 @@ DEFAULT_ADAPTER_PROFILE = DEFAULT_PROFILE.copy()
 def sb_defender_data(
     ff_players: list[dict],
     side: str,
-    profile: Optional[dict] = None,
+    profile: dict | None = None,
 ) -> list[dict]:
     """
     Convert identified FF players into the defender_data format expected by
@@ -81,7 +79,7 @@ def sb_all_teammates(
     ball_xy: list[float] | np.ndarray,
     xT_surfaces: tuple,
     hex_centers: np.ndarray,
-    lineup: Optional[dict] = None,
+    lineup: dict | None = None,
 ) -> list[dict]:
     """
     Build a list of {name, xy, pov} for every visible teammate, ready for
@@ -179,7 +177,7 @@ def sb_actor_info(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _nearest_hex(xy: np.ndarray, hex_centers: np.ndarray) -> Optional[int]:
+def _nearest_hex(xy: np.ndarray, hex_centers: np.ndarray) -> int | None:
     if hex_centers is None or len(hex_centers) == 0:
         return None
     dists = np.hypot(hex_centers[:, 0] - xy[0], hex_centers[:, 1] - xy[1])

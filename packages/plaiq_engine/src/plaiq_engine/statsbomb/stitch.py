@@ -21,10 +21,8 @@ directly.
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import pandas as pd
-
 
 # Maximum ball gap (metres) between End(A) and Start(B) for a stitch to be
 # considered spatially valid.
@@ -176,7 +174,7 @@ def end_proxy_ff(
     events_df: pd.DataFrame,
     stitch_df: pd.DataFrame,
     freeze_frames: dict,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Return the freeze frame from the next stitched event as an "end snapshot"
     for the event at position ``ev_df_idx`` (DataFrame .index value).
@@ -229,7 +227,7 @@ def stitch_coverage_summary(
     carry_cont_links    int
     """
     n_total = len(events_df)
-    ff_uuids = set(str(u) for u in freeze_frames.keys())
+    ff_uuids = set(str(u) for u in freeze_frames)
     n_ff = events_df["sb_event_id"].astype(str).isin(ff_uuids).sum()
 
     valid = stitch_df[stitch_df["stitch_valid"]]

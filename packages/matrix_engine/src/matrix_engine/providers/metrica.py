@@ -35,8 +35,8 @@ from matrix_engine.ingestion.metrica_io import (
     to_single_playing_direction,
 )
 from matrix_engine.ingestion.metrica_velocities import calc_player_velocities
-from matrix_engine.schema import coerce_schema, validate_schema
 from matrix_engine.pitch_config import PitchConfig
+from matrix_engine.schema import coerce_schema, validate_schema
 
 #: Metrica sample data is recorded at 25 Hz.
 METRICA_FPS: float = 25.0

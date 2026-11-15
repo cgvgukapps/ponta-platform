@@ -11,7 +11,6 @@ pass POV / decision quality (end-frame scoring).
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -105,7 +104,7 @@ def _next_same_period_index(
     events: pd.DataFrame,
     pos: int,
     period,
-) -> Optional[int]:
+) -> int | None:
     for j in range(pos + 1, len(sorted_indices)):
         b_idx = sorted_indices[j]
         if events.loc[b_idx, "Period"] == period:

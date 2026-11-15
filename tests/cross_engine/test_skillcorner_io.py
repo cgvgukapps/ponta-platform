@@ -15,41 +15,33 @@ Tests cover:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine.ingestion.skillcorner_io import (
-    SkillCornerAdapter,
-    load_skillcorner_meta,
-    load_skillcorner_events,
-    tracking_to_wide,
     SC_FPS,
     SC_NOMINAL_PITCH_LENGTH,
-    SC_NOMINAL_PITCH_WIDTH,
+    SkillCornerAdapter,
+    load_skillcorner_events,
+    load_skillcorner_meta,
+    tracking_to_wide,
 )
 from skillcorner_fixture import (
-    MATCH_ID,
-    HOME_ID,
-    AWAY_ID,
-    HOME_GK_ID,
-    HOME_DF_ID,
-    HOME_FW_ID,
     AWAY_GK_ID,
-    AWAY_DF_ID,
-    P1_START,
+    AWAY_ID,
+    HOME_FW_ID,
+    HOME_ID,
+    MATCH_ID,
     P1_END,
-    P2_START,
+    P1_START,
     P2_END,
+    P2_START,
+    make_dynamic_events_csv,
     make_match_json,
     make_tracking_records,
-    make_dynamic_events_csv,
     write_fixture_dir,
 )
-
 
 # ===========================================================================
 # Helpers
@@ -445,7 +437,7 @@ class TestCalcPlayerVelocitiesFps:
     def test_window_auto_scaled(self):
         """At 10 fps, window should be scaled below 7 (auto-computed to 3)."""
         from matrix_engine.ingestion.metrica_velocities import calc_player_velocities
-        import scipy.signal as signal
+        from scipy import signal
 
         # Monkey-patch to capture the actual window used
         windows_used = []

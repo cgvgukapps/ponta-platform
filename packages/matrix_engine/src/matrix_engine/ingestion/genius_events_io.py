@@ -40,13 +40,15 @@ Open items to confirm against a real payload (documented, not guessed):
 from __future__ import annotations
 
 import json
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
 
-from matrix_engine.ingestion.second_spectrum_io import EVENT_COLUMNS, _period_time_seconds
-
+from matrix_engine.ingestion.second_spectrum_io import (
+    EVENT_COLUMNS,
+    _period_time_seconds,
+)
 
 # ---------------------------------------------------------------------------
 # Event-type mapping (Genius EventType -> PLAIQ Type)
@@ -186,7 +188,7 @@ def _start_end_coords(genius_type: str, attrs: dict) -> tuple[float, float, floa
     return sx, sy, ex, ey
 
 
-def _resolve_participant(participants: Iterable[dict], wanted: tuple[str, ...]) -> Optional[dict]:
+def _resolve_participant(participants: Iterable[dict], wanted: tuple[str, ...]) -> dict | None:
     if not participants:
         return None
     by_type = {}
@@ -199,7 +201,7 @@ def _resolve_participant(participants: Iterable[dict], wanted: tuple[str, ...]) 
     return None
 
 
-def _map_participant_id(pid: Optional[str], participant_id_map: Optional[dict]) -> Optional[str]:
+def _map_participant_id(pid: str | None, participant_id_map: dict | None) -> str | None:
     if pid is None:
         return None
     if participant_id_map and pid in participant_id_map:
@@ -207,8 +209,8 @@ def _map_participant_id(pid: Optional[str], participant_id_map: Optional[dict]) 
     return pid
 
 
-def _resolve_team(event: dict, actor: Optional[dict],
-                  teamid_to_side: Optional[dict]) -> Optional[str]:
+def _resolve_team(event: dict, actor: dict | None,
+                  teamid_to_side: dict | None) -> str | None:
     # Prefer an explicit HOME/AWAY team entry on the event.
     for team in event.get("teams", []) or []:
         ttype = str(team.get("type", "")).upper()
@@ -230,7 +232,7 @@ def _resolve_team(event: dict, actor: Optional[dict],
     return None
 
 
-def _subtype(genius_type: str, attrs: dict) -> Optional[str]:
+def _subtype(genius_type: str, attrs: dict) -> str | None:
     if genius_type in _SETPIECE_SUBTYPE:
         return _SETPIECE_SUBTYPE[genius_type]
     if genius_type == "CLEARANCE":
@@ -255,8 +257,8 @@ def genius_events_to_dataframe(
     *,
     periods: dict[int, tuple[int, int]],
     fps: float,
-    teamid_to_side: Optional[dict] = None,
-    participant_id_map: Optional[dict] = None,
+    teamid_to_side: dict | None = None,
+    participant_id_map: dict | None = None,
     second_half_sign_flip: bool = False,
 ) -> pd.DataFrame:
     """
@@ -352,8 +354,8 @@ class GeniusEventAdapter:
         self,
         events_path: str,
         *,
-        teamid_to_side: Optional[dict] = None,
-        participant_id_map: Optional[dict] = None,
+        teamid_to_side: dict | None = None,
+        participant_id_map: dict | None = None,
         second_half_sign_flip: bool = False,
     ):
         self.events_path = events_path
@@ -378,8 +380,8 @@ def load_genius_events_game(
     *,
     periods: dict[int, tuple[int, int]],
     fps: float,
-    teamid_to_side: Optional[dict] = None,
-    participant_id_map: Optional[dict] = None,
+    teamid_to_side: dict | None = None,
+    participant_id_map: dict | None = None,
     second_half_sign_flip: bool = False,
 ) -> pd.DataFrame:
     """Convenience wrapper around :class:`GeniusEventAdapter`."""

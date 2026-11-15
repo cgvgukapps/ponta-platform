@@ -1,13 +1,12 @@
 """Tests for statsbomb/sb_dq.py."""
 import math
+
 import numpy as np
 import pandas as pd
 import pytest
-
-from plaiq_engine.analytics.pitch_control import build_pitch_hex_grid
 from plaiq_engine.analytics.hex_value import xT_surface
-from plaiq_engine.statsbomb.sb_dq import sb_pass_dq, sb_carry_dq, sb_event_player_rows
-
+from plaiq_engine.analytics.pitch_control import build_pitch_hex_grid
+from plaiq_engine.statsbomb.sb_dq import sb_carry_dq, sb_event_player_rows, sb_pass_dq
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

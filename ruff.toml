@@ -1,0 +1,23 @@
+# Lint policy for ponta-platform.
+#
+# Ruff's default rule set is strict. The engine code was moved in from the prototype
+# unchanged in behaviour (see docs/ARCHITECTURE.md), and extraction must not alter
+# numerical code. The safe auto-fixes were applied in the move's lint commit. The rules
+# below flag style and judgement points in that moved code (for example a blind `except`
+# around an optional network call, or an unused unpacked variable) where changing the line
+# would be an edit to engine logic. They are ignored for now, not endorsed: remove an
+# entry here when the code it covers is next changed for a real reason.
+[lint]
+ignore = [
+    "EXE001",  # shebang present, file not executable (prototype scripts' headers)
+    "BLE001",  # blind except
+    "C401", "C408",  # set/dict construction style
+    "F841", "RUF059",  # unused local / unpacked variable
+    "ISC004",
+    "PERF102",
+    "PIE810",
+    "RUF013",  # implicit Optional in signatures
+    "RUF034",  # useless if-else
+    "RUF046",  # unnecessary int() cast
+    "SIM102", "SIM103", "SIM117", "SIM118",
+]

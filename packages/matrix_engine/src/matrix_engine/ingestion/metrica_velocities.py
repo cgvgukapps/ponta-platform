@@ -9,8 +9,8 @@ Each half is processed independently to avoid artefacts at half-time.
 """
 
 import numpy as np
-import scipy.signal as signal
 import pandas as pd
+from scipy import signal
 
 MAX_SPEED = 12.0  # m/s — realistic upper bound for a footballer
 

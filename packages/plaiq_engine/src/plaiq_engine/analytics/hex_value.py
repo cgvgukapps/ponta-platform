@@ -38,9 +38,8 @@ toward x = −53 m.  V_xT_home and V_xT_away are computed accordingly.
 
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree
-
 from matrix_engine.pitch_config import FIELD_LENGTH
+from scipy.spatial import cKDTree
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -381,8 +380,9 @@ def compute_movement_delta_v(
     -------
     Copy of analytics_df with two additional columns.
     """
-    from plaiq_engine.analytics.hex_analytics import hex_to_center
     from scipy.spatial import cKDTree
+
+    from plaiq_engine.analytics.hex_analytics import hex_to_center
 
     df = analytics_df.copy()
     tree = cKDTree(hex_centers)
@@ -447,8 +447,9 @@ def compute_movement_value(
     All values are event-window scoped so they can be summed across a
     play chain without overlap or double-counting.
     """
-    from plaiq_engine.analytics.hex_analytics import hex_to_center
     from scipy.spatial import cKDTree
+
+    from plaiq_engine.analytics.hex_analytics import hex_to_center
 
     tree = cKDTree(hex_centers)
 

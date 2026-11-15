@@ -1,16 +1,17 @@
 """Tests for the Genius event-spec v1 -> PLAIQ events-CSV adapter."""
 
-import os
 
-import numpy as np
-import pandas as pd
 import pytest
-
-from matrix_engine.ingestion.genius_events_io import genius_events_to_dataframe, load_genius_events_game
-from matrix_engine.ingestion.second_spectrum_io import EVENT_COLUMNS, load_secondspectrum_game
 from genius_events_fixture import build_events, write_genius_events_fixture
+from matrix_engine.ingestion.genius_events_io import (
+    genius_events_to_dataframe,
+    load_genius_events_game,
+)
+from matrix_engine.ingestion.second_spectrum_io import (
+    EVENT_COLUMNS,
+    load_secondspectrum_game,
+)
 from ss_fixture import write_ss_fixture
-
 
 # Period frame bounds matching the tracking fixture (8 frames/half, step 25).
 PERIODS = {1: (0, 175), 2: (1000, 1175)}

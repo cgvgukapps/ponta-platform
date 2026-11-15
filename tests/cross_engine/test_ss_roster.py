@@ -1,9 +1,8 @@
 """Second Spectrum roster is built from persistent player_id, not slot inference."""
 
 import pytest
-
-from plaiq_engine.roster.build_roster import build_secondspectrum_roster
 from matrix_engine.ingestion.second_spectrum_io import load_secondspectrum_game
+from plaiq_engine.roster.build_roster import build_secondspectrum_roster
 from ss_fixture import write_ss_fixture
 
 

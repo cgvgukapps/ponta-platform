@@ -44,8 +44,8 @@ from matrix_engine.ingestion.skillcorner_io import (
     pitch_config_from_sc_meta,
     tracking_to_wide,
 )
-from matrix_engine.schema import coerce_schema, empty_frame, validate_schema
 from matrix_engine.pitch_config import PitchConfig
+from matrix_engine.schema import coerce_schema, empty_frame, validate_schema
 
 #: Default ``source`` label written into the schema's source column.
 SOURCE_NAME: str = "skillcorner"

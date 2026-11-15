@@ -54,7 +54,7 @@ class PitchConfig:
         return (self.length_m, self.width_m)
 
     @classmethod
-    def from_skillcorner_meta(cls, meta: dict) -> "PitchConfig":
+    def from_skillcorner_meta(cls, meta: dict) -> PitchConfig:
         """Build a PitchConfig from a parsed SkillCorner match meta dict.
 
         Reads ``pitch_length`` and ``pitch_width`` (real venue metres) and
@@ -67,7 +67,7 @@ class PitchConfig:
         )
 
     @classmethod
-    def from_kloppy_metadata(cls, metadata) -> "PitchConfig":
+    def from_kloppy_metadata(cls, metadata) -> PitchConfig:
         """Build a PitchConfig from a Kloppy dataset's metadata.
 
         Falls back to the Metrica-sample defaults when the provider does not

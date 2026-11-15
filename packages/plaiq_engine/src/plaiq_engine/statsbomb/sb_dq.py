@@ -34,16 +34,15 @@ Event Player Row Builder
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
 from plaiq_engine.statsbomb.sb_pov_adapter import (
+    _nearest_hex,
     sb_all_teammates,
     sb_defender_data,
-    _nearest_hex,
 )
 
 # Minimum non-zero DQ denominator to avoid div-by-zero
@@ -55,9 +54,9 @@ _RING_TOL = 1
 
 def sb_pass_dq(
     event: dict | pd.Series,
-    next_event: Optional[dict | pd.Series],
-    ff_start: Optional[dict],
-    ff_end: Optional[dict],
+    next_event: dict | pd.Series | None,
+    ff_start: dict | None,
+    ff_end: dict | None,
     xT_home: np.ndarray,
     xT_away: np.ndarray,
     hex_centers: np.ndarray,
@@ -160,7 +159,7 @@ def sb_pass_dq(
 
 def sb_carry_dq(
     event: dict | pd.Series,
-    ff_start: Optional[dict],
+    ff_start: dict | None,
     xT_home: np.ndarray,
     xT_away: np.ndarray,
     hex_centers: np.ndarray,
@@ -190,7 +189,7 @@ def sb_carry_dq(
       confidence   str
       reason       str
     """
-    def _fail(reason: str) -> dict:  # noqa: E301
+    def _fail(reason: str) -> dict:
         return dict(dq=float("nan"), v_actual=float("nan"),
                     v_best=float("nan"), n_alts=0,
                     confidence="none", reason=reason)
@@ -343,7 +342,7 @@ def sb_event_player_rows(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _event_ball_start(event) -> Optional[list[float]]:
+def _event_ball_start(event) -> list[float] | None:
     x = event.get("Start X") if hasattr(event, "get") else None
     y = event.get("Start Y") if hasattr(event, "get") else None
     if x is None or y is None:
@@ -354,7 +353,7 @@ def _event_ball_start(event) -> Optional[list[float]]:
         return None
 
 
-def _event_coords(event, x_col: str, y_col: str) -> Optional[list[float]]:
+def _event_coords(event, x_col: str, y_col: str) -> list[float] | None:
     x = event.get(x_col) if hasattr(event, "get") else None
     y = event.get(y_col) if hasattr(event, "get") else None
     if x is None or y is None or (isinstance(x, float) and math.isnan(x)):
@@ -366,8 +365,8 @@ def _event_coords(event, x_col: str, y_col: str) -> Optional[list[float]]:
 
 
 def _receiver_xy(
-    event, next_event: Optional[dict | pd.Series]
-) -> Optional[list[float]]:
+    event, next_event: dict | pd.Series | None
+) -> list[float] | None:
     """Pass end coords from event End X/Y, or next_event Start X/Y."""
     end = _event_coords(event, "End X", "End Y")
     if end is not None:

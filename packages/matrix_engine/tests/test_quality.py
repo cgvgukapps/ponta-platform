@@ -10,7 +10,6 @@ case. The two runs differ only in ``time_drift_rate``.
 import numpy as np
 import pandas as pd
 import pytest
-
 from matrix_engine.quality import (
     assess_quality,
     coverage_summary,

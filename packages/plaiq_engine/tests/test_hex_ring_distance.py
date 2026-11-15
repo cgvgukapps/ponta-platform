@@ -26,7 +26,6 @@ erroneous "/ 2").
 import itertools
 from collections import deque
 
-import numpy as np
 import pytest
 
 _AXIAL_NEIGHBORS = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
