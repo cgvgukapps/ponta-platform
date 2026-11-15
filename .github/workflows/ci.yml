@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  engines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install pinned dependencies
+        run: pip install -r requirements-dev.txt
+
+      # One command, so the local engine packages resolve each other and pip never has to
+      # look up an internal package name on the public index.
+      - name: Install engine packages (editable)
+        run: pip install -e packages/matrix_engine -e packages/plaiq_engine
+
+      - name: Import-graph check
+        run: python tools/check_imports.py
+
+      - name: Lint
+        run: ruff check packages tools tests
+
+      # Tests that need the open sample data (Metrica, SkillCorner) cannot run on a clean
+      # runner: the data is not redistributed from this repository. Until a decision on how
+      # CI obtains it, those tests are gated by the local full run (see README).
+      - name: Tests
+        run: pytest -q

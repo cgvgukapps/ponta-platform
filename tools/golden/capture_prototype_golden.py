@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Capture golden outputs from the frozen PONTA-PROTOTYPE.
 
@@ -50,7 +49,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import platform
 import subprocess
 import sys
@@ -79,7 +77,7 @@ def sha256(path: Path) -> str:
 
 
 def git(proto: Path, *args: str) -> str:
-    r = subprocess.run(["git", "-C", str(proto), *args], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(proto), *args], capture_output=True, text=True, check=False)
     return r.stdout.strip()
 
 
@@ -112,8 +110,12 @@ def main() -> int:
 
     import numpy as np
     import pandas as pd
-
-    from analytics.hex_analytics import assign_all_players, compute_pressure, infer_possession, tag_possession
+    from analytics.hex_analytics import (
+        assign_all_players,
+        compute_pressure,
+        infer_possession,
+        tag_possession,
+    )
     from analytics.hex_value import (
         compute_movement_delta_v,
         compute_movement_value,
@@ -124,7 +126,11 @@ def main() -> int:
         xT_surface,
     )
     from analytics.pass_option_value import compute_event_pov
-    from analytics.pitch_control import DEFAULT_PROFILE, build_pitch_hex_grid, compute_frame_control
+    from analytics.pitch_control import (
+        DEFAULT_PROFILE,
+        build_pitch_hex_grid,
+        compute_frame_control,
+    )
     from roster.player_db import get_profiles, load_sc_roster
 
     processed = proto / "sample-data" / "data" / "processed"
@@ -311,17 +317,17 @@ def main() -> int:
             "provider": kind,
             "match_id": mid,
             "frames": int(n_frames),
-            "events_total": int(len(events)),
-            "events_used_for_value_and_pov": int(len(ev_for_value)),
+            "events_total": len(events),
+            "events_used_for_value_and_pov": len(ev_for_value),
             "players": {"home": home_j, "away": away_j},
-            "hex_count": int(len(hex_centers)),
-            "frames_ball_present": int(len(ball_ok)),
-            "frames_ball_missing": int(len(ball_missing)),
+            "hex_count": len(hex_centers),
+            "frames_ball_present": len(ball_ok),
+            "frames_ball_missing": len(ball_missing),
             "ball_missing_frames_recorded": [int(f) for f in miss_pick],
-            "sampled_frames_requested": int(len(sample)),
+            "sampled_frames_requested": len(sample),
             "sampled_frames_with_surfaces": len(frames_ok),
             "frames_with_value_surface": int(sum(1 for p in val_poss if p)),
-            "rows": {n: int(len(d)) for n, d in outputs.items()},
+            "rows": {n: len(d) for n, d in outputs.items()},
             "seconds": round(time.time() - t0, 1),
         }
         for p in sorted(mdir.iterdir()):

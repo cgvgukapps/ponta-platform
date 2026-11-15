@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Prefixed distribution names: see packages/matrix_engine/pyproject.toml.
+name = "ponta-plaiq-engine"
+version = "0.1.0"
+description = "Ponta Plaiq: spatial decision-quality analysis and the semantic football event builder."
+requires-python = ">=3.13"
+dependencies = [
+    # Dependency direction is one way: plaiq_engine may use matrix_engine, never the reverse.
+    # Always install both in one pip command (see README) so this resolves to the local package.
+    "ponta-matrix-engine",
+    "numpy",
+    "pandas",
+    "scipy",
+    "statsbombpy",
+    "pyarrow",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

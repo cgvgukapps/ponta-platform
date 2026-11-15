@@ -1,0 +1,13 @@
+# Runtime dependencies for the engine packages, pinned exactly as in PONTA-PROTOTYPE.
+# Only what packages/ actually imports (verified by import-graph analysis of the prototype):
+# no Streamlit, matplotlib, plotly or mplsoccer. Those were UI and demo dependencies.
+kloppy==3.19.0
+numpy==2.5.0
+pandas==3.0.3
+scipy==1.18.0
+statsbombpy==1.20.0
+
+# Parquet output (semantic_events.parquet, trajectories.parquet). In the prototype pyarrow
+# was present only as a Streamlit dependency; the platform declares it explicitly.
+# Pinned to the version the golden outputs were captured with.
+pyarrow==25.0.0
