@@ -2,6 +2,8 @@
 
 The Ponta production monorepo. Ponta is one AI-native football intelligence product: **Matrix** (normalise, reconcile, fuse) is the built-in data engine, **Plaiq** is the spatial decision engine, and grounded AI reads the semantic events they produce. Strategy and architecture live in the planning repo, [ponta-blueprint](https://github.com/cgvgukapps/ponta-blueprint) (`architecture.md`, `data-tiers.md`, `ai-layer.md`, `roadmap.md`).
 
+**Current status and next steps:** [ponta-blueprint/status.md](https://github.com/cgvgukapps/ponta-blueprint/blob/main/ponta-blueprint/status.md). Read it first when resuming.
+
 `PONTA-PROTOTYPE` is frozen at tag `prototype-validation-final` as the validation record. This repo is where production work happens.
 
 ## Layout
