@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "kind": "golden",
+  "prototype": {
+    "path": "/Users/cicerovieira/PONTA-PROTOTYPE",
+    "commit": "41bd8122c6a1758e8673d10fe6a61db673496930",
+    "tag": "prototype-validation-final",
+    "tree_clean": true
+  },
+  "environment": {
+    "python": "3.13.4",
+    "numpy": "2.5.0",
+    "pandas": "3.0.3"
+  },
+  "sampling": {
+    "even_frames": 40,
+    "event_frames": 10,
+    "method": "np.linspace over common frames; evenly spaced event Start Frames"
+  },
+  "pov_fps": {
+    "metrica": "pitch_config.DEFAULT_FPS (default argument, as in app.load_pov_scores)",
+    "skillcorner": 10.0
+  },
+  "canonicalisation": {
+    "pov.parquet": "sorted by (event_idx, team, jersey); the prototype's row order is not deterministic across runs, values are",
+    "pov_alternatives.parquet": "sorted by (event_idx, hex_x, hex_y) when that key is unique"
+  },
+  "matches": {
+    "metrica_3": {
+      "provider": "metrica",
+      "match_id": 3,
+      "frames": 143761,
+      "events_total": 3620,
+      "events_used_for_value_and_pov": 3620,
+      "players": {
+        "home": [
+          "11",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ],
+        "away": [
+          "28",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25",
+          "26",
+          "27"
+        ]
+      },
+      "hex_count": 7463,
+      "frames_ball_present": 97436,
+      "frames_ball_missing": 46325,
+      "ball_missing_frames_recorded": [
+        1,
+        36966,
+        72223,
+        105103,
+        143761
+      ],
+      "sampled_frames_requested": 48,
+      "sampled_frames_with_surfaces": 48,
+      "frames_with_value_surface": 48,
+      "rows": {
+        "event_delta_v.parquet": 3620,
+        "movement_value.parquet": 79640,
+        "pov.parquet": 39589,
+        "pov_alternatives.parquet": 36792,
+        "frame_pressure.parquet": 1056
+      },
+      "seconds": 442.4
+    },
+    "skillcorner_1886347": {
+      "provider": "skillcorner",
+      "match_id": 1886347,
+      "frames": 59061,
+      "events_total": 1484,
+      "events_used_for_value_and_pov": 1484,
+      "players": {
+        "home": [
+          "10",
+          "17",
+          "22",
+          "15",
+          "4",
+          "23",
+          "6",
+          "14",
+          "25",
+          "5",
+          "9",
+          "27",
+          "28",
+          "3",
+          "1",
+          "8",
+          "7",
+          "12"
+        ],
+        "away": [
+          "19",
+          "28",
+          "21",
+          "27",
+          "39",
+          "1",
+          "4",
+          "33",
+          "17",
+          "14",
+          "15",
+          "13",
+          "6",
+          "23",
+          "29",
+          "37",
+          "7",
+          "22"
+        ]
+      },
+      "hex_count": 7463,
+      "frames_ball_present": 43458,
+      "frames_ball_missing": 15603,
+      "ball_missing_frames_recorded": [
+        0,
+        22530,
+        39156,
+        50886,
+        59060
+      ],
+      "sampled_frames_requested": 50,
+      "sampled_frames_with_surfaces": 50,
+      "frames_with_value_surface": 50,
+      "rows": {
+        "event_delta_v.parquet": 1484,
+        "movement_value.parquet": 32648,
+        "pov.parquet": 16324,
+        "pov_alternatives.parquet": 46135,
+        "frame_pressure.parquet": 1100
+      },
+      "seconds": 160.1
+    }
+  },
+  "files": {
+    "metrica_3/event_delta_v.parquet": {
+      "bytes": 182902,
+      "sha256": "cce07aa6a37f1a3e8faa1ea57334e1c24f8b0ce6015cbe61ea0e83e249edc3e5"
+    },
+    "metrica_3/frame_pressure.parquet": {
+      "bytes": 13610,
+      "sha256": "f6e4d48e0f15880679cb5ed1a0c8180192ffb3e5ae9d2307ba521c575bbbdf63"
+    },
+    "metrica_3/frame_surfaces.npz": {
+      "bytes": 5058044,
+      "sha256": "57d072fdf6c1964451fbc66eac55f7c6fc924dbe7a9ddc7b5a60641a95164d60"
+    },
+    "metrica_3/movement_value.parquet": {
+      "bytes": 529879,
+      "sha256": "fa5051f46ae4eec7984cde8877e422aa2da7efbdf825c5116cd131b800bb8668"
+    },
+    "metrica_3/pov.parquet": {
+      "bytes": 252268,
+      "sha256": "0b128895c7673c9f8ffd9bbffe41359023e4bdcee530aad94fdacc15a9757074"
+    },
+    "metrica_3/pov_alternatives.parquet": {
+      "bytes": 250681,
+      "sha256": "5e7ef80c28c34433d7f8a5d0dbaa6c46daeb2d67a838466972ef1dd85dd392c5"
+    },
+    "skillcorner_1886347/event_delta_v.parquet": {
+      "bytes": 87600,
+      "sha256": "1cf98ef35c7834403e72f49c2b912294d8c43f34be79df784ca3f9526e08d5e0"
+    },
+    "skillcorner_1886347/frame_pressure.parquet": {
+      "bytes": 13924,
+      "sha256": "f9042069a55e6921b9baa7a7ae993beb6e161dfb7fad4ef0d1e7f747c5f65d87"
+    },
+    "skillcorner_1886347/frame_surfaces.npz": {
+      "bytes": 5255088,
+      "sha256": "4c0bb9a44979a20871c557b8a1ec79c8478abc86442967ec135ff2e7b5ba5422"
+    },
+    "skillcorner_1886347/movement_value.parquet": {
+      "bytes": 232032,
+      "sha256": "bada4fdeea8586febf791120ade6289b2d0135425a6640c6ab09b66cdf94c8f5"
+    },
+    "skillcorner_1886347/pov.parquet": {
+      "bytes": 134093,
+      "sha256": "3ba6d8040cd842a1b51278d3f73ea3a4f269c92cfeb61d2aad4ded4be6783913"
+    },
+    "skillcorner_1886347/pov_alternatives.parquet": {
+      "bytes": 300511,
+      "sha256": "26a7b542595eb3bf0e7e48e9d843fadd13dfc3281746e3291a0810a2cbee94f6"
+    }
+  },
+  "total_seconds": 602.5
+}
