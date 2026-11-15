@@ -96,3 +96,9 @@ Decisions and deviations from `ai-layer.md`:
 2. SkillCorner Data check: Full or Degraded for pass option value and event ΔV.
 3. Update `ai-layer.md`'s semantic schema for the deviations listed above.
 4. How CI gets sample data remains "skip in CI, full run locally" until the licence gate (G3) is settled.
+
+## Decisions recorded (15 November 2026)
+
+1. The characterised Metrica differences are the platform baseline; `engine_version` is unchanged. The carry near-tie (event 3373) is noted for the engine-validity work in `engine-governance.md`.
+2. The SkillCorner Data check follows the measured data: pass option value and event ΔV are Full; shot quality stays Blocked because the shots are derived from tracking.
+3. `ai-layer.md`'s semantic event schema was updated to the implemented builder, and its invented "pressure index ≥ 0.7" example replaced: the engine's pressure is on a 1 to 10 scale and no named threshold exists yet.
