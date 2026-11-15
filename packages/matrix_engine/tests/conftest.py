@@ -31,7 +31,21 @@ SKILLCORNER_MAX_FRAMES = 3000
 
 @pytest.fixture(scope="session")
 def data_dir():
-    return sample_data_dir()
+    """
+    The open sample data (Metrica, SkillCorner), read from outside the repo.
+
+    When it is absent (a clean CI runner: redistribution terms are unresolved, so it is
+    never copied here) every test that needs it is skipped, not failed. Set
+    PONTA_REQUIRE_SAMPLE_DATA=1 to turn that skip into a failure, which is how the full
+    local run is meant to be used.
+    """
+    path = sample_data_dir()
+    if not os.path.isdir(path):
+        message = f"sample data not found at {path} (set PONTA_SAMPLE_DATA)"
+        if os.environ.get("PONTA_REQUIRE_SAMPLE_DATA"):
+            pytest.fail(message)
+        pytest.skip(message)
+    return path
 
 
 @pytest.fixture(scope="session")

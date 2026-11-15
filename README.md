@@ -51,7 +51,7 @@ pytest -q
 
 ## Sample data
 
-Tests that need open sample data (Metrica sample games, SkillCorner open data) read it from outside this repo. It is **not** copied here: the redistribution terms for Metrica and SkillCorner are still open (blueprint, `website-v2-plan.md`, gate G3). By default it is read from `../PONTA-PROTOTYPE/sample-data`; set `PONTA_SAMPLE_DATA` to point elsewhere.
+Tests that need open sample data (Metrica sample games, SkillCorner open data) read it from outside this repo. It is **not** copied here: the redistribution terms for Metrica and SkillCorner are still open (blueprint, `website-v2-plan.md`, gate G3). By default it is read from `../PONTA-PROTOTYPE/sample-data`; set `PONTA_SAMPLE_DATA` to point elsewhere. When the data is absent, the tests that need it are skipped (CI does this: 841 pass, 132 skip). For the full run, set `PONTA_REQUIRE_SAMPLE_DATA=1` so a missing directory fails instead of skipping: expect 973 passed, 0 skipped.
 
 ## Golden outputs
 

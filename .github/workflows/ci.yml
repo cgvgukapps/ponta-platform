@@ -36,8 +36,9 @@ jobs:
       - name: Lint
         run: ruff check packages tools tests
 
-      # Tests that need the open sample data (Metrica, SkillCorner) cannot run on a clean
-      # runner: the data is not redistributed from this repository. Until a decision on how
-      # CI obtains it, those tests are gated by the local full run (see README).
+      # Tests that need the open sample data (Metrica, SkillCorner) are skipped on a clean
+      # runner: the data is not redistributed from this repository (licence terms open,
+      # gate G3). The skip count is printed (-rs). The full run, with data and
+      # PONTA_REQUIRE_SAMPLE_DATA=1, is the local gate until that is decided.
       - name: Tests
-        run: pytest -q
+        run: pytest -q -rs
