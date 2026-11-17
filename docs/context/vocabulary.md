@@ -1,6 +1,6 @@
-# Context vocabulary (P0 and P1)
+# Context vocabulary (P0 to P4)
 
-Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` 0.1.0, `p1` 0.1.0; thresholds 0.2.0. The specification is `ponta-blueprint/context-packages.md`; the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md`.
+Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe`, `p1`, `p2`, `p3` and `p4` all 0.1.0; thresholds 0.3.0. The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
 
 **Observed** means a fact read from the data (a distance, whether the ball was seen, an event). **Estimated** means a label the engine assigns by rules. Nothing in the frame table reaches the AI layer directly; the semantic events carry only the labels listed at the end.
 
@@ -58,6 +58,86 @@ Rate: `context_grid_rate_hz` (5 Hz). Nothing is interpolated: a ball or player n
 - **Inference:** possession during long detection gaps falls back to the event feed. Inference from player movement is not implemented yet.
 - **Derived feeds:** SkillCorner's feed is derived from tracking, so dead ball is unknown and counted as in play.
 - **Precision:** the control radius is tuned on 25 Hz Metrica data; broadcast tracking agrees better with a larger radius.
+
+## Team frame (P2 to P4)
+
+Every Stage B measure is taken in a team's own frame: **depth** is metres from its own goal line towards the opponent's, **width** is metres from the centre line with the team's left positive. Each team's direction of attack is read per period from the side its goalkeeper defends (the player with the largest mean distance from halfway), not assumed: Metrica Sample Game 2 is normalised with the home team attacking −x. The goalkeeper in each two-minute block is the team's deepest player on average; every other player is outfield.
+
+## P2 Team structure
+
+Per team (`home`, `away`), on every grid point; null when fewer than `p2_min_outfield_players` outfield players are observed.
+
+| Field | Unit | Kind | Meaning |
+|---|---|---|---|
+| `p2_<team>_outfield_n` | players | observed | Outfield players observed |
+| `p2_<team>_length_m` | m | observed | Deepest to highest outfield player (depth) |
+| `p2_<team>_width_m` | m | observed | Widest to widest outfield player |
+| `p2_<team>_centroid_depth_m` | m | observed | Mean outfield depth |
+| `p2_<team>_stretch_m` | m | observed | Stretch index: mean distance to the outfield centroid |
+| `p2_<team>_hull_m2` | m² | observed | Convex-hull area of the outfield players |
+| `p2_<team>_def_line_m` | m | observed | Defensive line height: the deepest outfield player's depth |
+| `p2_<team>_mid_line_m`, `p2_<team>_att_line_m` | m | estimated | The deepest member of the midfield and attacking lines |
+| `p2_<team>_def_mid_gap_m`, `p2_<team>_mid_att_gap_m` | m | estimated | Depth between line centroids |
+| `p2_<team>_formation_in`, `p2_<team>_formation_out` | label | estimated | The team's current formation in and out of possession |
+
+**Rules.**
+
+- **Windows:** two minutes (`p2_window_s`) within a period, split by the team's possession state (`in`, `out`, and `all` as a fallback). Only P1 chains of at least `p2_min_possession_s` count; a window needs `p2_min_window_data_s` of data, and a player counts when seen for `p2_min_presence_share` of it.
+- **Lines:** exact one-dimensional 3-means on the players' mean depth: the split into three contiguous groups with the least within-group sum of squares.
+- **Formation:** the players' mean positions, centred and scaled per axis, are assigned to each template's slots with the Hungarian algorithm (templates: 4-4-2, 4-3-3, 4-2-3-1, 4-1-4-1, 4-1-2-1-2, 3-5-2, 3-4-3, 3-4-2-1, 5-3-2, 5-4-1). The window's formation is the best fit, or `unclear` when it beats the second best by less than `p2_formation_min_margin`. The current formation changes only when a new one holds for `p2_formation_persist_s`.
+- **Roles:** each player's slot in the current formation's template (`LB`, `LCB`, `CB`, `RCB`, `RB`, `LWB`, `RWB`, `DM`, `LDM`, `RDM`, `LCM`, `CM`, `RCM`, `LM`, `RM`, `LAM`, `RAM`, `AM`, `LW`, `RW`, `CF`, `LCF`, `RCF`).
+
+**Segments.** `p2_formations` (team, period, block, state, data seconds, best and second template, margin, window formation, current formation), `p2_roles` (team, period, block, state, player id, line, role), `p2_orientation` (attack sign per team and period), `p2_goalkeepers`. No positions are written.
+
+**Data check.** `team_shape` and `formation`: `full` when both teams have a shape for at least `p2_min_shape_coverage` of in-play time and the orientation is consistent; `degraded` below it (broadcast tracking loses players out of view); `blocked` with no shape at all.
+
+## P3 Relative zones
+
+Measured for the team in possession (P1) against the team out of possession, on every grid point where one team has the ball.
+
+| Field | Unit | Kind | Meaning |
+|---|---|---|---|
+| `p3_attacking_team` | label | estimated | The team in possession |
+| `p3_ball_lane` | label | estimated | `left_wing`, `left_half_space`, `centre`, `right_half_space`, `right_wing` in the attacking team's frame: wings beyond the penalty-area edges (20.16 m from the centre line), half-spaces between those and the goal-area edges (9.16 m), centre inside |
+| `p3_ball_third` | label | estimated | `defensive`, `middle`, `attacking` along the attacking direction |
+| `p3_ball_band` | label | estimated | Against the defending lines (depth from the defending goal line): `behind_defence` (beyond the deepest defender), `in_defensive_line` (up to the defensive line's centroid), `between_lines` (defensive to midfield centroid), `between_mid_att`, `in_front` |
+| `p3_ball_in_hull` | bool | estimated | Inside the defending outfield players' convex hull |
+| `p3_ball_in_pocket` | bool | estimated | Between the lines, in a half-space and inside the defending hull (Ponta's definition; none is published) |
+| `p3_att_behind_defence`, `p3_att_between_lines`, `p3_att_in_pocket` | players | estimated | Attacking outfield players in each zone |
+
+**Data check.** `relative_zones` inherits P2's state and is `degraded` when the ball or the defending shape is missing for more than `1 − p3_min_coverage` of possession time.
+
+## P4 Phase of play
+
+| Field | Unit | Kind | Meaning |
+|---|---|---|---|
+| `p4_team` | label | estimated | The team in possession |
+| `p4_phase` | label | estimated | `build_up`, `create`, `finish`, `direct`, `quick_break`, `transition`, `set_play`, `chaotic` |
+| `p4_out_phase` | label | estimated | The paired label for the other team: `high_block`, `medium_block`, `low_block`, `defending_direct`, `defending_quick_break`, `defending_transition`, `defending_set_play`, `chaotic` |
+| `p4_block` | label | estimated | The defending team's block, `low`, `medium` or `high`, whatever the phase |
+| `p4_defending_depth_m` | m | observed | Mean depth of the defending team's three deepest outfield players |
+| `p4_phase_id` | id | estimated | The phase segment |
+
+**Rules** (within each P1 chain, highest priority first; the vocabulary follows SkillCorner's published phases, the rules and numbers are Ponta's):
+
+1. **Set play:** a chain starting with a logged corner, or a free kick in the attacking half, for up to `p4_set_play_max_s`. Without a logged feed, only corners: the ball within `p4_corner_radius_m` of a corner flag in the chain's first `p4_corner_window_s`.
+2. **Direct:** from the own half, the ball gains `p4_direct_min_gain_m` towards goal within `p4_direct_window_s`.
+3. **Chaotic:** a chain shorter than `p4_chaotic_max_s`, or contested possession.
+4. **Quick break or transition:** a chain won from the other team in open play (regain in the opponent's half or the own half) where the ball gains `p4_break_min_gain_m` within `p4_break_eval_s`. It ends when `p4_recovered_players` defenders are goal-side of the ball, at the chain's end or after `p4_break_max_s`.
+5. **Established play:** the defending team's block from `p4_defending_depth_m`: below `p4_low_block_max_m` low (`finish`), at or above `p4_high_block_min_m` high (`build_up`), otherwise medium (`create`).
+
+Runs shorter than `p4_min_phase_s` merge into the run before them in the same chain.
+
+**Segments.** `p4_phases` (phase id, period, team, phase, start, end, duration, chain id).
+
+**Data check.** `phase_of_play`: `degraded` when team shape is degraded, when more than `p1_degraded_inferred_share` of labelled time rests on inferred possession, or without a logged event feed (only corners are found as set plays); coverage is the share of in-play time labelled.
+
+**Known limits (Stage B).**
+
+- **Validation:** formations, roles, zones and phases are estimated, not yet validated by analysts (Gate 2b). Reference agreement is in `CONTEXT_STRUCTURE_REPORT.md`.
+- **Central midfield:** most role disagreements are among defensive, central and attacking midfield.
+- **Set plays without events:** the corner rule finds about a quarter of corners; free kicks are not found.
+- **Runtime:** P3 and P4 rebuild the team frames from P2's segments; about 13 s of the 16 s per match is Stage B.
 
 ## In the semantic events (schema 1.1)
 

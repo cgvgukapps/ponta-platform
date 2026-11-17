@@ -41,3 +41,42 @@ def tiny_match(events: list[dict] | None = None, *, seconds: float = 20.0, provi
     away["ball_x"], away["ball_y"] = bx, by
     ev = pd.DataFrame(events or [], columns=EVENT_COLUMNS)
     return from_wide_frames(home, away, ev, provider=provider, match_id="t1", fps=FPS, pitch=PitchConfig(fps=FPS))
+
+
+def eleven_a_side(*, home: str = "4-4-2", away: str = "4-3-3", seconds: float = 360.0, home_attacks_positive: bool = True,
+                  ball_holder: str | None = "Home_7", events: list[dict] | None = None):
+    """
+    Two fictional teams of eleven in template formations (``structure.TEMPLATES``), each player
+    swaying about a metre around their slot, for ``seconds`` in one period. The ball sits at
+    ``ball_holder``'s feet (None: undetected). ``home_attacks_positive=False`` mirrors the
+    pitch, as Metrica Sample Game 2 is normalised.
+    """
+    from plaiq_engine.context.structure import TEMPLATES
+
+    pitch = PitchConfig(fps=FPS)
+    half = pitch.length_m / 2
+    n = int(seconds * FPS)
+    frames = np.arange(1, n + 1)
+    t = (frames - 1) / FPS
+    idx = pd.Index(frames, name="Frame")
+    clock = {"Period": np.ones(n, dtype=int), "Time [s]": t}
+    sgn = 1.0 if home_attacks_positive else -1.0
+
+    def side(name: str, formation: str, sign: float, phase: float) -> pd.DataFrame:
+        cols = {}
+        slots = [("GK", 5.0, 0.0)] + list(TEMPLATES[formation])
+        for k, (_, depth, width) in enumerate(slots, start=1):
+            sway = np.sin(2 * np.pi * t / 30.0 + phase + k)
+            cols[f"{name}_{k}_x"] = sign * (depth + sway - half)
+            cols[f"{name}_{k}_y"] = sign * (width + 0.8 * np.cos(2 * np.pi * t / 25.0 + k))
+        return pd.DataFrame({**clock, **cols}, index=idx)
+
+    home_df = side("Home", home, sgn, 0.0)
+    away_df = side("Away", away, -sgn, 1.0)
+    if ball_holder is None:
+        away_df["ball_x"], away_df["ball_y"] = np.nan, np.nan
+    else:
+        src = home_df if ball_holder.startswith("Home") else away_df
+        away_df["ball_x"], away_df["ball_y"] = src[f"{ball_holder}_x"].to_numpy() + 0.3, src[f"{ball_holder}_y"].to_numpy()
+    ev = pd.DataFrame(events or [], columns=EVENT_COLUMNS)
+    return from_wide_frames(home_df, away_df, ev, provider="metrica", match_id="t11", fps=FPS, pitch=pitch)

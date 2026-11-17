@@ -29,10 +29,13 @@ from pathlib import Path
 import pandas as pd
 from matrix_engine.parity import parity_for_match
 from matrix_engine.sample_data import repo_root, sample_data_dir
+from plaiq_engine.context.phase import PhasePackage
 from plaiq_engine.context.possession import GameStateInput, PossessionPackage
 from plaiq_engine.context.probe import ProbePackage
 from plaiq_engine.context.registry import Registry
+from plaiq_engine.context.structure import StructurePackage
 from plaiq_engine.context.thresholds import THRESHOLDS_VERSION
+from plaiq_engine.context.zones import ZonesPackage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from context_measure import SC_ID, load
@@ -42,7 +45,7 @@ GOLDEN = repo_root() / "tests" / "golden" / "context"
 
 
 def registry() -> Registry:
-    return Registry([ProbePackage(), PossessionPackage()])
+    return Registry([ProbePackage(), PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage()])
 
 
 def extras_for(key: str) -> dict:
