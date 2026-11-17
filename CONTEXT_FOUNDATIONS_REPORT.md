@@ -124,7 +124,18 @@ About 2.5 s per match for both packages (1.9 to 2.7 s), excluding loading. The f
 - **SkillCorner's player names are in its event file;** the measurement tool reads only frame, team and type columns, and no name appears in any output.
 - **Metrica's second-half event-coordinate issue** (`EXTRACTION_REPORT.md`) does not affect P1, which uses event frames and teams only.
 
-## Decisions for a human
+## Decisions (founder, 17 November 2026)
+
+1. **Gate 1 bar agreed:** at least 93% agreement with event-based possession on each Metrica match, with possession changes within 15% of the event feed's. **Gate 1 is passed:** 93.7%, 95.7% and 93.6%; changes −10%, −7% and +7%.
+2. **Thresholds agreed:** every value in "Proposed thresholds" above, unchanged. Their status in `plaiq_engine/context/thresholds.py` is now `agreed`, each naming this decision.
+
+Still open (questions in the report, not proposals), with the engineer's recommendation:
+
+3. **Control radius per provider:** recommended, but only once a second broadcast match or a design partner's feed confirms the SkillCorner result; one match is not enough to set a provider-specific value.
+4. **Hand-labelled possession sample:** recommended before Stage B, and cheap if folded into the first analyst session that Gate 2 needs anyway.
+5. **Movement-based inference for detection gaps:** recommended later, when a feed with frequent in-play gaps appears; on the regression set its effect would be small.
+
+## Decisions for a human (as first asked)
 
 1. The Gate 1 bar (the proposal above, or another).
 2. Agree, or change, the measured thresholds; status moves to `agreed` only by the founder's decision.

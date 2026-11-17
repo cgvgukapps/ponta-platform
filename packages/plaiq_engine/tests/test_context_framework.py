@@ -82,9 +82,10 @@ def test_probe_runs_end_to_end_and_stamps_versions(tmp_path):
 def test_thresholds_have_status_and_sources():
     for t in thresholds.THRESHOLDS.values():
         assert t.status in ("proposed", "measured", "agreed")
-        assert t.status != "agreed", "only the founder sets agreed values"
-        if t.status == "measured":
+        if t.status in ("measured", "agreed"):
             assert t.source, t.name
+        if t.status == "agreed":
+            assert "agreed by the founder" in t.source, f"{t.name}: agreed values must name the founder's decision"
     assert thresholds.values({"p1_control_radius_m": 2.0})["p1_control_radius_m"] == 2.0
     with pytest.raises(KeyError):
         thresholds.values({"no_such_threshold": 1.0})
