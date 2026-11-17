@@ -19,7 +19,9 @@ These are agreements with one provider's labels on one match, not accuracy again
 - **Phases** hold up pooled (κ 0.61; 0.62 and 0.59 by half), but only 11 of 20 matches clear 0.55 on both halves.
 - **Roles** do not generalise: the median is 75.4% by playing time, and 12 of 20 matches clear 75%. Most misses are wide midfielders given central slots.
 
-**Gate 2a is met on the reference match except zones, which wait for the spot check. It is not met across the wider set for roles, and only pooled for phases.**
+**Zones:** the founder's spot check passed, 47 of 50 judged right (bar 45).
+
+**Gate 2a is met on the reference match, zones included. It is not met across the wider set for roles, and only pooled for phases.**
 
 ## What was built
 
@@ -321,10 +323,13 @@ Both are easy to optimise if the runtime budget at Gate 3a needs it.
 
 Taken on 17 November 2026: the five Gate 2a bars and every Stage B threshold agreed; the Metrica Game 2 fix approved and done; the SkillCorner open-data download approved and done (20 matches, not 10).
 
+**Zone spot check, done 17 November 2026:**
+- **Zones:** 47 of 50 judged right, so the bar is met. The three misses: Metrica 1 grid point 25974, Metrica 2 grid point 4809, SkillCorner grid point 16221.
+- **Phases on the still cards:** 34 of 50 judged right. By label: build_up 8 of 8, create 9 of 12, finish 9 of 17, direct 4 of 6, set_play 2 of 4, transition 1 of 2, chaotic 1 of 1.
+- **Why the phase figure is indicative only:** the founder noted that a still frame rarely shows a phase. `tools/context_spotcheck.py --replay` now writes the same 50 moments as replays (5 s before, 2 s after) with a phase tick and a note per case.
+- **A pattern to check on the replays:** "finish" follows the defending team's low block, whether or not the ball is in the final third.
+
 Still open:
-1. **Zone spot check:**
-   - Open the page written by `tools/context_spotcheck.py`.
-   - Tick the zone (and optionally phase) boxes.
-   - Copy the results back.
+1. **Phase replay check:** the founder judges the 50 replays and copies the results back.
 2. **Roles across the 20 matches:** approve the short P2 role-fit revision recommended above, or accept roles as they are and keep them out of later packages.
 3. **Phase bar for a set of matches:** keep "κ at least 0.55 on each half" per match, or restate it pooled with a per-match floor.
