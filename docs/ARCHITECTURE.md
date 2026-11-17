@@ -22,3 +22,13 @@ Recorded here because they are driven by the prototype's measured import graph, 
 8. **Rendering helpers stay out of the engine packages.** The Plotly trace builders `app.py` imported (`control_to_hex_traces`, `value_to_hex_traces`, `build_render_grid`, `player_zone_outlines`, `corridor_traces_for_frame`) are reference for the web pitch only.
 9. **Private names get thin public wrappers.** `is_failed_pass_event` and `nearest_hex` in `plaiq_engine/match_analysis.py` call `_is_failed_pass_event` and `_nearest_hex` unchanged; engine code is not edited.
 10. **Decision-quality bands live in `semantic_builder.py`.** The engine documents 0.55 / 0.80 / 0.95 but has no band function (the app applied them). `dq_band` is defined once, citing the spec.
+
+## Context packages (added 17 November 2026)
+
+Context packages (`ponta-blueprint/context-packages.md`) describe the whole match on a fixed grid. Stage A (P0 foundations, P1 possession and game state) is built; see `CONTEXT_FOUNDATIONS_REPORT.md` and `docs/context/vocabulary.md`.
+
+11. **Context packages live in `plaiq_engine/context/`.** Later packages need Plaiq's pressure and pass logic, and the semantic builder reads P1, so the packages sit on the Plaiq side of the one-way dependency. `matrix_engine` knows only the Data check entry type (`parity.PackageEntry`, `with_package_entries`) and never imports package code; the import check still passes.
+12. **The grid is keyed by elapsed time, not the vendor clock.** `frame_ts` is seconds since the first recorded frame, because SkillCorner's clock restarts at 45:00 in the second half and would repeat keys. The vendor clock is kept as `clock_s` and the football minute as `minute`.
+13. **One frame table, one block per package.** `context_frames.parquet` holds the grid columns, then each package's fields (prefixed with its name) and a `<package>_version` column. Segment tables (P1's possession chains) are written as `<package>_<name>.parquet`.
+14. **Thresholds in one versioned config.** `plaiq_engine/context/thresholds.py` holds every named value with its status (`proposed`, `measured`, `agreed`); only the founder sets `agreed`.
+15. **Semantic events schema 1.1.** Four nullable columns from P1 (`possession_chain_id`, `possession_source`, `score_diff`, `red_card_diff`), null unless the builder is given a `ContextResult`. Existing columns are unchanged.

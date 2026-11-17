@@ -123,6 +123,28 @@ class MetricParity:
     unlock: str | None = None
 
 
+@dataclass(frozen=True)
+class PackageEntry:
+    """
+    One Data check line contributed by a context package (``ponta-blueprint/context-packages.md``).
+
+    Context packages live outside ``matrix_engine`` (some need Plaiq), so they build these
+    entries themselves and attach them with :func:`with_package_entries`; ``matrix_engine``
+    never imports package code. ``coverage`` is the share of match time or events the
+    package labelled, as a plain line (for example ``"98.2% of match time labelled"``).
+    """
+
+    package: str
+    package_version: str
+    metric: str
+    label: str
+    state: State
+    reason: str
+    measure: str | None = None
+    unlock: str | None = None
+    coverage: str | None = None
+
+
 @dataclass
 class AnalyticsParityReport:
     provider: str
@@ -133,6 +155,9 @@ class AnalyticsParityReport:
     coverage: dict
     schema_version: str = SCHEMA_VERSION
     engine_version: str = field(default_factory=lambda: _engine_version())
+    #: Context package entries, by package name. Empty unless packages added some; the
+    #: base metrics, their summary and the serialised form are unchanged when empty.
+    packages: dict[str, list[PackageEntry]] = field(default_factory=dict)
 
     @property
     def summary(self) -> dict[str, int]:
@@ -144,8 +169,23 @@ class AnalyticsParityReport:
     def states(self) -> dict[str, State]:
         return {k: m.state for k, m in self.metrics.items()}
 
+    def package_summary(self) -> dict[str, int]:
+        """State counts over context package entries only (the base summary is separate)."""
+        out = {"full": 0, "degraded": 0, "blocked": 0}
+        for entries in self.packages.values():
+            for e in entries:
+                out[e.state] += 1
+        return out
+
     def to_dict(self) -> dict:
         """JSON-serialisable form, as stored on the match record."""
+        d = self._base_dict()
+        if self.packages:
+            d["packages"] = {name: [asdict(e) for e in entries] for name, entries in sorted(self.packages.items())}
+            d["package_summary"] = self.package_summary()
+        return d
+
+    def _base_dict(self) -> dict:
         return {
             "schema_version": self.schema_version,
             "engine_version": self.engine_version,
@@ -157,6 +197,31 @@ class AnalyticsParityReport:
             "coverage": self.coverage,
             "metrics": {k: asdict(m) for k, m in self.metrics.items()},
         }
+
+
+def with_package_entries(report: AnalyticsParityReport, entries: list[PackageEntry]) -> AnalyticsParityReport:
+    """
+    Return a copy of ``report`` with context package entries attached, grouped by package.
+
+    The base metrics are untouched. A package's entries replace any earlier entries from
+    the same package, so re-running a package does not duplicate its lines.
+    """
+    by_pkg: dict[str, list[PackageEntry]] = {k: list(v) for k, v in report.packages.items()}
+    new: dict[str, list[PackageEntry]] = {}
+    for e in entries:
+        new.setdefault(e.package, []).append(e)
+    by_pkg.update(new)
+    return AnalyticsParityReport(
+        provider=report.provider,
+        mode=report.mode,
+        fusion_tier=report.fusion_tier,
+        inputs=report.inputs,
+        metrics=report.metrics,
+        coverage=report.coverage,
+        schema_version=report.schema_version,
+        engine_version=report.engine_version,
+        packages=by_pkg,
+    )
 
 
 def _engine_version() -> str:

@@ -40,7 +40,9 @@ from matrix_engine.parity import AnalyticsParityReport
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.match_analysis import MatchAnalysis
 
-SCHEMA_VERSION = "1.0"
+#: 1.1 (17 November 2026): adds the context columns from package P1 (possession chain and
+#: source, score and red-card difference for the actor's team). Earlier columns are unchanged.
+SCHEMA_VERSION = "1.1"
 
 #: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types.
 BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "optimal"), (0.80, "good"), (0.55, "suboptimal"))
@@ -63,6 +65,8 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "not_scored", "not_scored_reason",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
+    # Context package P1 (null unless a ContextResult is given): labels, never coordinates.
+    "possession_chain_id", "possession_source", "score_diff", "red_card_diff",
 )
 
 
@@ -121,17 +125,57 @@ class SemanticBuilder:
         The match's data check; its states annotate every row.
     roles : dict, optional
         ``{player_ref: role}`` from the club's roster. Unknown roles stay null.
+    context : ContextResult, optional
+        Context package outputs for the same match (``plaiq_engine.context``). When given,
+        each row carries the P1 context at its start frame; otherwise those columns are null.
     """
 
-    def __init__(self, analysis: MatchAnalysis, parity: AnalyticsParityReport, *, roles: dict[str, str] | None = None) -> None:
+    def __init__(self, analysis: MatchAnalysis, parity: AnalyticsParityReport, *, roles: dict[str, str] | None = None,
+                 context=None) -> None:
         self.a = analysis
         self.parity = parity
         self.roles = roles or {}
+        self._ctx = self._context_lookup(context)
         self.match_id = f"{analysis.match.provider}_{analysis.match.match_id}"
         self.engine_version = _engine_version()
         self.goalkeepers = self._goalkeepers()
 
     # -- helpers ---------------------------------------------------------------
+
+    def _context_lookup(self, context):
+        """P1 context by native frame: the grid point at or before each frame."""
+        if context is None or "p1_possession" not in getattr(context, "frames", pd.DataFrame()).columns:
+            return None
+        f = context.frames.sort_values("native_frame", kind="stable")
+        return {
+            "frame": f["native_frame"].to_numpy(),
+            "chain": f["p1_chain_id"].to_numpy(dtype=object),
+            "source": f["p1_possession_source"].to_numpy(dtype=object),
+            "score": {t: f[f"p1_score_{t}"].to_numpy(dtype=object) for t in ("home", "away")},
+            "red": {t: f[f"p1_red_{t}"].to_numpy(dtype=object) for t in ("home", "away")},
+        }
+
+    def _context_fields(self, frame: int | None, team: str) -> dict:
+        empty = {"possession_chain_id": None, "possession_source": None, "score_diff": None, "red_card_diff": None}
+        c = self._ctx
+        if c is None or frame is None or team not in ("home", "away"):
+            return empty
+        i = int(np.searchsorted(c["frame"], frame, side="right")) - 1
+        if i < 0:
+            return empty
+        other = "away" if team == "home" else "home"
+
+        def diff(block):
+            a, b = block[team][i], block[other][i]
+            return None if a is None or b is None or pd.isna(a) or pd.isna(b) else int(a) - int(b)
+
+        chain = c["chain"][i]
+        return {
+            "possession_chain_id": None if chain is None or pd.isna(chain) else f"{self.match_id}_ch{int(chain):04d}",
+            "possession_source": None if c["source"][i] is None else str(c["source"][i]),
+            "score_diff": diff(c["score"]),
+            "red_card_diff": diff(c["red"]),
+        }
 
     def _goalkeepers(self) -> set[str]:
         out = set()
@@ -180,6 +224,7 @@ class SemanticBuilder:
             "players_observed": obs,
             "parity_spatial": self.parity.metrics["decision_quality"].state,
             "parity_physiological": self.parity.metrics["load_and_fatigue"].state,
+            **self._context_fields(frame, team.lower()),
         }
 
     # -- semantic events ----------------------------------------------------------
@@ -383,6 +428,10 @@ def nested_record(row: dict) -> dict:
             "not_scored": row["not_scored"], "not_scored_reason": row["not_scored_reason"],
         },
         "physiological_context": row["physiological_context"],
+        "match_context": {
+            "possession_chain_id": row.get("possession_chain_id"), "possession_source": row.get("possession_source"),
+            "score_diff": row.get("score_diff"), "red_card_diff": row.get("red_card_diff"),
+        },
         "quality_gate": {
             "ball_detected": row["ball_detected"], "players_observed": row["players_observed"],
             "parity": {"spatial_intelligence": row["parity_spatial"], "physiological_context": row["parity_physiological"]},

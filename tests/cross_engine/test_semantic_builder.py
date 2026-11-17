@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.0").all()
+    assert sem["schema_version"].eq("1.1").all()  # 1.1: context columns added (P1)
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -138,3 +138,25 @@ def test_trajectories_have_refs_and_no_physiological_columns(built):
     assert {"frame", "time_s", "player_ref", "x", "y", "speed", "source_attribution"} <= set(tr.columns)
     assert not {"heart_rate", "hr", "load"} & set(tr.columns)
     assert tr["player_ref"].str.fullmatch(r"(home|away)_\w+|ball").all()
+
+
+def test_context_columns_are_null_without_context(built):
+    _, _, sem = built
+    for c in ("possession_chain_id", "possession_source", "score_diff", "red_card_diff"):
+        assert sem[c].isna().all(), c
+
+
+def test_context_columns_from_p1(built):
+    from plaiq_engine.context.possession import PossessionPackage
+    from plaiq_engine.context.registry import Registry
+
+    analysis, builder, plain = built
+    ctx = Registry([PossessionPackage()]).run(analysis.match)
+    sem = SemanticBuilder(analysis, builder.parity, context=ctx).semantic_events()
+    base_cols = [c for c in SEMANTIC_COLUMNS if c not in ("possession_chain_id", "possession_source", "score_diff", "red_card_diff")]
+    pd.testing.assert_frame_equal(sem[base_cols], plain[base_cols])  # existing columns unchanged
+    assert sem["possession_source"].dropna().isin(["observed", "inferred", "events", "unknown"]).all()
+    assert sem["possession_chain_id"].dropna().str.fullmatch(r"synthetic_1_ch\d{4}").all()
+    assert sem["score_diff"].dropna().eq(0).all()  # no goals in the synthetic match
+    rec = nested_record(sem.iloc[0].to_dict())
+    assert set(rec["match_context"]) == {"possession_chain_id", "possession_source", "score_diff", "red_card_diff"}

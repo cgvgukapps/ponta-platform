@@ -12,3 +12,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Context golden summaries are derived from sample data: regenerable, not tracked (manifest only).
+tests/golden/context/*.json
+!tests/golden/context/manifest.json
