@@ -12,8 +12,9 @@ Metrica specifics the adapter is responsible for hiding from the rest of Matrix:
 - Raw coordinates are normalised 0–1 with a top-left origin, so
   ``to_metric_coordinates`` converts to centred metres and flips y.
 - Teams swap ends at half time, so ``to_single_playing_direction`` is applied
-  before reshaping — downstream Matrix code can then assume home attacks +x
-  for the whole match.
+  before reshaping, then ``orient_home_attacking_positive`` rotates the match
+  if the home team starts attacking -x (sample game 2). Downstream Matrix code
+  can then assume home attacks +x for the whole match.
 - Columns are named ``Home_11_x`` / ``Away_3_y``; player IDs are namespaced to
   ``home_11`` / ``away_3`` so a merged multi-source frame stays unambiguous.
 
@@ -30,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from matrix_engine.ingestion.metrica_io import (
+    orient_home_attacking_positive,
     read_match_data,
     to_metric_coordinates,
     to_single_playing_direction,
@@ -63,7 +65,8 @@ def _read_direction_normalised(data_dir: str, game_id: int) -> tuple[pd.DataFram
     home, away, events = read_match_data(data_dir, game_id)
     home = to_metric_coordinates(home)
     away = to_metric_coordinates(away)
-    home, away, _ = to_single_playing_direction(home, away, events)
+    home, away, events = to_single_playing_direction(home, away, events)
+    home, away, _ = orient_home_attacking_positive(home, away, events)
     return home, away
 
 

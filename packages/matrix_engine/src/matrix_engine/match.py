@@ -27,6 +27,7 @@ import pandas as pd
 
 from matrix_engine.ingestion.epts_io import load_game3
 from matrix_engine.ingestion.metrica_io import (
+    orient_home_attacking_positive,
     read_match_data,
     to_metric_coordinates,
     to_single_playing_direction,
@@ -105,7 +106,8 @@ def load_metrica_csv_match(data_dir: str, game_id: int) -> NormalisedMatch:
 
     Same steps as the prototype's ``preprocess._preprocess_metrica_csv``: read,
     convert tracking and event coordinates to centred metres, then normalise the
-    playing direction.
+    playing direction. One step the prototype lacked follows: if the home team
+    attacks -x (game 2), the whole match is rotated so it attacks +x as documented.
     """
     home, away, events = read_match_data(data_dir, game_id)
     home = to_metric_coordinates(home)
@@ -118,6 +120,8 @@ def load_metrica_csv_match(data_dir: str, game_id: int) -> NormalisedMatch:
             sign = -1.0 if axis_y else 1.0
             events[col] = sign * (events[col] - 0.5) * size
     home, away, events = to_single_playing_direction(home, away, events)
+    # Not in the prototype: game 2's home team starts attacking -x (see metrica_io).
+    home, away, events = orient_home_attacking_positive(home, away, events)
     return from_wide_frames(
         home, away, events,
         provider="metrica", match_id=str(game_id), fps=DEFAULT_FPS, pitch=PitchConfig(fps=DEFAULT_FPS),

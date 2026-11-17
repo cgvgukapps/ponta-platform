@@ -31,13 +31,18 @@ These are agreements with one provider's labels on one match, not accuracy again
 | Field definitions | `docs/context/vocabulary.md` (P0 to P4) |
 | Architecture decisions 16 to 18 | `docs/ARCHITECTURE.md` |
 
-## A data finding: Metrica Game 2's direction of play
+## A data finding: Metrica Game 2's direction of play (fixed)
 
 In Metrica Sample Game 2 the home goalkeeper's mean x is +39.7 m. The normalised data therefore has the home team attacking −x in both periods, against `PitchConfig.home_attacks_positive_x=True`. The Metrica CSV loader flips the second half and assumes the first-half direction; in Game 2 that assumption is wrong. Games 1 and 3 and SkillCorner are correct.
 
 - **Stage B:** reads each team's direction per period from the data (the side its goalkeeper defends) and is unaffected.
-- **The loader:** is not changed. This task makes no engine changes; the finding is reported here.
-- **Who it may affect:** anything that assumes the home team attacks +x on Game 2 (decision-quality direction, attacking-third labels in the semantic events). The prototype used the same loader, so its Game 2 outputs share the assumption. **Recommended:** a small Matrix fix with a regression test, as its own task.
+- **Who it may affect:** anything that assumes the home team attacks +x on Game 2 (decision-quality direction, attacking-third labels in the semantic events). The prototype used the same loader, so its Game 2 outputs share the assumption.
+
+**Fixed on 17 November 2026** (founder approval, after this report was first written):
+- `metrica_io.orient_home_attacking_positive` rotates the whole match by 180 degrees when the home goalkeeper defends +x over the first half. Both Metrica CSV loaders (`match.load_metrica_csv_match`, `providers.metrica`) call it after the half-time flip; the prototype's `to_single_playing_direction` is unchanged.
+- Regression tests in `packages/matrix_engine/tests/test_metrica_coords.py`.
+- After the fix both home goalkeepers in Games 1 and 2 defend −x in both halves.
+- **What changed downstream:** in the context golden summaries only Game 2's recorded attack signs; every P1 to P4 field is identical, as expected. Games 1 and 3 and SkillCorner are unchanged. No prototype parity reference covers Game 2, so the extraction proof is unaffected. Engine outputs on Game 2 that depend on direction (decision quality, attacking-third labels) now follow the documented convention and will differ from the prototype's Game 2 outputs.
 
 ## Measurements
 

@@ -61,7 +61,7 @@ Rate: `context_grid_rate_hz` (5 Hz). Nothing is interpolated: a ball or player n
 
 ## Team frame (P2 to P4)
 
-Every Stage B measure is taken in a team's own frame: **depth** is metres from its own goal line towards the opponent's, **width** is metres from the centre line with the team's left positive. Each team's direction of attack is read per period from the side its goalkeeper defends (the player with the largest mean distance from halfway), not assumed: Metrica Sample Game 2 is normalised with the home team attacking −x. The goalkeeper in each two-minute block is the team's deepest player on average; every other player is outfield.
+Every Stage B measure is taken in a team's own frame: **depth** is metres from its own goal line towards the opponent's, **width** is metres from the centre line with the team's left positive. Each team's direction of attack is read per period from the side its goalkeeper defends (the player with the largest mean distance from halfway), not assumed from the provider convention (it caught Metrica Sample Game 2 normalised the wrong way round, since fixed in the loader). The goalkeeper in each two-minute block is the team's deepest player on average; every other player is outfield.
 
 ## P2 Team structure
 

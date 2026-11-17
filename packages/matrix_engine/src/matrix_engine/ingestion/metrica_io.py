@@ -124,6 +124,46 @@ def to_single_playing_direction(
     return home, away, events
 
 
+def home_attack_sign(home: pd.DataFrame, min_presence: float = 0.5) -> int:
+    """
+    Which way the home team attacks in the first half: +1 towards +x, -1 towards -x.
+
+    Read from the home goalkeeper, taken as the player with the largest absolute
+    mean x over the first half among players seen in at least ``min_presence`` of
+    its frames. A goalkeeper near +x defends that end, so the team attacks -x.
+    More robust than the single kick-off frame that ``find_playing_direction`` reads.
+    """
+    first = home.loc[home.Period == 1] if "Period" in home.columns else home
+    x_cols = [c for c in first.columns if c.startswith("Home_") and c.endswith("_x")]
+    seen = first[x_cols].notna().mean()
+    means = first[[c for c in x_cols if seen[c] >= min_presence]].mean()
+    if means.empty or not np.isfinite(means.abs().max()):
+        return 1
+    return -1 if means[means.abs().idxmax()] > 0 else 1
+
+
+def orient_home_attacking_positive(
+    home: pd.DataFrame, away: pd.DataFrame, events: pd.DataFrame
+) -> tuple:
+    """
+    Rotate the whole match by 180 degrees if the home team attacks -x.
+
+    ``to_single_playing_direction`` only makes each team attack the same way in
+    both halves; it assumes the home team starts attacking +x. Metrica Sample
+    Game 2 starts the other way, so without this step its home team attacks -x
+    for the whole match, against Matrix's convention. Call it AFTER
+    ``to_single_playing_direction``. A no-op when the home team already attacks +x.
+    """
+    if home_attack_sign(home) == 1:
+        return home, away, events
+    for df in [home, away, events]:
+        coord_cols = [c for c in df.columns if c.endswith("_x") or c.endswith("_y")]
+        if "Start X" in df.columns:
+            coord_cols = ["Start X", "Start Y", "End X", "End Y"]
+        df.loc[:, coord_cols] *= -1
+    return home, away, events
+
+
 def find_goalkeeper(team: pd.DataFrame, team_name: str) -> str:
     """
     Identify the goalkeeper as the player furthest from the centre circle at kick-off.
