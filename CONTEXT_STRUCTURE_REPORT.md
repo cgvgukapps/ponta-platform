@@ -12,7 +12,14 @@ All three packages are built on the Stage A registry. They run on all four regre
 - **Shape measures** fall inside published ranges for official matches.
 - **Zones** wait for the founder's spot check.
 
-These are agreements with one provider's labels on one match, not accuracy against a hand-labelled truth. **Gate 2a is not declared passed:** the founder sets the bars from these numbers.
+These are agreements with one provider's labels on one match, not accuracy against a hand-labelled truth.
+
+**Update, 17 November 2026 (later the same day).** The founder agreed the bars and every Stage B threshold, approved the Metrica Game 2 fix (done) and the SkillCorner open-data download. Measured on all 20 open-data matches ([below](#across-skillcorners-open-data-20-matches)):
+- **Formations** meet the bar on every match.
+- **Phases** hold up pooled (κ 0.61; 0.62 and 0.59 by half), but only 11 of 20 matches clear 0.55 on both halves.
+- **Roles** do not generalise: the median is 75.4% by playing time, and 12 of 20 matches clear 75%. Most misses are wide midfielders given central slots.
+
+**Gate 2a is met on the reference match except zones, which wait for the spot check. It is not met across the wider set for roles, and only pooled for phases.**
 
 ## What was built
 
@@ -21,11 +28,12 @@ These are agreements with one provider's labels on one match, not accuracy again
 | P2 team structure: per-frame shape and lines; per-window lines, formation, roles; current formation with persistence | `plaiq_engine/context/structure.py` |
 | P3 relative zones: ball lane, third, band against the defending lines, hull, pocket; attacker counts | `plaiq_engine/context/zones.py` |
 | P4 phase of play: rule-based state machine, paired out-of-possession phase, block, phase segments | `plaiq_engine/context/phase.py` |
-| Stage B thresholds (P2 to P4), each with status, reason and source | `plaiq_engine/context/thresholds.py` (version 0.3.0; P1 values unchanged) |
+| Stage B thresholds (P2 to P4), each with status, reason and source | `plaiq_engine/context/thresholds.py` (version 0.3.0; 0.4.0 records the founder's agreement, values unchanged) |
 | Reference readers (SkillCorner roles, phases as points and as spans; no names) | `tools/context_references.py` |
 | Phase sweep (half-split) | `tools/context_phase_sweep.py` |
 | Measurements for this report | `tools/context_structure_measure.py` |
 | Spot-check page for zones and phases (written outside the repository) | `tools/context_spotcheck.py` |
+| Stage B on SkillCorner's open data (20 matches; reads and writes outside the repository) | `tools/context_reference_set.py` |
 | Golden harness registers P2 to P4; manifest updated | `tools/context_golden.py`, `tests/golden/context/manifest.json` |
 | Tests: 27 synthetic (building blocks, all ten templates, mirrored pitch, determinism) and one on sample data | `packages/plaiq_engine/tests/test_context_structure.py`, `tests/cross_engine/test_context_sample.py`, fixture `tests/support/context_fixture.py` (`eleven_a_side`) |
 | Field definitions | `docs/context/vocabulary.md` (P0 to P4) |
@@ -179,7 +187,9 @@ Only the two block boundaries matter much. They are fitted to one match and one 
 - **Result:** it finds 6 of 25, with 1 false alarm (radius 4 m, first 1 s). Wider radii find up to 9 of 25 but raise false alarms to 5 to 7.
 - **Why it misses:** in most missed corners the ball is not detected until it is in flight. That is why Data check marks phases Degraded without a logged feed.
 
-## Proposed thresholds (for the founder to agree or change)
+## Thresholds
+
+**All agreed by the founder on 17 November 2026** (thresholds version 0.4.0; no value changed). The Status column records the basis each value had when it was proposed.
 
 | Threshold | Value | Status | Basis |
 |---|---|---|---|
@@ -206,7 +216,9 @@ Only the two block boundaries matter much. They are fitted to one match and one 
 | `p4_corner_radius_m` | 4 m | proposed | Corner rule test above |
 | `p4_corner_window_s` | 1 s | proposed | Corner rule test above |
 
-## Proposed Gate 2a bars
+## Gate 2a bars
+
+**Agreed by the founder on 17 November 2026.** "Measured" is the reference match 1886347; the wider set is in the next section.
 
 | Package | Measure | Measured | Proposed bar |
 |---|---|---|---|
@@ -217,6 +229,54 @@ Only the two block boundaries matter much. They are fitted to one match and one 
 | P4 phases | Cohen's κ against SkillCorner's in-possession phases | 0.60 (0.58 / 0.61 by half) | **at least 0.55**, on each half |
 
 The phase bar sits below published analyst agreement (κ about 0.7) because the reference is one provider's rules, not a consensus.
+
+## Across SkillCorner's open data (20 matches)
+
+**Source:** SkillCorner's open data (MIT licence, checked 17 November 2026):
+- 20 matches from the 2024/25 Australian A-League, each with tracking, dynamic events and a phases-of-play file;
+- downloaded to `~/ponta-reference-data/skillcorner-opendata`, outside every repository;
+- SkillCorner credited as its README asks.
+
+**Method:**
+- `tools/context_reference_set.py` runs P1 to P4 with the agreed thresholds on every match.
+- Roles are scored by the same method as on the reference match.
+- Phases are scored against two references: spans from the dynamic events (the Gate 2a method) and SkillCorner's own phases-of-play file.
+- Nothing was tuned on these matches.
+- Two corrections to the comparison, neither touching the packages:
+  - **LF and RF** (forwards in a front two) were missing from the role-group table and are now counted as centre forwards. This changes no figure on the reference match.
+  - **The re-downloaded 1886347** has a revised dynamic-events file. Phases on it give κ 0.59 (0.58 and 0.59 by half, 9,628 points) against 0.60 (0.58 and 0.61, 9,463 points) on the older copy; roles are identical.
+
+| Measure | Bar | Median (range) over 20 matches | Matches meeting the bar |
+|---|---|---|---|
+| Roles by position group, time-weighted | at least 75% | 75.4% (59.7% to 98.7%) | 12 |
+| Same, central midfield merged | at least 85% | 76.3% (59.7% to 100%) | 7 |
+| Formation changes per team, state and half | at most 2 | at most 1 on every match | 20 |
+| Phase κ, lower of the two halves (event spans) | at least 0.55 | 0.56 (0.50 to 0.66) | 11 |
+| All four bars | | | 5 |
+
+**Phases pooled over all 20 matches:**
+- **Event spans:** 193,453 compared points; 72.7% agreement, **κ 0.61** (0.62 first half, 0.59 second).
+- **SkillCorner's phases-of-play file:** 265,278 points; 70.3% agreement, **κ 0.59** (0.60 and 0.58).
+- So the phase rules and the block boundaries (26 m and 47 m) carry over to other matches at about the level measured on the reference match. One half of one match is a small sample (about 5,000 points), and per-half κ ranges from 0.50 to 0.72. **No match falls below 0.50.**
+
+**Roles, where they miss** (165 of 583 players who played):
+- **Wide midfielders given central slots** account for 72 misses (44%). SkillCorner calls them LM or RM; Ponta gives a central or defensive midfield slot.
+- **Centre forwards given an attacking-midfield slot** account for 24 (15%).
+- The rest are spread thinly: wingers against wing-backs or attacking midfielders, and full-backs against centre-backs.
+- **Why merging central midfield does not help here:** SkillCorner uses no central-midfield role (CM, LCM, RCM) on these matches. Its midfielders are DM, AM, LM and RM. Merging central midfield helped on the reference match only because of that match's line-ups.
+- **A hypothesis, not tested:** many of these teams play a flat midfield four or a front two. The template fit may prefer shapes with a midfield three, or a wide midfielder who tucks in reads as central over a two-minute window. SkillCorner's role is one label per player for the match; Ponta's is the main slot by playing time.
+
+**Other measures on the 20 matches:**
+- **Direction:** read consistently on every match.
+- **Shape coverage:** shape covers a median 73% of in-play time (54% to 80%), so every Stage B entry is Degraded on broadcast tracking, as on the reference match.
+- **Runtime:** P1 to P4 take a median 18.8 s per match (13 s to 27 s) on a laptop also running other jobs.
+
+**What this means for Gate 2a:**
+- **Formations:** met everywhere.
+- **Phases:** met pooled and on the reference match; per match, the per-half bar is noisy.
+- **Roles:** not met across the set. The misses are specific (wide midfield and front-two shapes), and the template fit is the place to fix them.
+- **Recommended:** a short P2 role-fit revision measured on these 20 matches before Stage C builds on roles. Until then, roles stay "estimated, not yet validated" and are not used by later packages.
+- **Phase bar:** the founder may also restate it for a set of matches, for example pooled κ at least 0.55 on each half and no match below 0.50.
 
 ## Runtime and storage
 
@@ -236,7 +296,7 @@ Stage A alone was about 2.5 s and 0.8 MB. Most of the new time is spent in P3 an
 Both are easy to optimise if the runtime budget at Gate 3a needs it.
 
 **Other gates:**
-- **Full local gate:** 1,057 passed, 12 skipped.
+- **Full local gate:** 1,057 passed, 12 skipped. *(After the Game 2 fix and the agreement of the thresholds: 1,060 passed, 12 skipped.)*
 - **Golden outputs:** captured; a second run matches on all four matches.
 - **P1 outputs:** unchanged (the only golden difference is the four new Data check entries per match).
 - **Import check and lint:** both pass.
@@ -254,16 +314,17 @@ Both are easy to optimise if the runtime budget at Gate 3a needs it.
   - **Vocabulary:** follows SkillCorner's published phases so it can be measured against a reference. The blueprint's earlier list (progression, settled possession, counter-press, defensive transition) is not used.
   - **Pressure:** Plaiq pressure is not an input; the block rule matched the reference without it.
   - **Counter-press:** not labelled.
-- **References:** one match with role and phase labels, one provider. SkillCorner's open data reportedly has phases for 10 more matches under an MIT licence; using them would test whether the bars and the block boundaries generalise.
+- **References:** one provider. *(Revised 17 November 2026.)* Measured on the reference match and then on all 20 of SkillCorner's open-data matches (section above); still one provider and one league.
 - **No analyst check:** every Stage B label is "estimated, checked against references, not yet validated by analysts" until Gate 2b.
 
 ## Decisions for the founder
 
-1. **Gate 2a bars:** agree the five bars above, or change them.
-2. **Thresholds:** agree the measured P4 values (26 m, 47 m, 15 m) and the proposed P2 to P4 values, or change them.
-3. **Zone spot check:**
+Taken on 17 November 2026: the five Gate 2a bars and every Stage B threshold agreed; the Metrica Game 2 fix approved and done; the SkillCorner open-data download approved and done (20 matches, not 10).
+
+Still open:
+1. **Zone spot check:**
    - Open the page written by `tools/context_spotcheck.py`.
-   - Tick the zone and phase boxes.
+   - Tick the zone (and optionally phase) boxes.
    - Copy the results back.
-4. **Metrica Game 2 direction:** approve a separate small Matrix task to fix the loader, with a regression test, and check what downstream outputs change.
-5. **More reference matches:** approve downloading SkillCorner's open data (10 matches with phases of play) outside the repositories, after checking its licence, to re-run the role and phase measurements.
+2. **Roles across the 20 matches:** approve the short P2 role-fit revision recommended above, or accept roles as they are and keep them out of later packages.
+3. **Phase bar for a set of matches:** keep "κ at least 0.55 on each half" per match, or restate it pooled with a per-match floor.

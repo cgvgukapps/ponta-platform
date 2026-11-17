@@ -94,12 +94,14 @@ def test_corner_rule():
     assert not corner_at_start(bx, by, np.arange(1), 105.0, 68.0, 4.0)
 
 
-def test_stage_b_thresholds_carry_a_reason_and_status():
-    for name in ("p2_window_s", "p2_formation_persist_s", "p3_min_coverage", "p4_low_block_max_m", "p4_high_block_min_m"):
-        t = THRESHOLDS[name]
-        assert t.reason and t.status in ("proposed", "measured")
-        if t.status == "measured":
-            assert "CONTEXT_STRUCTURE_REPORT.md" in t.source
+def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
+    stage_b = [t for name, t in THRESHOLDS.items() if name.startswith(("p2_", "p3_", "p4_"))]
+    assert len(stage_b) == 22
+    for t in stage_b:
+        assert t.reason and t.status == "agreed"
+        assert "agreed by the founder, 17 November 2026" in t.source
+    for name in ("p4_low_block_max_m", "p4_high_block_min_m", "p4_break_min_gain_m"):
+        assert "CONTEXT_STRUCTURE_REPORT.md" in THRESHOLDS[name].source
 
 
 # -- the packages on a synthetic match ---------------------------------------------------

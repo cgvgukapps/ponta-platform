@@ -134,7 +134,8 @@ fieldset{border:0;padding:0;display:flex;gap:16px} button{font:inherit;padding:6
 </style></head><body>
 <h1>Zones and phases spot check</h1>
 <p>Each card is one moment, drawn with the attacking team (blue) going left to right. Red dashed lines are the defending team's line centroids; the shaded area is its hull. Tick a box when Ponta's label looks right to you.</p>
-<div class="bar"><span id="count"></span><button id="copy">Copy results</button></div>
+<div class="bar"><span id="count"></span><button id="copy">Copy results</button><span id="copied" aria-live="polite"></span></div>
+<textarea id="out" hidden readonly rows="4" style="width:100%;font:12px ui-monospace,monospace"></textarea>
 <div class="grid">__CARDS__</div>
 <script>
 const boxes=[...document.querySelectorAll('input[type=checkbox]')];
@@ -143,7 +144,9 @@ document.getElementById('count').textContent=`Zones right: ${z.filter(b=>b.check
 boxes.forEach(b=>b.addEventListener('change',tally));tally();
 document.getElementById('copy').addEventListener('click',()=>{const out=[...document.querySelectorAll('.card')].map(c=>({id:c.dataset.id,
 zone:c.querySelector('[data-k=zone]').checked,phase:c.querySelector('[data-k=phase]').checked}));
-try{navigator.clipboard.writeText(JSON.stringify(out));}catch(e){}});
+const txt=JSON.stringify(out),box=document.getElementById('out');box.value=txt;box.hidden=false;box.select();
+const done=m=>{document.getElementById('copied').textContent=m;};
+try{navigator.clipboard.writeText(txt).then(()=>done('Copied. Paste it back to Claude.'),()=>done('Copy blocked: select the text below and copy it.'));}catch(e){done('Copy blocked: select the text below and copy it.');}});
 </script></body></html>"""
 
 

@@ -37,12 +37,12 @@ from context_references import sc_phase_spans, sc_roles
 MATCHES = ("metrica_1", "metrica_2", "metrica_3", "skillcorner_1886347")
 GROUP = {"LB": "LB", "LWB": "LB", "RB": "RB", "RWB": "RB", "LCB": "CB", "CB": "CB", "RCB": "CB", "DM": "DM", "LDM": "DM", "RDM": "DM",
          "LCM": "CM", "CM": "CM", "RCM": "CM", "AM": "AM", "LAM": "AM", "RAM": "AM", "LW": "W_L", "LM": "W_L", "RW": "W_R", "RM": "W_R",
-         "CF": "CF", "LCF": "CF", "RCF": "CF"}
+         "CF": "CF", "LCF": "CF", "RCF": "CF", "LF": "CF", "RF": "CF"}
 COARSE = {"DM": "C", "CM": "C", "AM": "C"}
 
 
-def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame) -> dict:
-    ref = sc_roles()
+def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame, match_dir: Path | None = None) -> dict:
+    ref = sc_roles(match_dir)
     r = roles.merge(formations[["team", "period", "block", "state", "data_s"]], on=["team", "period", "block", "state"])
     out = {}
     for state in ("all", "out", "in"):
@@ -60,7 +60,7 @@ def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame) -> dict:
                       "central_mid_merged_time_weighted": round(float((coarse * w).sum() / w.sum()), 4)}
         if state == "all":
             out["pairs"] = sorted(f"{a}->{b}" for a, b in zip(j["role_x"], j["role_y"].fillna("none"), strict=True) if GROUP.get(a) != GROUP.get(b))
-    gk = set(sc_roles().query("role == 'GK'")["player_id"])
+    gk = set(ref.query("role == 'GK'")["player_id"])
     out["goalkeepers_excluded_from_roles"] = not (set(roles["player_id"]) & gk)
     return out
 
