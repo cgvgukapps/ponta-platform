@@ -12,13 +12,15 @@ Within each P1 possession chain, in priority order:
 1. ``set_play``: the chain starts with a logged corner or a free kick in the attacking half;
    up to ``p4_set_play_max_s``. Without a logged event feed only corners are detected: the
    ball comes within ``p4_corner_radius_m`` of a corner flag in the chain's first
-   ``p4_corner_window_s``.
+   ``p4_corner_window_s``. (Since 0.2.0 corners come from player positions instead,
+   ``restarts.corner_setups``.)
 2. ``direct``: from the own half, the ball gains at least ``p4_direct_min_gain_m`` towards
    goal within ``p4_direct_window_s`` (SkillCorner: a long ball of at least 32 m). Labelled
    from the kick to the furthest point.
 3. ``chaotic``: the chain is shorter than ``p4_chaotic_max_s``, or possession is contested.
 4. ``quick_break`` (regain in the opponent's half) or ``transition`` (regain in the own
-   half): the chain begins by winning the ball from the other team in open play and the
+   half): the chain begins by winning the ball from the other team in open play (since
+   0.3.0, without a logged feed, not straight after a throw-in found from positions) and the
    ball gains at least ``p4_break_min_gain_m`` within ``p4_break_eval_s``. It lasts until
    ``p4_recovered_players`` defending outfield players are goal-side of the ball (after the
    evaluation time), the chain ends, or ``p4_break_max_s``.
@@ -35,6 +37,13 @@ Runs shorter than ``p4_min_phase_s`` merge into the run before them in the same 
 team out of possession gets the paired label (``low_block``, ``defending_transition`` …).
 ``p4_block`` is the defending team's block on every possession grid point, whatever the
 phase. Phases are estimated (rules on positions), not yet validated.
+
+Without a logged feed (version 0.3.0): no phase is labelled while a throw-in set-up found from
+positions is under way (the ball is dead), and a corner set-up is ``set_play`` for the taking
+team from the set-up's start.
+
+The ``restarts`` segment lists the restarts behind the labels: from the logged feed (every logged
+set piece, team as logged) or, without one, the corners and throw-ins found from player positions (version 0.3.0).
 """
 
 from __future__ import annotations
@@ -45,14 +54,20 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from plaiq_engine.context.possession import ball_on_grid, logged_events
+from plaiq_engine.context.possession import _restart_name, ball_on_grid, logged_events
 from plaiq_engine.context.registry import (
     ContextField,
     ContextInput,
     ContextPackage,
     PackageOutput,
 )
-from plaiq_engine.context.restarts import corner_setups
+from plaiq_engine.context.restarts import (
+    SETUP_AFTER_S,
+    SETUP_BEFORE_S,
+    corner_setups,
+    median_speed,
+    throw_in_setups,
+)
 from plaiq_engine.context.structure import (
     OTHER,
     TEAMS,
@@ -147,7 +162,7 @@ class _Fields:
 
 class PhasePackage(ContextPackage):
     name = "p4"
-    version = "0.2.0"
+    version = "0.3.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -172,10 +187,11 @@ class PhasePackage(ContextPackage):
 
         d3 = {t: deepest_three(tf[t].depth, lines[t]) for t in TEAMS}
         # Ball depth towards goal for each team (its own frame) and defending players' depths.
-        a_depth = {}
+        a_depth, a_width = {}, {}
         for t in TEAMS:
             s = np.array([sign_of.get((int(p), t), 1 if t == "home" else -1) for p in per], float)
             a_depth[t] = s * bx + L / 2
+            a_width[t] = s * by
 
         team = np.array([v if v in TEAMS else None for v in poss], dtype=object)
         phase = np.full(n, None, dtype=object)
@@ -217,12 +233,26 @@ class PhasePackage(ContextPackage):
         # Without a logged feed, corners from player positions (the founder's proposal): the end
         # of each set-up is about when the corner is taken.
         setups: dict[str, np.ndarray] = {}
+        dead_spans: list[tuple[float, float]] = []  # throw-in set-ups found from positions: the ball is dead
+        corner_spans: list[tuple[str, float, float]] = []  # corner set-ups: part of the set play
         if not logged and cfg["p4_corner_setup_crowd_min"] > 0:
             for t in TEAMS:
                 found = corner_setups(tf[t].depth, tf[t].width, tf[OTHER[t]].depth, tf[OTHER[t]].width, ts, per, L, W,
                                       radius=cfg["p4_corner_setup_radius_m"], crowd_min=int(cfg["p4_corner_setup_crowd_min"]),
                                       hold_s=cfg["p4_corner_setup_hold_s"])
                 setups[t] = np.array([e for _, e in found], dtype=float)
+                corner_spans += [(t, a, b) for a, b in found]
+        # Without a logged feed, throw-ins from player positions (0.3.0): a possession that starts
+        # with one is a restart, not a regain.
+        throw_ins: dict[str, np.ndarray] = {}
+        if not logged and cfg["p4_throw_in_hold_s"] > 0:
+            speed = median_speed([tf[t].depth for t in TEAMS], [tf[t].width for t in TEAMS], ts, per)
+            for t in TEAMS:
+                found = throw_in_setups(tf[t].depth, tf[t].width, tf[OTHER[t]].depth, tf[OTHER[t]].width, a_depth[t], a_width[t],
+                                        speed, ts, per, L, W, out_m=cfg["p4_throw_in_out_m"], hold_s=cfg["p4_throw_in_hold_s"],
+                                        still_mps=cfg["p4_throw_in_still_mps"], ball_m=cfg["p4_throw_in_ball_m"], hz=hz)
+                throw_ins[t] = np.array([e for _, e in found], dtype=float)
+                dead_spans += found
 
         for c in ch.itertuples() if len(ch) else ():
             t = c.team
@@ -258,7 +288,9 @@ class PhasePackage(ContextPackage):
             if s_i > 0:
                 prev = slice(max(0, s_i - int(round(cfg["p1_chain_event_window_s"] * hz))), s_i)
                 gap_dead = bool(np.nan_to_num(dead[prev], nan=0.0).any())
-            regain = (start in ("won", "recovery") and prev_team.get(int(c.chain_id)) == OTHER[t] and not gap_dead)
+            thrown = throw_ins.get(t, np.array([]))
+            restarted = bool(((thrown >= ts[s_i] - SETUP_BEFORE_S) & (thrown <= ts[s_i] + SETUP_AFTER_S)).any())
+            regain = (start in ("won", "recovery") and prev_team.get(int(c.chain_id)) == OTHER[t] and not gap_dead and not restarted)
             if regain and np.isfinite(start_depth) and set_end < 0:
                 look = in_team[(in_team >= s_i) & (in_team <= s_i + w_eval)]
                 gain = np.nanmax(a_depth[t][look]) - start_depth if len(look) and np.isfinite(a_depth[t][look]).any() else np.nan
@@ -301,6 +333,16 @@ class PhasePackage(ContextPackage):
                 if ok.all():
                     phase[idx] = _smooth(sub, min_pts)
         phase[team == None] = None
+        # Restart set-ups found from positions (no logged feed). P1 carries possession through the
+        # stoppage, so: while a throw-in set-up is under way the ball is dead and no phase is
+        # labelled; a corner set-up is part of the set play for the taking team (the founder's
+        # review: "a corner being taken" is a set play).
+        for a, b in dead_spans:
+            phase[(ts >= a) & (ts < b)] = None
+        for t, a, b in corner_spans:
+            span = (ts >= a) & (ts < b)
+            phase[span & (team == t)] = "set_play"
+            phase[span & (team != t)] = None
         out_phase = np.array([PAIRED.get(v) if v is not None else None for v in phase], dtype=object)
 
         pid = np.full(n, -1, dtype=np.int64)
@@ -326,6 +368,28 @@ class PhasePackage(ContextPackage):
                 "p4_phase_id": pd.array([int(v) if v >= 0 else None for v in pid], dtype="Int64"),
             })
 
+        # -- restarts behind the labels ----------------------------------------------
+        rrows = []
+        if logged:
+            # Every logged set piece, team as logged (a corner cleared at the first touch included).
+            ev = m.events
+            nf = g["native_frame"].to_numpy(np.int64)
+            for i in ev.index[ev["Type"].astype(str) == "SET PIECE"] if "Type" in ev.columns else ():
+                f0 = ev.at[i, "Start Frame"] if "Start Frame" in ev.columns else np.nan
+                if pd.isna(f0):
+                    continue
+                k = int(min(np.searchsorted(nf, int(f0)), n - 1))
+                tm = str(ev.at[i, "Team"]).lower() if "Team" in ev.columns else ""
+                rrows.append({"type": _restart_name(ev.at[i, "Subtype"]), "team": tm if tm in TEAMS else None,
+                              "period": int(per[k]), "ts": float(ts[k]), "source": "events"})
+        else:
+            for kind, found in (("corner_kick", setups), ("throw_in", throw_ins)):
+                for t, times in found.items():
+                    for x in times:
+                        k = int(min(np.searchsorted(ts, x), n - 1))
+                        rrows.append({"type": kind, "team": t, "period": int(per[k]), "ts": float(x), "source": "tracking"})
+        restarts = pd.DataFrame(sorted(rrows, key=lambda r: (r["ts"], r["team"])), columns=["type", "team", "period", "ts", "source"])
+
         # -- measurements and the Data check ---------------------------------------
         in_play = poss != "dead_ball"
         labelled = phase != None
@@ -341,6 +405,8 @@ class PhasePackage(ContextPackage):
             "median_duration_s": {p: round(float(segs.loc[segs["phase"] == p, "duration_s"].median()), 2)
                                   for p in IN_PHASES if (segs["phase"] == p).any()},
             "set_play_source": "events" if logged else "corners_from_tracking",
+            "restarts": {"source": "events" if logged else "tracking",
+                         "counts": {k: int(v) for k, v in restarts["type"].value_counts().sort_index().items()}},
         }
         p2_state = next((e.state for e in p2.entries if e.metric == "team_shape"), "blocked")
         if coverage == 0.0 or p2_state == "blocked":
@@ -353,14 +419,14 @@ class PhasePackage(ContextPackage):
             if inferred > cfg["p1_degraded_inferred_share"]:
                 parts.append(f"{_pct(inferred)} of labelled time rests on inferred possession")
             if not logged:
-                parts.append("without a logged event feed only corners are found as set plays")
+                parts.append("without a logged event feed only corners are found as set plays, and only corners and throw-ins as restarts, from player positions")
             why = "Phases are labelled but " + ", ".join(parts) + "."
         else:
             state, why = "full", "Phases are labelled from observed possession and both teams' shapes."
         entries = [self.entry("phase_of_play", "Phase of play", state, why + " Phases are Ponta's rules: estimated, not yet validated.",
                               coverage=f"{_pct(coverage)} of in-play time",
                               unlock=None if state == "full" else "Full-pitch tracking and the logged event feed.")]
-        return PackageOutput(frames=frames, entries=entries, segments={"phases": segs}, measurements=measurements)
+        return PackageOutput(frames=frames, entries=entries, segments={"phases": segs, "restarts": restarts}, measurements=measurements)
 
 
 def _pct(x: float) -> str:

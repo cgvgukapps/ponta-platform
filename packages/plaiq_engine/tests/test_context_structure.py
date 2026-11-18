@@ -112,10 +112,15 @@ def test_corner_rule():
 
 REVIEW_REFINEMENTS = ("p4_finish_min_depth_share", "p4_build_up_max_depth_share", "p4_break_end_depth_share")
 CORNER_SETUP = ("p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s")
+THROW_IN = ("p4_throw_in_hold_s", "p4_throw_in_out_m", "p4_throw_in_still_mps", "p4_throw_in_ball_m")
 
 
 def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
-    stage_b = [t for name, t in THRESHOLDS.items() if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP]
+    for name in THROW_IN:
+        t = THRESHOLDS[name]
+        assert t.reason and t.status in ("measured", "agreed") and "restart sweep" in t.source
+    stage_b = [t for name, t in THRESHOLDS.items()
+               if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP + THROW_IN]
     assert len(stage_b) == 22
     for t in stage_b:
         assert t.reason and t.status == "agreed"
@@ -197,6 +202,9 @@ def test_package_entries_and_versions(standard):
     assert metrics[("p2", "team_shape")] == "full"
     assert ("p3", "relative_zones") in metrics and ("p4", "phase_of_play") in metrics
     assert {"p2_version", "p3_version", "p4_version"} <= set(standard.frames.columns)
+    restarts = standard.outputs["p4"].segments["restarts"]
+    assert list(restarts.columns) == ["type", "team", "period", "ts", "source"]
+    assert standard.outputs["p4"].measurements["restarts"]["source"] in ("events", "tracking")
 
 
 def test_no_coordinates_in_stage_b_fields(standard):

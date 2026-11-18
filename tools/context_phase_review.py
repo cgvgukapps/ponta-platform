@@ -58,16 +58,18 @@ GRID_COLS = ["match_id", "frame_ts", "period", "native_frame", "clock_s", "minut
 #: The rules before the review (P4 0.1.0) and each refinement on its own, against the adopted
 #: set (P4 0.2.0, the thresholds' defaults). Two more refinements were tried and dropped on
 #: 17 November 2026 (direct following the ball's flight, set play ending in the own half);
-#: their scores are in CONTEXT_STRUCTURE_REPORT.md.
+#: their scores are in CONTEXT_STRUCTURE_REPORT.md. P4 0.3.0 adds throw-ins from positions
+#: (no regain straight after one); ``adopted_without_throw_ins`` is P4 0.2.0.
 BEFORE = {"p4_finish_min_depth_share": 0.0, "p4_build_up_max_depth_share": 0.0, "p4_break_end_depth_share": 0.0,
-          "p4_corner_setup_crowd_min": 0.0}
+          "p4_corner_setup_crowd_min": 0.0, "p4_throw_in_hold_s": 0.0}
 VARIANTS: dict[str, dict] = {
     "before_review": BEFORE,
     "finish_in_attacking_half_only": BEFORE | {"p4_finish_min_depth_share": 0.5},
     "build_up_in_own_third_only": BEFORE | {"p4_build_up_max_depth_share": 0.333},
     "break_ends_in_final_third_only": BEFORE | {"p4_break_end_depth_share": 0.667},
     "finish_in_final_third_only": BEFORE | {"p4_finish_min_depth_share": 2 / 3},
-    "adopted_without_corner_setups": {"p4_corner_setup_crowd_min": 0.0},
+    "adopted_without_corner_setups": {"p4_corner_setup_crowd_min": 0.0, "p4_throw_in_hold_s": 0.0},
+    "adopted_without_throw_ins": {"p4_throw_in_hold_s": 0.0},
     "adopted": {},
 }
 
@@ -99,7 +101,12 @@ def main() -> None:
     ap.add_argument("--sc-data", type=Path, required=True, help="local copy of SkillCorner's open data")
     ap.add_argument("--sc-cache", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--only", nargs="*", help="score only these variants")
     args = ap.parse_args()
+    if args.only:
+        for name in list(VARIANTS):
+            if name not in args.only:
+                del VARIANTS[name]
     for p in (args.cache, args.sc_data, args.sc_cache, args.out):
         if not _outside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")

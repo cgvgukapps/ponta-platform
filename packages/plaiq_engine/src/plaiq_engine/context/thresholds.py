@@ -16,6 +16,9 @@ P4 refinements from the founder's replay review and the founder's corner rule (c
 player positions when there is no event feed), measured against the review, SkillCorner's 20
 open-data matches and Metrica's logged corners (P4 0.2.0). Version 0.6.0 records the founder's
 agreement of those six values on 18 November 2026; no value changed, so package output is unchanged.
+Version 0.7.0 adds four throw-in values (throw-ins from player positions when there is no event
+feed), measured on SkillCorner's 20 open-data matches and Metrica's logged throw-ins, and waiting
+for the founder's agreement (P4 0.3.0).
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -29,7 +32,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.6.0"
+THRESHOLDS_VERSION = "0.7.0"
 
 
 @dataclass(frozen=True)
@@ -141,6 +144,19 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p4_corner_setup_hold_s", 1.0, "s", "agreed",
               "The set-up must hold this long, which separates it from open play near the corner flag.",
               "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners; agreed by the founder, 18 November 2026"),
+    # -- Throw-ins from player positions (18 November 2026; measured, for the founder to agree) --
+    Threshold("p4_throw_in_hold_s", 2.0, "s", "measured",
+              "Without a logged feed, a throw-in set-up is one player of the team (and none of the other) standing beyond a touchline for at least this long. 0 turns throw-in detection off.",
+              "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins"),
+    Threshold("p4_throw_in_out_m", 0.0, "m", "measured",
+              "The thrower stands at least this far beyond the touchline (0: on the line or beyond). 0.5 and 1 m lost throw-ins; -0.5 m let in wide players.",
+              "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins"),
+    Threshold("p4_throw_in_still_mps", 2.0, "m/s", "measured",
+              "Play has slowed: the median speed of all observed players over the set-up's last 2 s is at most this.",
+              "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins"),
+    Threshold("p4_throw_in_ball_m", 5.0, "m", "measured",
+              "The ball is within this distance of the thrower at some point in the set-up's last 2 s. Without a ball test, about half of all detections are wrong (wide players on the line in open play).",
+              "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins"),
     Threshold("p4_min_phase_s", 1.0, "s", "agreed",
               "A phase shorter than this merges into the phase before it in the same possession.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
 )

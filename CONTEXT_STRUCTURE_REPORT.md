@@ -29,6 +29,11 @@ These are agreements with one provider's labels on one match, not accuracy again
 - **Roles across the 20 matches:** median 92.2%; 19 of 20 meet the grouped bar and 17 the merged bar.
 - **Phase bar:** restated by the founder as pooled κ at least 0.55 on each half (met, 0.61), with no match below 0.50 (three matches fall short by up to 0.02).
 - **All six new thresholds agreed.**
+- **Restarts (later the same day, P4 0.3.0):**
+  - Throw-ins are now found from player positions without an event feed: 55% found and 61% of detections right on held-out SkillCorner matches, and 60% and 87% on Metrica.
+  - Goal kicks cannot be found on broadcast tracking.
+  - The review rises to 36 of 50, and SkillCorner agreement is unchanged to slightly up.
+  - Two matches remain below the 0.50 floor.
 
 ## What was built
 
@@ -404,6 +409,66 @@ Approved by the founder on 18 November 2026. Two changes, measured in this order
 | Phase κ at least 0.55 on each half | 13 |
 | All four | 10 |
 
+## Restarts from player positions (P4 0.3.0, 18 November 2026)
+
+**Why.** Without an event feed, P4 found corners from positions (the founder's rule) but no other restart. The founder's review flagged a throw-in labelled `finish` (SkillCorner grid point 16221) and a goal kick labelled `create` (Metrica 2 grid point 8943).
+
+**What the references say first.** SkillCorner does not treat throw-ins or goal kicks as set plays. Its phase on the first possession after each restart, over the 20 matches:
+
+| Restart | SkillCorner's phase on the next possession |
+|---|---|
+| Throw-in (705) | create 234, finish 197, chaotic 160, build_up 89; set_play 10 |
+| Goal kick (178) | build_up 92, create 46, direct 32 |
+| Corner (103) | set_play 95 |
+
+- So labelling throw-ins or goal kicks `set_play` would lose agreement, and the adoption rule would drop it.
+- Points in the 8 s after a restart disagree with SkillCorner about as often as elsewhere (27% after throw-ins against 28% overall). Breaks wrongly started by a restart account for about 300 of 194,000 compared points.
+- **The aim was therefore restart facts on matches without a feed, plus small phase changes with a football reason, under the usual test.**
+
+**Throw-ins: the detector** (`restarts.throw_in_setups`), the founder's corner idea carried over:
+- exactly one player of the team, and none of the other, stands on or beyond a touchline away from the corners, for at least 2 s;
+- play has slowed: the median speed of all players over the set-up's last 2 s is at most 2 m/s;
+- the ball is within 5 m of that player in those 2 s.
+
+The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner matches (fit) and read on the other 10 and on Metrica's 110 logged throw-ins. A detection matches a reference of the same team when the set-up ends from 6 s before it to 3 s after it.
+
+| Throw-ins | Found | Detections right |
+|---|---|---|
+| SkillCorner, fit half (384) | 51% | 63% |
+| SkillCorner, held-out half (447) | 55% | 61% |
+| Metrica, logged (110) | 60% | **87%** |
+
+- **Without the ball test** (the best such rule on the fit half), about half of all detections are wrong on every set: wide players stand on the line in open play. With it, Metrica's precision rises to 87%. SkillCorner's stays near 62%; its broadcast ball position is filled in almost everywhere, so the test separates less there.
+- **Stillness alone** traded finds for precision one for one; it is kept only together with the ball test, as chosen on the fit half.
+
+**Goal kicks: not detected.** At best about 20% found and 30% right. The reason is the broadcast: **73% of SkillCorner's goal kicks have a tracking gap** (at least 2 s with fewer than 4 players tracked, or a jump in the clock) in the 15 s before, against 24% of throw-ins. Corners have the same gap rate (80%), but their set-up lasts long enough to be seen. Metrica logs no goal kicks, so the full-pitch case is unmeasured.
+
+**What P4 0.3.0 does with them** (only without a logged feed):
+1. **Publishes the restarts** as a `restarts` segment: type, team, period, time, source. With a feed it lists every logged set piece, team as logged; without one, the corners and throw-ins found from positions.
+2. **A throw-in is not a regain:** a possession that starts with a detected throw-in of its own team cannot start a quick break or transition.
+3. **Set-ups:**
+   - While a throw-in set-up is under way the ball is dead, so no phase is labelled. P1 carries possession through stoppages without a feed, so before this P4 labelled the wait.
+   - A corner set-up is `set_play` for the taking team from the set-up's start, following the founder's note on SkillCorner grid point 20372 ("a corner being taken"). An earlier try that left corner set-ups unlabelled broke that case and was dropped.
+
+| Rules (scored by `tools/context_phase_review.py`) | Review (of 50) | SkillCorner κ, event spans (by half) | SkillCorner κ, phases file |
+|---|---|---|---|
+| P4 0.2.0 | 35 | 0.6103 (0.6085 / 0.6106) | 0.6193 |
+| Throw-in is not a regain (2 alone) | 35 | 0.6105 (0.6089 / 0.6106) | 0.6196 |
+| Corner set-ups left unlabelled (tried, dropped) | 34 | 0.6103 (0.6086 / 0.6106) | 0.6211 |
+| **P4 0.3.0 (1 to 3)** | **36** | 0.6104 (0.6089 / 0.6104) | **0.6249** |
+
+- **Review:** SkillCorner grid point 16221, the throw-in, now has no phase; the founder's note rejected only `finish`. Counting "no phase" as right there is a reading of the note, for the founder to confirm.
+- **SkillCorner:**
+  - against the phases-of-play file (which covers dead time too), κ rises by 0.006;
+  - against event spans it is flat, with the second half 0.0002 lower: noise, but strictly not "nothing lost", so recorded here.
+- **Per match (event spans):**
+  - changes stay within ±0.008;
+  - 13 of 20 still clear 0.55 on both halves;
+  - 2015213 moves from 0.496 to 0.501, so **two matches remain below the 0.50 floor** (2013725 at 0.482, 2017461 at 0.490). Moves this small are noise, not a fix.
+- **Unchanged:** matches with a logged feed (Metrica): P4's output there is unchanged.
+- **Thresholds 0.7.0:** four new `measured` values (`p4_throw_in_hold_s` 2 s, `p4_throw_in_out_m` 0 m, `p4_throw_in_still_mps` 2 m/s, `p4_throw_in_ball_m` 5 m), for the founder to agree. The detector's edge (3 m from a goal line), bridging (1 s) and look-back (2 s) are module constants, as measured.
+- **Not done:** free kicks (not attempted; 59% have a tracking gap before them), goal kicks (above), and P1 chain start types without a feed. P1 runs before team frames exist, so the restarts live in P4's segment.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
@@ -471,3 +536,9 @@ Taken on 18 November 2026:
    - **The founder re-judged the seven replays: all seven right.** On Metrica 3 grid point 25151 the note reads "this is right but the start frames show set_play, labelled moment is correct", so the P1 fix is confirmed there.
    - Kept in `tools/data/phase_review_2026-11-18_recheck.json`. `tools/context_phase_review.py` adds the re-check's accepted labels to the review's.
    - **The review now stands at 35 of 50 with P1 and P4 0.2.0.** The old rules with the corrected P1 also gain grid point 25151, so they score 29.
+
+Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.0; section above).
+
+Still open:
+6. **The four throw-in thresholds (P4 0.3.0):** agree them or change them.
+7. **SkillCorner grid point 16221:** confirm that "no phase" (the ball is dead during the throw-in set-up) is right there.
