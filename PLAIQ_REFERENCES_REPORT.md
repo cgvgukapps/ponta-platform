@@ -122,3 +122,52 @@ Their product equals POV exactly (tests in `test_option_split.py`).
 - **Plaiq's geometric threat surface holds up against three independent references,** so it stays.
 - **For pass option value,** the gap between the threat at the receiver (0.88 against SkillCorner's threat) and POV's value part (0.78) comes from POV's progressive factor and distance decay, not from the surface. That is where a value change should look.
 - **What the learned surface offers:** a scale in probability units (its maximum is 0.40, the chance of scoring within the possession), which the geometric surface, normalised to [0, 1], lacks. A finer grid or smoothing could close the resolution gap. Both are noted, not pursued.
+
+## Decision quality grounded in maths, outcomes and context (18 November 2026)
+
+**Why not a judge as the truth.** The founder decided a judge's rating should not be the truth for decision quality. So it is grounded three other ways by `tools/plaiq_dq_grounding.py`, on 12,012 SkillCorner passes (9,910 completed):
+- **independent maths:** SkillCorner's own expected value of every option (expected completion × threat), giving its analogue of decision quality, the targeted option's value over the best one's;
+- **what happened next;**
+- **the context of the pass.**
+
+The blind replay page (`tools/plaiq_dq_replay.py`) becomes a review tool for cases where these disagree, not a source of truth.
+
+**1. Failed passes (a flaw found by the arithmetic).**
+- **Plaiq rates 89% of failed passes "optimal"** (2,102 passes).
+- The failed-pass score compares pass option value at the inferred meeting point with the best option at the pass. It never charges for the failure, and the inferred point is, by construction, where a team-mate would have won the ball.
+- **Failed-pass decision quality should not be reported as it stands.**
+
+**2. Outcomes for completed passes.**
+
+| Plaiq band | Passes | Possession leads to a shot | Possession leads to a goal |
+|---|---|---|---|
+| Poor | 645 | 1.2% | 0.0% |
+| Suboptimal | 1,155 | 1.6% | 0.35% |
+| Good | 2,320 | 5.5% | 0.78% |
+| Optimal | 5,790 | **9.1%** | **1.16%** |
+
+- **As a predictor:** decision quality predicts a shot with AUC 0.60 and a goal with 0.62. SkillCorner's analogue gives 0.62 and 0.65.
+- **Higher decision quality goes with lower completion:** it rewards ambitious, valuable passes. This is by design, but should be stated wherever the score is shown.
+
+**3. Independent maths.**
+- **Rank correlation with SkillCorner's analogue: 0.31.** Plaiq's score picks out the passes where SkillCorner says the best option was chosen with AUC 0.60.
+- **Exact band agreement: 32%.**
+- **Optimal versus best:** Plaiq calls 59% of these completed passes optimal; SkillCorner says the passer chose its best option on 37%. This measures engine governance's concern that the passer is "the best option" too often.
+- **The two models define "best" differently:** SkillCorner's expected value is dominated by threat, while Plaiq weighs arrival more heavily.
+
+**4. Context (pressure on the passer, SkillCorner's level).**
+
+| Pressure | Passes | Median DQ | Poor or suboptimal | SkillCorner: chose best |
+|---|---|---|---|---|
+| None | 1,983 | 0.98 | 15% | 41% |
+| Low | 2,033 | 0.95 | 24% | 32% |
+| Medium | 3,153 | 0.97 | 19% | 34% |
+| High | 1,607 | 1.02 | 13% | 41% |
+| Very high | 168 | 1.01 | 12% | 41% |
+
+Under high pressure fewer options are on, so both models judge the choice more kindly. That is sensible behaviour, not a penalty for being pressed.
+
+**What this means.**
+- **Completed-pass decision quality has outcome evidence** comparable to a provider's own model: "a defined, explainable score" can now cite it.
+- **Failed-pass decision quality needs fixing before use.**
+- **A candidate decision quality version 2,** to be measured against these same three groundings, fit and test by match: score the choice at the moment of the pass as expected value, using the option split (availability × value). That charges a failed pass for its availability and keeps one definition for completed and failed passes.
