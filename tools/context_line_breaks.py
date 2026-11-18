@@ -111,26 +111,32 @@ def sc_passes(match_dir: Path, home_id: int) -> pd.DataFrame:
     return p
 
 
-def intents(m, cache: Path) -> dict[int, tuple[float, float]]:
-    """
-    Plaiq's intended meeting point for each failed pass (event row index to x, y): the ball's line
-    walked past the interception to the first teammate who would have controlled it, refined by
-    that teammate's run (``pass_option_value._evaluate_failed_pass``). Cached: Plaiq takes minutes.
-    """
-    p = cache / f"intents_{m.provider}_{m.match_id}.pkl"
+def plaiq_pov(m, cache: Path) -> pd.DataFrame:
+    """Plaiq's pass option value per event and teammate (``MatchAnalysis.event_pov``). Cached: it takes minutes."""
+    p = cache / f"pov_{m.provider}_{m.match_id}.pkl"
     if p.exists():
         return pd.read_pickle(p)
     from plaiq_engine.match_analysis import MatchAnalysis
     pov = MatchAnalysis(m).event_pov()
+    pov.to_pickle(p)
+    return pov
+
+
+def intents(pov: pd.DataFrame) -> dict[int, tuple[float, float]]:
+    """
+    Plaiq's intended meeting point for each failed pass (event row index to x, y): the ball's line
+    walked past the interception to the first teammate who would have controlled it, refined by
+    that teammate's run (``pass_option_value._evaluate_failed_pass``).
+    """
     rows = pov.loc[pov["intent_x"].notna(), ["event_idx", "intent_x", "intent_y"]].drop_duplicates("event_idx")
-    out = {int(r.event_idx): (float(r.intent_x), float(r.intent_y)) for r in rows.itertuples()}
-    pd.to_pickle(out, p)
-    return out
+    return {int(r.event_idx): (float(r.intent_x), float(r.intent_y)) for r in rows.itertuples()}
 
 
-def one(match_dir: Path, cache: Path, unit_mode: str = "window", use_intent: bool = False) -> pd.DataFrame:
+def one(match_dir: Path, cache: Path, unit_mode: str = "window", use_intent: bool = False, options: bool = False) -> pd.DataFrame:
     m = _load(match_dir, cache)
-    intent = intents(m, cache) if use_intent else {}
+    pov = plaiq_pov(m, cache) if (use_intent or options) else None
+    intent = intents(pov) if use_intent else {}
+    pov_by_event = {k: g for k, g in pov.groupby("event_idx")} if options else {}
     cfg = values()
     res = Registry([PossessionPackage(), StructurePackage()]).run(m, config=cfg)
     g, p1, p2 = res.frames, res.outputs["p1"], res.outputs["p2"]
@@ -171,6 +177,19 @@ def one(match_dir: Path, cache: Path, unit_mode: str = "window", use_intent: boo
             sel = np.isfinite(D) & (Ld == code)
             units[code] = np.column_stack([L - D[sel], -Wd[sel]])  # the defenders in the attacking team's frame
         b = breaks(start, end, units)
+        # Line-breaking options: teammates (not the passer) beyond at least one defending line from
+        # the ball, with Plaiq's option value at the pass (kept per option, so a threshold can be swept).
+        opt_values = []
+        if options:
+            A = tf[t]
+            col = {pid: i for i, pid in enumerate(A.ids)}
+            for o in pov_by_event.get(int(e.name), pd.DataFrame()).itertuples():
+                pid = f"{t}_{o.jersey}"
+                if str(o.jersey) == str(e["From"]) or pid not in col or not np.isfinite(A.depth[k, col[pid]]):
+                    continue
+                ob = breaks(start, (A.depth[k, col[pid]], A.width[k, col[pid]]), units)
+                if any(ob.values()):
+                    opt_values.append(round(float(o.pov_start), 4))
         rows.append({"match": match_dir.name, "outcome": "completed" if e["Type"] == "PASS" else "failed", "intent": bool(used_intent),
                      "sc_lines": r.n_defensive_lines, "sc_furthest": r.furthest_line_break if isinstance(r.furthest_line_break, str) else "none",
                      "sc_type": r.furthest_line_break_type, "sc_first": r.first_line_break, "sc_second_last": r.second_last_line_break,
@@ -178,8 +197,26 @@ def one(match_dir: Path, cache: Path, unit_mode: str = "window", use_intent: boo
                      "ponta_type": next((b[c] for c in (0, 1, 2) if b.get(c)), None),
                      **{f"ponta_{name}": b.get(code) for name in ("first", "second_last", "last")
                         for code in [next((c for c, n in unit_names(b).items() if n == name), None)]},
-                     "units_known": sum(v is not None for v in b.values())})
+                     "units_known": sum(v is not None for v in b.values()),
+                     "sc_lb_options": r.n_passing_options_line_break, "lb_option_values": opt_values})
     return pd.DataFrame(rows)
+
+
+THETAS = (0.0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3)
+
+
+def score_options(df: pd.DataFrame) -> dict:
+    """Ponta's line-breaking options (option value at least theta) against SkillCorner's count, per pass."""
+    k = df.loc[df["sc_lb_options"].notna() & df["sc_lines"].notna()]
+    ref = k["sc_lb_options"].astype(int).to_numpy()
+    out = {"passes": int(len(k)), "sc_mean": round(float(ref.mean()), 2) if len(k) else None}
+    for th in THETAS:
+        n = k["lb_option_values"].map(lambda v, th=th: sum(x >= th for x in v)).to_numpy()
+        out[f"theta_{th:g}"] = {"any_option": _kappa((ref > 0).astype(str), (n > 0).astype(str)),
+                                "exact": round(float((n == ref).mean()), 4), "within_1": round(float((abs(n - ref) <= 1).mean()), 4),
+                                "ponta_mean": round(float(n.mean()), 2),
+                                "spearman": round(float(pd.Series(n).corr(pd.Series(ref), method="spearman")), 4)}
+    return out
 
 
 def score(df: pd.DataFrame) -> dict:
@@ -205,6 +242,7 @@ def main() -> None:
     ap.add_argument("--units", choices=("window", "moment"), default="window",
                     help="window: P2's per-window lines; moment: lines grouped at the pass moment (FIFA)")
     ap.add_argument("--intent", action="store_true", help="judge a failed pass by Plaiq's intended meeting point")
+    ap.add_argument("--options", action="store_true", help="count line-breaking passing options (Plaiq option values)")
     args = ap.parse_args()
     for p in (args.data, args.cache, args.out):
         if not _outside(p):
@@ -214,13 +252,16 @@ def main() -> None:
         dirs = [d for d in dirs if d.name in args.matches]
     parts = []
     for n, d in enumerate(dirs):
-        df = one(d, args.cache, args.units, args.intent)
+        df = one(d, args.cache, args.units, args.intent, args.options)
+        df.to_pickle(args.out.parent / f"line_breaks_{d.name}.pkl")
         df["set"] = "fit" if n % 2 == 0 else "test"
         parts.append(df)
         print(d.name, len(df), "passes", flush=True)
     allp = pd.concat(parts, ignore_index=True)
     out = {"all": score(allp), "fit": score(allp.loc[allp["set"] == "fit"]), "test": score(allp.loc[allp["set"] == "test"]),
            "by_outcome": {o: score(allp.loc[allp["outcome"] == o]) for o in ("completed", "failed")}}
+    if args.options:
+        out["options"] = {s_: score_options(allp.loc[allp["set"] == s_]) for s_ in ("fit", "test")}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps({k: out["all"][k] for k in ("passes_matched", "passes_with_sc_lines", "furthest_line_broken", "any_break", "first_line", "second_last_line", "last_line", "type_where_both_agree_on_the_line")}, indent=1))

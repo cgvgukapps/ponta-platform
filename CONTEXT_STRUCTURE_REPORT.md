@@ -668,6 +668,42 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 - **Recommendation: keep it off.** The principle matches FIFA's "in contest" ("when neither team has controlled possession of the ball"), but a player near the ball is not a touch.
 - **FIFA computes its possession control from the event sequence.** Where a logged feed exists, "in contest" can come from logged clearances, blocks and duels instead (see `ponta-blueprint/fifa-alignment.md`).
 
+## Line breaks: a prototype for Stage C (18 November 2026)
+
+**The rule** (`tools/context_line_breaks.py`, after FIFA's definitions in `ponta-blueprint/fifa-alignment.md`):
+- **Units:** the defending team's outfield lines at the moment of the pass, each with at least two players. A unit's line is its deepest player.
+- **Breaking a unit:** the ball starts in front of the line and is received beyond it.
+- **Through or around:** through when the ball crosses the line between the unit's two widest players, around otherwise. FIFA's "over" needs the ball's height, which SkillCorner does not give.
+
+**Measured against SkillCorner's line-break labels** on its 20 open-data matches, where SkillCorner knows the number of lines: 6,628 passes, 10 fit matches and 10 held out. Nothing was tuned except the choice of lines.
+
+| | Any line broken, κ fit / held out | Furthest line broken, κ fit / held out |
+|---|---|---|
+| P2's lines (two-minute windows) | 0.64 / 0.63 | 0.48 / 0.49 |
+| **Lines grouped at the pass moment** (FIFA's "at the moment of the pass") | **0.68 / 0.66** | **0.52 / 0.52** |
+
+- **Adopted:** lines grouped at the pass moment.
+- **Completed passes** (5,869): furthest line κ 0.54, 80% agreement.
+- **Through or around**, where both name the same line: 82% agreement, κ 0.64.
+
+**Failed passes and Plaiq's pass intent.**
+- For a failed pass, FIFA judges the break by where the intended team-mate was. Plaiq's failed-pass inference gave an intended meeting point for 740 of the 759 failed passes.
+- Using it changed nothing: furthest line κ 0.27 before, 0.26 after.
+- **The reason:** Plaiq picks the *first* team-mate along the ball's line who would have controlled it, usually short of a long ball's target. Ponta then credits first-line breaks (170 against SkillCorner's 31) where SkillCorner credits last-line breaks (211 against 51).
+- **Line breaks need the pass's target.** Plaiq's inference stays as it is for decision quality; changing it is an engine decision for the founder.
+
+**Line-breaking options** (team-mates beyond at least one line from the ball, at the pass):
+- **Geometry agrees.** For the team-mates SkillCorner itself lists as passing options on the reference match, Ponta and SkillCorner agree on which would break a line in 83% of 1,123 cases (κ 0.63).
+- **Availability does not.**
+  - Counting every team-mate beyond a line gives about 5 per pass, against SkillCorner's 0.9.
+  - Keeping only those with Plaiq's option value at or above a threshold gives at best κ 0.11 on "any option" and rank correlation 0.19 (held out).
+  - Plaiq's option value measures a pass's worth, not whether the team-mate is available. An availability test (for example Plaiq's control of the ball at the team-mate) has to be built and measured first.
+
+**Next, for the founder to decide:**
+1. Bring completed-pass line breaks into P5, with lines at the pass moment.
+2. A target rule for failed passes, in the context layer or as a Plaiq change.
+3. An availability model for line-breaking options, measured against SkillCorner's option lists.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
