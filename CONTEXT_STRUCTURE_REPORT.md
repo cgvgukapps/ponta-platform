@@ -578,6 +578,37 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 - **A measured answer** for event-only possession.
 - **Three leads for the next rounds:** P1's possession lag at switches and on shots; corner starts in P1; and counter-attacks in P4, now measurable against both the league's and Wyscout's flags.
 
+## The possession round: P1 against the official possession (18 November 2026)
+
+**Question.** P1 agrees with the league's frame-level possession on 82% to 89% of in-play time. Can its control thresholds close the gap without breaking what Gate 1 measured?
+
+**Sweep** (`tools/context_possession_official.py`):
+- **Axes:** control radius, ball-speed limit and minimum switch time (the axes of `context_measure.py`, 80 settings).
+- **Fit and test:** chosen on four IDSSE matches, read on the other three.
+- **Objective, fixed in advance:** accuracy over every in-play point where the league names a team. Contested, unknown or dead-ball labels count as misses, so a setting cannot gain by labelling less.
+- **Guards:** Gate 1 on Metrica (at least 93% against event-anchored possession, switches within 15%), and agreement with SkillCorner's player possessions no more than 0.5 points lower.
+
+| Setting | Official accuracy, fit / held out | Gate 1 | SkillCorner | Switches against the league's |
+|---|---|---|---|---|
+| Current: 1.5 m, 16 m/s, 0.4 s | 79.6% / 75.8% | passes | 95.1% | 0.51 |
+| Best keeping the guards: 1.5 m, no speed limit, 0.4 s | 80.2% / 76.6% | passes | 95.1% | 0.52 |
+| Best on the league's data alone: 1.0 m, no speed limit, no minimum switch | 83.5% / 80.4% | **fails** (switches 2.1 to 2.6 times the event feed's) | 92.5% | 1.00 |
+
+**Why the gap does not close.**
+- **The league switches possession about twice as often as P1** (2,804 against 1,440 switches on the seven matches). Its count is matched only with no minimum switch, which Gate 1's event reference and SkillCorner's possessions both reject.
+- **The disagreement is not just brief spells.** Smoothing the league's possession with P1's own 0.4 s rule leaves agreement at 78.0%.
+- **Of all in-play points the league names:** P1 names the other team on 11.4%, says contested on 4.7%, unknown on 3.1%, and dead ball (from events) on 2.9%.
+- **The league's possession is anchored to its event log.** 93% of its switches have a logged event within 2 s, at a median offset of about 0.1 s, most often the new team's first action. It is the league's event-based possession on the frame clock, not an independent tracking truth. The 82% to 89% compares two definitions; it does not measure P1's error.
+
+**Decision: no threshold change.**
+- The best change that keeps the guards adds 0.7 to 0.9 points.
+- A P1 change ripples into P2 to P4 and every measurement since Gate 1.
+
+**Next: a judge.**
+- `tools/context_possession_replay.py` writes a **blind** replay check: 40 moments where P1 and the league disagree for at least 1 s, and 10 control moments where they agree, drawn from all seven matches and shuffled.
+- The founder says who has the ball at each moment (home, away or nobody yet) without seeing either label. The key is kept apart from the page.
+- Scoring both sources against the founder's calls says which definition matches a football reading, and where P1's real errors are.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
