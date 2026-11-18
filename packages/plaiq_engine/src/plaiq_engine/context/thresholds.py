@@ -14,7 +14,8 @@ The P1 values were agreed by the founder on 17 November 2026 (``CONTEXT_FOUNDATI
 value on 17 November 2026; no value changed, so package output is unchanged. Version 0.5.0 adds three
 P4 refinements from the founder's replay review and the founder's corner rule (corners from
 player positions when there is no event feed), measured against the review, SkillCorner's 20
-open-data matches and Metrica's logged corners, and waiting for the founder's agreement (P4 0.2.0).
+open-data matches and Metrica's logged corners (P4 0.2.0). Version 0.6.0 records the founder's
+agreement of those six values on 18 November 2026; no value changed, so package output is unchanged.
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -28,7 +29,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.5.0"
+THRESHOLDS_VERSION = "0.6.0"
 
 
 @dataclass(frozen=True)
@@ -120,26 +121,26 @@ _ALL: tuple[Threshold, ...] = (
               "A quick break or transition lasts at most this long.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
     Threshold("p4_recovered_players", 7.0, "players", "agreed",
               "A quick break or transition ends when this many defending outfield players are goal-side of the ball.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
-    # -- P4 refinements from the founder's replay review (17 November 2026; measured, for the founder to agree) --
-    Threshold("p4_finish_min_depth_share", 0.5, "share of pitch length", "measured",
+    # -- P4 refinements from the founder's replay review (17 November 2026; agreed 18 November 2026) --
+    Threshold("p4_finish_min_depth_share", 0.5, "share of pitch length", "agreed",
               "Against a low block, finish needs the ball in the attacking half; otherwise it is create. Requiring the final third instead lost agreement with SkillCorner (kappa 0.55 against 0.61). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches"),
-    Threshold("p4_build_up_max_depth_share", 0.333, "share of pitch length", "measured",
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+    Threshold("p4_build_up_max_depth_share", 0.333, "share of pitch length", "agreed",
               "With the ball in the team's own third, the team is building up whatever the block (the reviewer: playing from the back is build-up). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches"),
-    Threshold("p4_break_end_depth_share", 0.667, "share of pitch length", "measured",
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+    Threshold("p4_break_end_depth_share", 0.667, "share of pitch length", "agreed",
               "A quick break or transition that began further back ends when the ball reaches the final third; the attack is then labelled by the block (usually finish). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches"),
-    # -- Corners from player positions (the founder's proposal, 17 November 2026; measured, for the founder to agree) --
-    Threshold("p4_corner_setup_crowd_min", 12.0, "players", "measured",
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+    # -- Corners from player positions (the founder's proposal, 17 November 2026; agreed 18 November 2026) --
+    Threshold("p4_corner_setup_crowd_min", 12.0, "players", "agreed",
               "Without a logged feed, a corner set-up needs at least this many players of both teams in that penalty area while one attacker stands at a corner flag. Finds 73% of SkillCorner's corners (55% of detections right) against 4% for the ball rule. 0 turns the position rule off (the ball rule is used).",
-              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners"),
-    Threshold("p4_corner_setup_radius_m", 4.0, "m", "measured",
+              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners; agreed by the founder, 18 November 2026"),
+    Threshold("p4_corner_setup_radius_m", 4.0, "m", "agreed",
               "The taker stands within this distance of the corner flag (and no defender does). 2 and 3 m lost corners on broadcast tracking.",
-              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners"),
-    Threshold("p4_corner_setup_hold_s", 1.0, "s", "measured",
+              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners; agreed by the founder, 18 November 2026"),
+    Threshold("p4_corner_setup_hold_s", 1.0, "s", "agreed",
               "The set-up must hold this long, which separates it from open play near the corner flag.",
-              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners"),
+              "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners; agreed by the founder, 18 November 2026"),
     Threshold("p4_min_phase_s", 1.0, "s", "agreed",
               "A phase shorter than this merges into the phase before it in the same possession.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
 )

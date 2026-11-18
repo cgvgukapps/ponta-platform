@@ -87,8 +87,10 @@ def one(match_dir: Path, cache: Path) -> tuple[dict, dict]:
     seconds = time.perf_counter() - t0
     g, p2, p4 = res.frames, res.outputs["p2"], res.outputs["p4"]
     per = g["period"].to_numpy()
-    ra = role_agreement(p2.segments["roles"], p2.segments["formations"], match_dir)
-    roles = {**ra["all"], "pairs": ra["pairs"]}
+    ra = role_agreement(p2.segments["roles"], p2.segments["formations"], match_dir, main=p2.segments["main_roles"])
+    # P2 0.2.0: the bars read each player's main role (out of possession, else all); the
+    # all-windows reading used before is kept for comparison.
+    roles = {**ra["main"], "all_windows": ra["all"], "all_windows_pairs": ra["pairs"]}
     forms = formations_by_half(p2.segments["formations"])
     refs = {"event_spans": sc_phase_spans(g, match_dir), "phase_file": sc_phase_file(g, match_dir)}
     phases, raw = {}, {}
@@ -124,6 +126,10 @@ def summarise(report: dict, raw: dict) -> dict:
     out = {"matches": len(ms),
            "roles_grouped_tw": dist([report[k]["roles"]["grouped_time_weighted"] for k in ms]),
            "roles_cm_merged_tw": dist([report[k]["roles"]["central_mid_merged_time_weighted"] for k in ms]),
+           "roles_grouped_playing_time": dist([report[k]["roles"]["grouped_time_weighted_playing_time"] for k in ms]),
+           "roles_cm_merged_playing_time": dist([report[k]["roles"]["central_mid_merged_time_weighted_playing_time"] for k in ms]),
+           "roles_all_windows_grouped_tw": dist([report[k]["roles"]["all_windows"]["grouped_time_weighted"] for k in ms]),
+           "roles_all_windows_cm_merged_tw": dist([report[k]["roles"]["all_windows"]["central_mid_merged_time_weighted"] for k in ms]),
            "formation_changes_max": dist([report[k]["formation_changes_max"] for k in ms]),
            "runtime_s": dist([report[k]["runtime_s"] for k in ms]),
            "shape_coverage_in_play": dist([report[k]["shape_coverage_in_play"] for k in ms]),

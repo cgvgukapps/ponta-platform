@@ -35,13 +35,21 @@ from context_phase_sweep import agreement, confusion
 from context_references import sc_phase_spans, sc_roles
 
 MATCHES = ("metrica_1", "metrica_2", "metrica_3", "skillcorner_1886347")
+#: Position group of each Ponta template role (Ponta's LM and RM are the wide midfielders of a flat four).
 GROUP = {"LB": "LB", "LWB": "LB", "RB": "RB", "RWB": "RB", "LCB": "CB", "CB": "CB", "RCB": "CB", "DM": "DM", "LDM": "DM", "RDM": "DM",
          "LCM": "CM", "CM": "CM", "RCM": "CM", "AM": "AM", "LAM": "AM", "RAM": "AM", "LW": "W_L", "LM": "W_L", "RW": "W_R", "RM": "W_R",
-         "CF": "CF", "LCF": "CF", "RCF": "CF", "LF": "CF", "RF": "CF"}
+         "CF": "CF", "LCF": "CF", "RCF": "CF"}
+#: Position group of each SkillCorner role. Its vocabulary differs from Ponta's templates: SkillCorner
+#: files LM and RM under "Midfield" (the central pair of a 4-4-2; they stand a mean 2 to 4 m from the
+#: middle over the 20 open-data matches) and LF and RF under "Wide Attacker" (a mean 11 to 15 m out).
+#: A flat four's wide midfielders are LW and RW there. Corrected 18 November 2026; the reference match
+#: uses none of these four labels.
+REF_GROUP = {**GROUP, "LM": "CM", "RM": "CM", "LF": "W_L", "RF": "W_R"}
 COARSE = {"DM": "C", "CM": "C", "AM": "C"}
 
 
-def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame, match_dir: Path | None = None) -> dict:
+def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame, match_dir: Path | None = None,
+                   main: pd.DataFrame | None = None) -> dict:
     ref = sc_roles(match_dir)
     r = roles.merge(formations[["team", "period", "block", "state", "data_s"]], on=["team", "period", "block", "state"])
     out = {}
@@ -51,7 +59,7 @@ def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame, match_dir: Pat
         j = ref.merge(d, on="player_id", how="left")
         j = j.loc[j["role_x"] != "GK"]
         w = j["data_s"].fillna(0.0)
-        g_ref, g_us = j["role_x"].map(GROUP), j["role_y"].map(GROUP)
+        g_ref, g_us = j["role_x"].map(REF_GROUP), j["role_y"].map(GROUP)
         exact, grouped = j["role_x"] == j["role_y"], g_ref == g_us
         coarse = g_ref.map(lambda x: COARSE.get(x, x)) == g_us.map(lambda x: COARSE.get(x, x))
         out[state] = {"players": int(len(j)), "exact": round(float(exact.mean()), 4), "grouped": round(float(grouped.mean()), 4),
@@ -59,7 +67,24 @@ def role_agreement(roles: pd.DataFrame, formations: pd.DataFrame, match_dir: Pat
                       "central_mid_merged": round(float(coarse.mean()), 4),
                       "central_mid_merged_time_weighted": round(float((coarse * w).sum() / w.sum()), 4)}
         if state == "all":
-            out["pairs"] = sorted(f"{a}->{b}" for a, b in zip(j["role_x"], j["role_y"].fillna("none"), strict=True) if GROUP.get(a) != GROUP.get(b))
+            out["pairs"] = sorted(f"{a}->{b}" for a, b in zip(j["role_x"], j["role_y"].fillna("none"), strict=True) if REF_GROUP.get(a) != GROUP.get(b))
+    if main is not None:
+        # P2 0.2.0's main role (out of possession, else all). Two weights: the data behind the main
+        # role (the method above) and the player's playing time with data (all windows).
+        played = r.loc[r["state"] == "all"].groupby("player_id")["data_s"].sum()
+        j = ref.merge(main, on="player_id", how="left", suffixes=("_x", "_y"))
+        j = j.loc[j["role_x"] != "GK"]
+        g_ref, g_us = j["role_x"].map(REF_GROUP), j["role_y"].map(GROUP)
+        grouped = g_ref == g_us
+        coarse = g_ref.map(lambda x: COARSE.get(x, x)) == g_us.map(lambda x: COARSE.get(x, x))
+        res = {"players": int(len(j)), "exact": round(float((j["role_x"] == j["role_y"]).mean()), 4),
+               "grouped": round(float(grouped.mean()), 4), "central_mid_merged": round(float(coarse.mean()), 4)}
+        for name, w in (("", j["role_s"].fillna(0.0)), ("_playing_time", j["player_id"].map(played).fillna(0.0))):
+            res[f"grouped_time_weighted{name}"] = round(float((grouped * w).sum() / w.sum()), 4)
+            res[f"central_mid_merged_time_weighted{name}"] = round(float((coarse * w).sum() / w.sum()), 4)
+        res["pairs"] = sorted(f"{a}->{b}" for a, b in zip(j["role_x"], j["role_y"].fillna("none"), strict=True)
+                              if REF_GROUP.get(a) != GROUP.get(b))
+        out["main"] = res
     gk = set(ref.query("role == 'GK'")["player_id"])
     out["goalkeepers_excluded_from_roles"] = not (set(roles["player_id"]) & gk)
     return out
@@ -118,7 +143,7 @@ def main() -> None:
         }
         entry["p2"]["attack_signs"] = p2.measurements["attack_signs"]
         if key.startswith("skillcorner"):
-            entry["p2_roles_vs_skillcorner"] = role_agreement(p2.segments["roles"], p2.segments["formations"])
+            entry["p2_roles_vs_skillcorner"] = role_agreement(p2.segments["roles"], p2.segments["formations"], main=p2.segments["main_roles"])
             ref = sc_phase_spans(res.frames)
             per = res.frames["period"].to_numpy()
             entry["p4_vs_skillcorner"] = {"all": agreement(ref, p4.frames), "half_1": agreement(ref, p4.frames, per == 1),

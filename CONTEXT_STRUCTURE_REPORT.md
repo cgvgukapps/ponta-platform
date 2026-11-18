@@ -23,6 +23,13 @@ These are agreements with one provider's labels on one match, not accuracy again
 
 **Gate 2a is met on the reference match, zones included. It is not met across the wider set for roles, and only pooled for phases.**
 
+**Update, 18 November 2026.**
+- **Phases:** revised after the founder's replay review (P1 and P4 0.2.0; [below](#the-founders-phase-replay-review-and-the-refinements-17-and-18-november-2026)).
+- **Roles:** revised (P2 0.2.0; [below](#the-role-revision-p2-020-18-november-2026)). Most of the role misses were the comparison misreading SkillCorner's LM and RM, which are central midfielders in its vocabulary. Each player's main role is now read from the team's defensive shape.
+- **Roles across the 20 matches:** median 92.2%; 19 of 20 meet the grouped bar and 17 the merged bar.
+- **Phase bar:** restated by the founder as pooled κ at least 0.55 on each half (met, 0.61), with no match below 0.50 (three matches fall short by up to 0.02).
+- **All six new thresholds agreed.**
+
 ## What was built
 
 | Piece | Where |
@@ -343,7 +350,59 @@ The phase bar sits below published analyst agreement (κ about 0.7) because the 
   - restarts other than corners without an event feed (SkillCorner grid point 16221, a throw-in);
   - recycling the ball backwards to rebuild, which the reviewer calls build-up (Metrica 2 grid point 5864, Metrica 3 grid point 11497);
   - a regain that gained less than 15 m in 3 s (Metrica 3 grid point 4277).
-- **Thresholds:** the six new values are `measured`, not `agreed`, until the founder agrees them.
+- **Thresholds:** the six new values are `measured`, not `agreed`, until the founder agrees them. *(Agreed by the founder on 18 November 2026; thresholds 0.6.0, no value changed.)*
+
+## The role revision (P2 0.2.0, 18 November 2026)
+
+Approved by the founder on 18 November 2026. Two changes, measured in this order.
+
+**1. The comparison misread SkillCorner's vocabulary (a measurement fix; P2 unchanged).**
+- SkillCorner's own position groups, in each player's `player_role`, file **LM and RM under "Midfield"** and **LF and RF under "Wide Attacker"**.
+- Mean positions from the tracking agree. Over the 20 matches, SkillCorner's LM and RM stand a mean 2 to 4 m from the middle, as LDM and RDM do; its LW and RW stand about 11 m out, and LF and RF 11 to 15 m.
+- In its line-ups a 4-4-2 is `LW LM RM RW`, so LM and RM are the central pair. Ponta's templates use LM and RM for a flat four's wide midfielders.
+- The comparison mapped both vocabularies through Ponta's table, so it counted a central midfielder given a central slot as a miss. It also counted LF and RF as centre forwards, the correction recorded in the section above.
+- `tools/context_structure_measure.py` now maps SkillCorner's roles through their own groups (`REF_GROUP`). The reference match 1886347 uses none of these four labels, so its figures do not change.
+- **So most of the "wide midfielders given central slots" were Ponta right and the comparison wrong.**
+
+**2. Each player's main role is read from the defensive shape (P2 0.2.0).**
+- With the comparison fixed, the remaining misses were mostly one pattern: SkillCorner lists a 4-4-2, while Ponta fits a 4-2-3-1 or 4-3-3 *in possession*, when the wide players and one forward push on. Out of possession Ponta mostly fits the 4-4-2.
+- The role comparison had read each player's most common slot over *all* windows, mixing both states.
+- **The rule, from football convention** (a team's nominal formation is its defensive shape) and fixed before scoring: a player's main role is the slot held for the most window data **out of possession**, or over all windows when the player has no out-of-possession window. P2 now publishes it as the `main_roles` segment. Per-window roles are unchanged.
+- **Adoption test, as for the corner rule:** compared on the even-index matches (fit) and read on the odd ones (held out). In possession was scored too, and was worse on both halves.
+
+| Roles by position group, time-weighted (bar 75%) | All windows | **Main role (P2 0.2.0)** |
+|---|---|---|
+| Fit half (10 matches): median, matches meeting the bar | 77.5%, 6 | **85.0%, 9** |
+| Held-out half (10 matches): median, matches meeting the bar | 85.3%, 10 | **97.6%, 10** |
+| Central midfield merged (bar 85%), all 20: median, matches meeting the bar | 91.3%, 17 | **94.8%, 17** |
+| Reference match 1886347: grouped / merged | 79.3% / 90.5% | 77.0% / 95.2% |
+
+**Across the 20 matches, from the start of the day to now:**
+
+| Roles, time-weighted | Before (17 November) | Comparison fixed | **P2 0.2.0** |
+|---|---|---|---|
+| By position group: median, matches meeting 75% | 75.4%, 12 | 81.5%, 16 | **92.2%, 19** |
+| Central midfield merged: median, matches meeting 85% | 76.3%, 7 | 91.3%, 17 | **94.8%, 17** |
+| Players whose main role misses (of 583) | 165 | 126 | **93** |
+
+- **Weighting:** as before, each player is weighted by the window data behind their main role. Weighted by each player's playing time with data instead, the medians are 90.7% and 93.5%.
+- **Where it got worse:**
+  - On match 1959846 roles fell from 72% to 59% (merged 92% to 78%). The home team's out-of-possession shape fits a 3-4-2-1, while SkillCorner lists a 4-4-2.
+  - On 1996435, 98.7% fell to 92.6%.
+  - On the reference match the strict measure fell from 79.3% to 77.0%, still above the bar, while the merged measure rose from 90.5% to 95.2%.
+- **Still below a bar:** grouped on 1959846; merged on 1959846, 2006229 (84.4%) and 2016236 (84.0%).
+- **The remaining misses are spread thinly.** The largest groups are a central midfielder given a defensive-midfield slot (9), a forward given a central or attacking-midfield slot (9), and an attacking midfielder given a central-midfield slot (6).
+- **Unchanged:** formations, lines and every per-frame field. P3 and P4 read P2's per-window roles, not the main role, so their outputs are unchanged and phase κ is unchanged (pooled 0.610).
+
+**Gate 2a across the 20 matches after the revision** (`tools/context_reference_set.py`):
+
+| Bar | Matches meeting it |
+|---|---|
+| Roles by position group, at least 75% | 19 |
+| Roles, central midfield merged, at least 85% | 17 |
+| Formation changes, at most 2 | 20 |
+| Phase κ at least 0.55 on each half | 13 |
+| All four | 10 |
 
 ## Runtime and storage
 
@@ -363,7 +422,7 @@ Stage A alone was about 2.5 s and 0.8 MB. Most of the new time is spent in P3 an
 Both are easy to optimise if the runtime budget at Gate 3a needs it.
 
 **Other gates:**
-- **Full local gate:** 1,057 passed, 12 skipped. *(After the Game 2 fix and the agreement of the thresholds: 1,060 passed, 12 skipped.)*
+- **Full local gate:** 1,057 passed, 12 skipped. *(After the Game 2 fix and the agreement of the thresholds: 1,060 passed, 12 skipped. After P1, P2 and P4 0.2.0: 1,068 passed, 12 skipped.)*
 - **Golden outputs:** captured; a second run matches on all four matches.
 - **P1 outputs:** unchanged (the only golden difference is the four new Data check entries per match).
 - **Import check and lint:** both pass.
@@ -394,9 +453,19 @@ Taken on 17 November 2026: the five Gate 2a bars and every Stage B threshold agr
 - **Why the phase figure is indicative only:** the founder noted that a still frame rarely shows a phase. `tools/context_spotcheck.py --replay` now writes the same 50 moments as replays (5 s before, 2 s after) with a phase tick and a note per case.
 - **A pattern to check on the replays:** "finish" follows the defending team's low block, whether or not the ball is in the final third.
 
-Still open:
+Taken on 18 November 2026:
 1. ~~Phase replay check~~ done: 29 of 50 against P4 0.1.0; see the review section above.
-2. **Roles across the 20 matches:** approve the short P2 role-fit revision recommended above, or accept roles as they are and keep them out of later packages.
-3. **Phase bar for a set of matches:** keep "κ at least 0.55 on each half" per match, or restate it pooled with a per-match floor. After P4 0.2.0 the pooled bar is met (0.609 and 0.611 by half), but the floor of 0.50 proposed earlier fails three matches by up to 0.02. Choosing a lower floor after seeing that would be moving the bar to fit the result, so the choice is the founder's: keep 0.50 and count those three as below it, or set the bar another way with the reason recorded.
-4. **The six new thresholds (P4 0.2.0):** agree the three phase refinements from the replay review and the three corner set-up values, or change them.
-5. **Phase replay check again (optional):** the same 50 moments re-rendered with P4 0.2.0, to confirm the changes look right in replays.
+2. **Roles across the 20 matches:** the role revision approved and done (P2 0.2.0; section above). Roles meet the grouped bar on 19 of 20 matches and the merged bar on 17.
+3. **Phase bar for a set of matches:** restated as **pooled κ at least 0.55 on each half, and no match below 0.50 on either half**, the floor proposed before P4 0.2.0 was measured. Pooled it is met (0.609 and 0.611). **Three matches are below the floor and count as failing:** 2013725 (0.483 in the first half), 2015213 (0.496, second half) and 2017461 (0.497, second half). The per-match bar of 0.55 on each half is kept as a reading and is met on 13 of 20.
+4. **The six new thresholds (P4 0.2.0):** agreed (thresholds 0.6.0).
+
+**Gate 2a across the set, after these decisions:**
+- **Met:** formations (20 of 20) and phases pooled.
+- **Not met:** roles on three matches (one on the grouped bar, three on the merged bar) and the phase floor on three. All three phase failures are within 0.02 of the floor.
+- **On the reference match:** every bar is met.
+
+Still open:
+5. **Phase replay check again (optional):**
+   - The same 50 moments were re-rendered with P4 0.2.0 on 18 November 2026. The sample is drawn by the ball's P3 band, which did not change, so the moments are the same. The page holds positions, so it is kept outside the repository.
+   - Seven cases changed label: Metrica 1 grid point 25371 (create to build_up), Metrica 2 grid points 4809 (finish to create), 18016 and 20789 (transition to finish), Metrica 3 grid point 25151 (set_play to chaotic), and SkillCorner grid points 7820 (create to build_up) and 20372 (finish to set_play).
+   - Six of the seven now carry a label the founder accepted. Re-judging only these seven confirms the changes on the pitch.

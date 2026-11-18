@@ -20,6 +20,7 @@ from plaiq_engine.context.structure import (
     assign_lines,
     attack_signs,
     fit_formation,
+    main_roles,
 )
 from plaiq_engine.context.thresholds import THRESHOLDS, values
 from plaiq_engine.context.zones import ZonesPackage, band_of, lane_of
@@ -60,6 +61,21 @@ def test_a_formation_change_must_persist():
     assert out[:4] == ["4-4-2"] * 4  # one 4-3-3 window is not a change
     assert out[4:] == ["4-3-3"] * 3  # three in a row (360 s) is
     assert _persist(["unclear", "4-4-2"], [120.0, 120.0], 300.0) == ["4-4-2", "4-4-2"]
+
+
+def test_main_role_reads_the_defensive_shape_first():
+    """A forward who drops in possession is an AM there, but their main role is the out-of-possession slot."""
+    key = ["team", "period", "block", "state"]
+    forms = pd.DataFrame([("home", 1, 0, "in", 100.0), ("home", 1, 0, "out", 40.0), ("home", 1, 0, "all", 140.0),
+                          ("home", 1, 1, "all", 120.0)], columns=key + ["data_s"])
+    roles = pd.DataFrame([("home", 1, 0, "in", "home_9", "AM"), ("home", 1, 0, "out", "home_9", "LCF"),
+                          ("home", 1, 0, "all", "home_9", "AM"), ("home", 1, 1, "all", "home_9", "AM"),
+                          ("home", 1, 1, "all", "home_7", "LM")], columns=key + ["player_id", "role"])
+    main = main_roles(roles, forms).set_index("player_id")
+    assert main.at["home_9", "role"] == "LCF" and main.at["home_9", "state"] == "out"
+    assert main.at["home_7", "role"] == "LM" and main.at["home_7", "state"] == "all"  # no out-of-possession window: all
+    assert main.at["home_9", "share"] == 1.0
+    assert main_roles(roles.iloc[:0], forms).empty
 
 
 def test_lanes_follow_the_box_edges():
@@ -104,11 +120,11 @@ def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
     for t in stage_b:
         assert t.reason and t.status == "agreed"
         assert "agreed by the founder, 17 November 2026" in t.source
-    for name in REVIEW_REFINEMENTS:
+    for name in REVIEW_REFINEMENTS + CORNER_SETUP:
         t = THRESHOLDS[name]
-        assert t.status == "measured" and "replay review" in t.source  # the founder has not agreed them yet
-    for name in CORNER_SETUP:
-        assert THRESHOLDS[name].status in ("proposed", "measured")  # the founder has not agreed them yet
+        assert t.reason and t.status == "agreed" and "agreed by the founder, 18 November 2026" in t.source
+    for name in REVIEW_REFINEMENTS:
+        assert "replay review" in THRESHOLDS[name].source
     for name in ("p4_low_block_max_m", "p4_high_block_min_m", "p4_break_min_gain_m"):
         assert "CONTEXT_STRUCTURE_REPORT.md" in THRESHOLDS[name].source
 
@@ -129,6 +145,9 @@ def test_structure_finds_the_formations_and_roles(standard):
     roles = standard.outputs["p2"].segments["roles"]
     home = roles.loc[(roles["team"] == "home") & (roles["state"] == "in")].drop_duplicates("player_id").set_index("player_id")["role"]
     assert home["home_2"] == "LB" and home["home_10"] == "LCF"
+    main = standard.outputs["p2"].segments["main_roles"].set_index("player_id")
+    assert main.at["home_2", "role"] == "LB" and main.at["home_10", "role"] == "LCF"
+    assert "home_1" not in main.index and "away_1" not in main.index  # goalkeepers have no outfield role
     gk = standard.outputs["p2"].segments["goalkeepers"]
     assert set(gk["player_id"]) == {"home_1", "away_1"}
 

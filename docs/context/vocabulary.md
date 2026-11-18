@@ -1,6 +1,6 @@
 # Context vocabulary (P0 to P4)
 
-Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe`, `p2` and `p3` 0.1.0, `p1` and `p4` 0.2.0 (18 November 2026); thresholds 0.5.0 (Stage A and B values agreed by the founder; six P4 values from the founder's replay review and corner rule measured, not yet agreed). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
+Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` and `p3` 0.1.0, `p1`, `p2` and `p4` 0.2.0 (18 November 2026); thresholds 0.6.0 (every Stage A and B value agreed by the founder, the last six on 18 November 2026). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
 
 **Observed** means a fact read from the data (a distance, whether the ball was seen, an event). **Estimated** means a label the engine assigns by rules. Nothing in the frame table reaches the AI layer directly; the semantic events carry only the labels listed at the end.
 
@@ -85,9 +85,10 @@ Per team (`home`, `away`), on every grid point; null when fewer than `p2_min_out
 - **Windows:** two minutes (`p2_window_s`) within a period, split by the team's possession state (`in`, `out`, and `all` as a fallback). Only P1 chains of at least `p2_min_possession_s` count; a window needs `p2_min_window_data_s` of data, and a player counts when seen for `p2_min_presence_share` of it.
 - **Lines:** exact one-dimensional 3-means on the players' mean depth: the split into three contiguous groups with the least within-group sum of squares.
 - **Formation:** the players' mean positions, centred and scaled per axis, are assigned to each template's slots with the Hungarian algorithm (templates: 4-4-2, 4-3-3, 4-2-3-1, 4-1-4-1, 4-1-2-1-2, 3-5-2, 3-4-3, 3-4-2-1, 5-3-2, 5-4-1). The window's formation is the best fit, or `unclear` when it beats the second best by less than `p2_formation_min_margin`. The current formation changes only when a new one holds for `p2_formation_persist_s`.
-- **Roles:** each player's slot in the current formation's template (`LB`, `LCB`, `CB`, `RCB`, `RB`, `LWB`, `RWB`, `DM`, `LDM`, `RDM`, `LCM`, `CM`, `RCM`, `LM`, `RM`, `LAM`, `RAM`, `AM`, `LW`, `RW`, `CF`, `LCF`, `RCF`).
+- **Roles:** each player's slot in the current formation's template (`LB`, `LCB`, `CB`, `RCB`, `RB`, `LWB`, `RWB`, `DM`, `LDM`, `RDM`, `LCM`, `CM`, `RCM`, `LM`, `RM`, `LAM`, `RAM`, `AM`, `LW`, `RW`, `CF`, `LCF`, `RCF`). Ponta's `LM` and `RM` are the wide midfielders of a flat four (SkillCorner's `LM` and `RM` are a central pair).
+- **Main role** (P2 0.2.0): each player's role for the match, the slot held for the most window data out of possession, where a team keeps its nominal shape; all windows when the player has no out-of-possession window. In possession a 4-4-2 often fits as a 4-2-3-1, so a forward who drops reads as `AM` in those windows.
 
-**Segments.** `p2_formations` (team, period, block, state, data seconds, best and second template, margin, window formation, current formation), `p2_roles` (team, period, block, state, player id, line, role), `p2_orientation` (attack sign per team and period), `p2_goalkeepers`. No positions are written.
+**Segments.** `p2_formations` (team, period, block, state, data seconds, best and second template, margin, window formation, current formation), `p2_roles` (team, period, block, state, player id, line, role), `p2_main_roles` (team, player id, role, the state read, seconds in that role, share of the player's data in that state), `p2_orientation` (attack sign per team and period), `p2_goalkeepers`. No positions are written.
 
 **Data check.** `team_shape` and `formation`: `full` when both teams have a shape for at least `p2_min_shape_coverage` of in-play time and the orientation is consistent; `degraded` below it (broadcast tracking loses players out of view); `blocked` with no shape at all.
 
@@ -135,7 +136,7 @@ Runs shorter than `p4_min_phase_s` merge into the run before them in the same ch
 **Known limits (Stage B).**
 
 - **Validation:** formations, roles, zones and phases are estimated, not yet validated by analysts (Gate 2b). Reference agreement is in `CONTEXT_STRUCTURE_REPORT.md`.
-- **Central midfield:** most role disagreements are among defensive, central and attacking midfield.
+- **Roles:** after P2 0.2.0 most remaining disagreements with SkillCorner are a central midfielder given a defensive-midfield slot, and a forward who drops given an attacking-midfield slot (`CONTEXT_STRUCTURE_REPORT.md`).
 - **Set plays without events:** the position rule finds about 70% of corners (about 55% of its detections are right); throw-ins, goal kicks and free kicks are not found.
 - **Runtime:** P3 and P4 rebuild the team frames from P2's segments; about 13 s of the 16 s per match is Stage B.
 

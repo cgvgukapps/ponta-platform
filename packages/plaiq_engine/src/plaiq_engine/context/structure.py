@@ -29,6 +29,9 @@ possessions of at least ``p2_min_possession_s``; Shaw and Glickman 2019):
 * the team's current formation: a change is accepted only when it holds for
   ``p2_formation_persist_s`` (SoccerCPD, Kim et al. 2022).
 
+**Per player** (version 0.2.0, 18 November 2026): the main role for the match, read from the
+out-of-possession windows (the team's nominal shape), else from all windows (``main_roles``).
+
 Formations and roles are Ponta's labels from rules (estimated, not yet validated); shape
 measures are observed. Nothing here reaches the AI as coordinates: depths and distances are
 measures, not positions.
@@ -338,6 +341,35 @@ def analyse_windows(grid: pd.DataFrame, tf: dict[str, TeamFrames], states: dict[
     return Windows(formations=formations, roles=roles, gk=gks)
 
 
+def main_roles(roles: pd.DataFrame, formations: pd.DataFrame) -> pd.DataFrame:
+    """
+    Each player's main role for the match: the slot they hold for the most window data **out of
+    possession**, where a team keeps its nominal shape; in possession, wide players and a forward
+    push on and a 4-4-2 often fits as a 4-2-3-1. Players with no out-of-possession window fall back
+    to all windows. Ties go to the alphabetically first role, so the result is deterministic.
+
+    Returns one row per player: ``team``, ``player_id``, ``role``, ``state`` (``out`` or ``all``,
+    the windows read), ``role_s`` (window data in that role) and ``share`` (of the player's data
+    in that state).
+    """
+    cols = ["team", "player_id", "role", "state", "role_s", "share"]
+    if roles.empty:
+        return pd.DataFrame(columns=cols)
+    r = roles.merge(formations[["team", "period", "block", "state", "data_s"]], on=["team", "period", "block", "state"])
+    out: dict[str, dict] = {}
+    for state in ("all", "out"):  # "out" is read last, so it wins where it exists
+        s = r.loc[r["state"] == state]
+        if s.empty:
+            continue
+        per = s.groupby(["team", "player_id", "role"])["data_s"].sum().reset_index()
+        tot = per.groupby("player_id")["data_s"].sum()
+        best = per.sort_values(["data_s", "role"], ascending=[False, True]).drop_duplicates("player_id")
+        for b in best.itertuples():
+            out[b.player_id] = {"team": b.team, "player_id": b.player_id, "role": b.role, "state": state,
+                                "role_s": round(float(b.data_s), 1), "share": round(float(b.data_s / tot[b.player_id]), 4)}
+    return pd.DataFrame(sorted(out.values(), key=lambda d: (d["team"], d["player_id"])), columns=cols)
+
+
 def windows_from_segments(segments: dict[str, pd.DataFrame]) -> Windows:
     """Rebuild P2's window results from its segment tables (used by packages that depend on P2)."""
     gk = {(r.team, int(r.period), int(r.block)): r.player_id for r in segments["goalkeepers"].itertuples()}
@@ -472,7 +504,7 @@ def _pct(x: float) -> str:
 
 class StructurePackage(ContextPackage):
     name = "p2"
-    version = "0.1.0"
+    version = "0.2.0"
     depends_on = ("p1",)
     fields = _Fields().items
 
@@ -557,5 +589,6 @@ class StructurePackage(ContextPackage):
         ]
         gk = pd.DataFrame([{"team": t, "period": p_, "block": b_, "player_id": pid} for (t, p_, b_), pid in sorted(win.gk.items())],
                           columns=["team", "period", "block", "player_id"])
-        segments = {"formations": win.formations, "roles": win.roles, "orientation": signs, "goalkeepers": gk}
+        segments = {"formations": win.formations, "roles": win.roles, "main_roles": main_roles(win.roles, win.formations),
+                    "orientation": signs, "goalkeepers": gk}
         return PackageOutput(frames=frames, entries=entries, segments=segments, measurements=measurements)
