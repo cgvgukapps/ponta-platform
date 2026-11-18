@@ -20,6 +20,8 @@ Version 0.7.0 adds four throw-in values (throw-ins from player positions when th
 feed), measured on SkillCorner's 20 open-data matches and Metrica's logged throw-ins (P4 0.3.0).
 Version 0.8.0 records the founder's agreement of those four values on 18 November 2026; no value
 changed, so package output is unchanged.
+Version 0.9.0 adds ``p1_loose_on_opponent_touch`` (the founder's loose-ball rule), proposed and off,
+so package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, possession round).
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -33,7 +35,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.8.0"
+THRESHOLDS_VERSION = "0.9.0"
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p1_max_carry_gap_s", 3.0, "s", "agreed",
               "During a ball-detection gap, the last observed possession is carried forward this long; after that the event feed decides, or the label is unknown. About 1% of undetected-ball time is in gaps under 3 s, so the value matters little.",
               "CONTEXT_FOUNDATIONS_REPORT.md, detection gaps; agreed by the founder, 17 November 2026"),
+    Threshold("p1_loose_on_opponent_touch", 0.0, "switch (1 on, 0 off)", "proposed",
+              "When the other team touches the ball without holding it for p1_min_switch_s (a deflection, block or clearance), possession is loose until a player of either team gains control (the founder's rule, 18 November 2026). Off: the team that had the ball keeps it.",
+              "CONTEXT_STRUCTURE_REPORT.md, possession round: the founder's blind replay check on the IDSSE matches"),
     Threshold("p1_degraded_inferred_share", 0.25, "share of in-play time", "agreed",
               "Possession is Degraded when more than this share of in-play time is not observed (inferred, from events or unknown). The Metrica matches sit at 11 to 18%; SkillCorner at 26%, partly because its dead-ball time is unknown and so counted as in play.",
               "CONTEXT_FOUNDATIONS_REPORT.md, possession sources; agreed by the founder, 17 November 2026"),

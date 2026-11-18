@@ -631,6 +631,28 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
   - **Add a separate observed ball-state field** on each grid point: controlled by home, controlled by away, in flight, or loose. That gives the AI "nobody had it yet" without changing possession.
   - **Either way, measure before agreeing:** the thresholds for "in flight" (ball speed, distance to the nearest player) would be swept against a larger judged sample, as for phases.
 
+**The founder's rule and its test (18 November 2026).**
+- **The founder's reading of the cases:** many are clearances or defensive touches. If the ball came from one team and bounced off the other, possession cannot be either team's until a player has gained control.
+- **The evidence fits.** In 8 of the 14 "nobody" moments, the last player within 1 m of the ball was from the team P1 did not have in possession, 0.2 to 1.4 s earlier, with the ball then travelling at about 7 to 12 m/s. P1's minimum switch (0.4 s) ignores a touch that short by design, so it keeps the old team; the league gives the ball to the team that touched it.
+- **Built as `p1_loose_on_opponent_touch`**, proposed and **off** (thresholds 0.9.0; P1's output unchanged). When on, a touch by the other team that does not last `p1_min_switch_s` makes the label `loose` until a player gains control. The original team's control ends it at once; the other team needs `p1_min_switch_s`. Chains are not broken by `loose`, and P4 labels no phase there.
+
+| P1 | Off (agreed) | On |
+|---|---|---|
+| Founder's 50 judged moments | 21 | 22 |
+| "Nobody" moments called loose | 0 of 14 | 5 of 14 |
+| Team moments kept | 11 of 26 | 7 of 26 |
+| Controls | 10 of 10 | 10 of 10 |
+| Agreement where P1 names a team: league (IDSSE mean) | 87.0% | **92.2%** |
+| Same: Metrica event-anchored (Gate 1 reference) | 93.6% to 95.7% | **96.6% to 98.2%** |
+| Same: SkillCorner's player possessions | 95.1% | **96.6%** |
+| Possession switches against the references | unchanged | unchanged |
+| In-play time labelled `loose` | 0 | about 9% (IDSSE), 8% (SkillCorner) |
+
+- **On every reference, the team P1 names is more often right when the rule is on,** because touches by the other side are no longer credited to the old team.
+- **On the judged moments the rule is a wash** (22 against 21). It catches 5 of the 14 loose balls and loosens 4 moments the founder gave to P1's team. Proximity is not always a touch, and at 5 Hz a ball travelling 10 m/s moves 2 m between grid points.
+- **Detecting touches at 25 Hz did no better** (18 to 21 of 50 for radii of 1 to 2 m and velocity changes of 3 to 5 m/s), so it was not pursued. Its prototype also missed the brief control that matters most.
+- **Not adopted.** Turning it on changes P1's labels on about 9% of in-play time, and through them P2's possession states and P4's phases. That needs the founder's decision, the downstream checks (phase κ, the phase review) and a larger judged sample.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:

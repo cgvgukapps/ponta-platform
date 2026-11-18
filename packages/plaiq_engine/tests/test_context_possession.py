@@ -45,6 +45,19 @@ def test_a_brush_past_an_opponent_does_not_switch_possession():
     assert list(lab[7:]) == ["away"] * 5     # relabelled from when away took control
 
 
+def test_a_touch_by_the_other_team_makes_the_ball_loose_when_switched_on():
+    """The founder's rule: a deflection or clearance by the other team leaves possession open until someone controls."""
+    grid, ball, near, ev = _arrays(12)
+    near.loc[0:3, "near_home"] = 0.5
+    near.loc[4, "near_away"] = 0.5          # away touches it for 0.2 s: a block, not a switch
+    near.loc[8:11, "near_home"] = 0.5       # home controls again
+    on = values({"p1_loose_on_opponent_touch": 1.0})
+    lab, _, _ = label_possession(grid, ball, near, ev, None, on)
+    assert list(lab[:4]) == ["home"] * 4 and list(lab[4:8]) == ["loose"] * 4 and list(lab[8:]) == ["home"] * 4
+    off, _, _ = label_possession(grid, ball, near, ev, None, CFG)
+    assert set(off) == {"home"}             # off (the agreed behaviour): the team that had the ball keeps it
+
+
 def test_fast_ball_is_in_flight_not_controlled():
     grid, ball, near, ev = _arrays(3)
     near.loc[:, "near_away"] = 0.5

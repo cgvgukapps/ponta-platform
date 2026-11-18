@@ -3,7 +3,9 @@ possession.py — context package P1: possession and game state.
 
 Possession on every grid point (``ponta-blueprint/context-packages.md``, P1):
 
-* ``home`` / ``away`` / ``contested`` / ``dead_ball`` / ``unknown``, each with its source:
+* ``home`` / ``away`` / ``contested`` / ``dead_ball`` / ``unknown`` (and ``loose`` when
+  ``p1_loose_on_opponent_touch`` is on: the other team touched the ball without taking it, so nobody
+  has it until a player gains control), each with its source:
 * ``observed`` — the ball is detected. A team is in control when its nearest player is
   within ``p1_control_radius_m`` and the ball moves slower than
   ``p1_max_control_ball_speed_mps``; both teams within the radius is ``contested``. While
@@ -285,37 +287,42 @@ def label_possession(grid: pd.DataFrame, ball: pd.DataFrame, near: pd.DataFrame,
 
     ts, per = grid["frame_ts"].to_numpy(float), grid["period"].to_numpy()
     min_switch = cfg["p1_min_switch_s"]
+    loose_rule = cfg["p1_loose_on_opponent_touch"] > 0
     state, last_seen, cur_per = None, -np.inf, None
     pend_team, pend_start = None, None  # a switch to the other team, waiting for p1_min_switch_s of control
+    loose = False  # the other team touched the ball without taking it: nobody has it until someone does
     for i in range(n):
         if per[i] != cur_per:
-            cur_per, state, last_seen, pend_team = per[i], None, -np.inf, None
+            cur_per, state, last_seen, pend_team, loose = per[i], None, -np.inf, None, False
         if dead is not None and dead[i]:
-            lab[i], src[i], state, pend_team = "dead_ball", "events", None, None
+            lab[i], src[i], state, pend_team, loose = "dead_ball", "events", None, None, False
             continue
+        held = "loose" if loose else state
         if det[i]:
             last_seen = ts[i]
             c = control[i]
             if c in TEAMS and (state is None or c == state):
-                state, pend_team = c, None
+                state, pend_team, loose = c, None, False
                 lab[i], src[i] = c, "observed"
             elif c in TEAMS:  # the other team controls: switch only once it has held the ball long enough
                 if pend_team != c:
                     pend_team, pend_start = c, i
                 if ts[i] - ts[pend_start] + 1e-9 >= min_switch:
-                    state, pend_team = c, None
+                    state, pend_team, loose = c, None, False
                     lab[pend_start:i + 1] = c  # the switch happened when the new team took control
                     src[pend_start:i + 1] = "observed"
                 else:
-                    lab[i], src[i] = state, "observed"
+                    if loose_rule:
+                        loose = True  # a deflection, block or clearance: possession is open
+                    lab[i], src[i] = ("loose" if loose else state), "observed"
             elif c == "contested":
                 lab[i], src[i] = "contested", "observed"
             elif state is not None:
-                lab[i], src[i] = state, "observed"
+                lab[i], src[i] = held, "observed"
                 pend_team = None
             continue
         if state is not None and ts[i] - last_seen <= gap_max:
-            lab[i], src[i] = state, "inferred"
+            lab[i], src[i] = held, "inferred"
         elif event_poss[i] in TEAMS:
             lab[i], src[i] = event_poss[i], "events"
     return lab, src, control
