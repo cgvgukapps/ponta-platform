@@ -1,0 +1,460 @@
+{
+ "reviewer": "founder (former semi-professional footballer)",
+ "date": "2026-11-17",
+ "method": "50 moments, each a replay of 5 s before and 2 s after, from tools/context_spotcheck.py --replay (P4 0.1.0, thresholds 0.4.0). The reviewer judged Ponta's phase at the moment and wrote a note. 'accept' lists labels the reviewer judged right; 'reject' lists labels judged wrong where the note gives no single right answer. Notes are the reviewer's words.",
+ "cases": [
+  {
+   "id": "metrica_1-2084",
+   "ponta_v1": "set_play",
+   "judged_right": true,
+   "accept": [
+    "set_play"
+   ],
+   "note": "the moment is a clear set piece, but the labelled moment is a short period after the set piece is taken, which aligns with the ball only showing delayed."
+  },
+  {
+   "id": "metrica_1-8542",
+   "ponta_v1": "set_play",
+   "judged_right": false,
+   "reject": [
+    "set_play"
+   ],
+   "note": "this is not a set play, the labelled moment is the moment the ball was intercepted by the defender."
+  },
+  {
+   "id": "metrica_1-9197",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "direct"
+   ],
+   "note": "this is a direct ball from the deference to the attacker, which is unsuccessful, the labelled moment is the moment just prior to  the defend getting possession of the ball."
+  },
+  {
+   "id": "metrica_1-9300",
+   "ponta_v1": "chaotic",
+   "judged_right": false,
+   "reject": [
+    "chaotic"
+   ],
+   "note": "this was an unsuccessful throw in."
+  },
+  {
+   "id": "metrica_1-12945",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create"
+   ],
+   "note": "this is correct, the attacking team breaks through the high pressure with a ball from the goalkeeper into midfield, which then sets up a create phase."
+  },
+  {
+   "id": "metrica_1-13782",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_1-15960",
+   "ponta_v1": "build_up",
+   "judged_right": true,
+   "accept": [
+    "build_up"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_1-16306",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": "this is correct and the labelled moment, is just prior to a cross into the box"
+  },
+  {
+   "id": "metrica_1-18784",
+   "ponta_v1": "build_up",
+   "judged_right": true,
+   "accept": [
+    "build_up"
+   ],
+   "note": "this is correct, the labelled moment is the mid point of the pass from the goalkeeper into midfield."
+  },
+  {
+   "id": "metrica_1-23177",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": "correct this was a long pass from the goal keeper into attack"
+  },
+  {
+   "id": "metrica_1-24341",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": "correct long ball from goalkeeper up the field"
+  },
+  {
+   "id": "metrica_1-25371",
+   "ponta_v1": "create",
+   "judged_right": false,
+   "accept": [
+    "build_up"
+   ],
+   "note": "this should be a build up as the team is attempting to play from the back"
+  },
+  {
+   "id": "metrica_1-25974",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": "correct phase, blue team makes a clearance and the labelled moment is the red team regaining possession of the ball"
+  },
+  {
+   "id": "metrica_2-1166",
+   "ponta_v1": "build_up",
+   "judged_right": false,
+   "accept": [
+    "create"
+   ],
+   "note": "labelled moment should be a create phase, as blue team regain possession and tries to create something, but chooses the safe pass backwards, which then triggers a build up phase."
+  },
+  {
+   "id": "metrica_2-4206",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "direct"
+   ],
+   "note": "labelled moment is an intercepted direct ball into the attacking third"
+  },
+  {
+   "id": "metrica_2-4809",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "create"
+   ],
+   "note": "this movement is a create phase, although the team is playing from the back the defenders are relatively high into midfield."
+  },
+  {
+   "id": "metrica_2-5306",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": "the phase is correct as a finish but the labelled moment is some time after the ball was crossed in the box, the finish opportunity was earlier as the ball came into the box."
+  },
+  {
+   "id": "metrica_2-5864",
+   "ponta_v1": "create",
+   "judged_right": false,
+   "accept": [
+    "build_up"
+   ],
+   "note": "this is build up phase."
+  },
+  {
+   "id": "metrica_2-6761",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": "great example, labelled moment is just as the player makes the direct ball into the attacking third."
+  },
+  {
+   "id": "metrica_2-8943",
+   "ponta_v1": "create",
+   "judged_right": false,
+   "reject": [
+    "create"
+   ],
+   "note": "this is likely a goal kick, the labelled moment is as the ball is travelling"
+  },
+  {
+   "id": "metrica_2-12281",
+   "ponta_v1": "build_up",
+   "judged_right": true,
+   "accept": [
+    "build_up"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_2-12348",
+   "ponta_v1": "direct",
+   "judged_right": true,
+   "accept": [
+    "direct"
+   ],
+   "note": "the phase was phase during this replay but the labelled moment is just after the unsuccessful long pass just before red team regains possession."
+  },
+  {
+   "id": "metrica_2-14664",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "create"
+   ],
+   "note": "the ball is in the attacking third but this should not be classes as finish because the attacking team is still trying to create a finishing opportunity, red team is very compact forcing blue player backwards."
+  },
+  {
+   "id": "metrica_2-18016",
+   "ponta_v1": "transition",
+   "judged_right": false,
+   "accept": [
+    "finish"
+   ],
+   "note": "this is a finish phase at the labelled moment, the transition happened prior to that."
+  },
+  {
+   "id": "metrica_2-20436",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_2-20789",
+   "ponta_v1": "transition",
+   "judged_right": false,
+   "accept": [
+    "finish"
+   ],
+   "note": "this phase of play is finish, the right sided player is positive and play a cross into the box, a transition is likely coming next as the red team regains possession."
+  },
+  {
+   "id": "metrica_3-4277",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "transition"
+   ],
+   "note": "labelled moment is the blue team transition as they regain the ball."
+  },
+  {
+   "id": "metrica_3-5507",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": "the labelled moment shows the shot from the attacking player in a finishing position."
+  },
+  {
+   "id": "metrica_3-8430",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_3-9627",
+   "ponta_v1": "set_play",
+   "judged_right": false,
+   "accept": [
+    "build_up"
+   ],
+   "note": "this is a build up of play as blue team is facing high pressure in their defensive third."
+  },
+  {
+   "id": "metrica_3-10859",
+   "ponta_v1": "build_up",
+   "judged_right": false,
+   "accept": [
+    "create"
+   ],
+   "note": "this is a create phase, ball was played into the midfield now the team must create"
+  },
+  {
+   "id": "metrica_3-11497",
+   "ponta_v1": "create",
+   "judged_right": false,
+   "accept": [
+    "build_up"
+   ],
+   "note": "the phase was create but as the ball is played backwards to the left back the team must build up the play into the midfield again"
+  },
+  {
+   "id": "metrica_3-14059",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_3-18193",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": ""
+  },
+  {
+   "id": "metrica_3-19191",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create"
+   ],
+   "note": "the phase is correct but labelled moment is just before blue team regains possession in the midfield and has the chance to create."
+  },
+  {
+   "id": "metrica_3-20017",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create",
+    "build_up"
+   ],
+   "note": "this one is close, the player is attempting to create, but as the move s back to the defence they must build up again."
+  },
+  {
+   "id": "metrica_3-21672",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish",
+    "create"
+   ],
+   "note": "although in final third the team still trying to create."
+  },
+  {
+   "id": "metrica_3-24452",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": "long ball played into the right flank setting up a finishing phase."
+  },
+  {
+   "id": "metrica_3-25151",
+   "ponta_v1": "set_play",
+   "judged_right": true,
+   "accept": [
+    "set_play"
+   ],
+   "note": "phase is correct but labelled moment is after the blue team clear the ball from their own box."
+  },
+  {
+   "id": "skillcorner_1886347-1017",
+   "ponta_v1": "build_up",
+   "judged_right": true,
+   "accept": [
+    "build_up"
+   ],
+   "note": ""
+  },
+  {
+   "id": "skillcorner_1886347-2581",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create"
+   ],
+   "note": ""
+  },
+  {
+   "id": "skillcorner_1886347-4168",
+   "ponta_v1": "build_up",
+   "judged_right": true,
+   "accept": [
+    "build_up"
+   ],
+   "note": "phase is correct, labelled moment is as red team almost intercepts ball."
+  },
+  {
+   "id": "skillcorner_1886347-7820",
+   "ponta_v1": "create",
+   "judged_right": false,
+   "accept": [
+    "build_up"
+   ],
+   "note": "this should be a build up, red team is pressure well and forcing blue to recycle the ball and rebuild."
+  },
+  {
+   "id": "skillcorner_1886347-8148",
+   "ponta_v1": "finish",
+   "judged_right": true,
+   "accept": [
+    "finish"
+   ],
+   "note": ""
+  },
+  {
+   "id": "skillcorner_1886347-10214",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "create"
+   ],
+   "note": "although high up the pitch this feel more like a create phase as red team is very compact is blue is looking to breakthrough the red formation."
+  },
+  {
+   "id": "skillcorner_1886347-16221",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "reject": [
+    "finish"
+   ],
+   "note": "this is likely a throw in, definitely not a finish."
+  },
+  {
+   "id": "skillcorner_1886347-17833",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create"
+   ],
+   "note": ""
+  },
+  {
+   "id": "skillcorner_1886347-20372",
+   "ponta_v1": "finish",
+   "judged_right": false,
+   "accept": [
+    "set_play"
+   ],
+   "note": "this is a corner being taken."
+  },
+  {
+   "id": "skillcorner_1886347-24345",
+   "ponta_v1": "build_up",
+   "judged_right": false,
+   "reject": [
+    "build_up"
+   ],
+   "note": "unsure what this is, it look like blue has lost possession and the ball is heading towards the red defence."
+  },
+  {
+   "id": "skillcorner_1886347-26116",
+   "ponta_v1": "create",
+   "judged_right": true,
+   "accept": [
+    "create",
+    "build_up"
+   ],
+   "note": "can be create but also build up, as blue looks from better angles by playing back to the defence."
+  }
+ ]
+}

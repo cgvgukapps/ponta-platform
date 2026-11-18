@@ -280,6 +280,71 @@ The phase bar sits below published analyst agreement (κ about 0.7) because the 
 - **Recommended:** a short P2 role-fit revision measured on these 20 matches before Stage C builds on roles. Until then, roles stay "estimated, not yet validated" and are not used by later packages.
 - **Phase bar:** the founder may also restate it for a set of matches, for example pooled κ at least 0.55 on each half and no match below 0.50.
 
+## The founder's phase replay review and the refinements (17 and 18 November 2026)
+
+**The review.**
+- A still frame rarely shows a phase, so the founder (a former semi-professional footballer) judged the same 50 moments again as replays: 5 s before and 2 s after each, from `tools/context_spotcheck.py --replay`.
+- Each case got a verdict and, often, a note on what the phase should be.
+- **29 of 50** were judged right against P4 0.1.0, stricter than the 34 of 50 on stills.
+- The judgments are kept, without positions, in `tools/data/phase_review_2026-11-17.json`. Each case records the labels the reviewer accepts, or rejects where the note gives no single answer.
+
+**Method.**
+- `tools/context_phase_review.py` scores each rule variant twice: on the 50 judgments, and against SkillCorner's phases pooled over its 20 open-data matches.
+- One reviewer on 50 moments is a small sample, and rules tuned to it can overfit. A variant was adopted only if it agreed better with the review **and** lost nothing against SkillCorner.
+
+**First and second rounds** (each refinement on its own, against P4 0.1.0; SkillCorner κ against event spans, pooled):
+
+| Refinement | Review (of 50) | SkillCorner κ | Decision |
+|---|---|---|---|
+| None (P4 0.1.0) | 29 | 0.607 | |
+| Finish needs the ball in the attacking half, else create | 30 | 0.622 | **adopted** |
+| Finish needs the ball in the final third | 30 | 0.554 | dropped: SkillCorner's finish does not require it |
+| Build-up whenever the ball is in the own third | 31 | 0.595 | **adopted** (in combination, below) |
+| A break ends when the ball reaches the final third | 31 | 0.605 | **adopted** |
+| Direct lasts the ball's whole forward flight | 28 | 0.603 | dropped: a carry after the reception also moves forward |
+| The same, only while the ball travels at 8, 11 or 14 m/s | 28 to 29 | 0.607 | dropped: the missed long ball rolled at about 5 m/s, like a carry |
+| Set play ends when the ball goes back into the own half | 29 | 0.608 | dropped: fixed one case, broke another |
+| The three adopted together | 34 | 0.608 (0.604 / 0.610 by half) | |
+
+**A P1 bug found on the way (fixed, P1 0.2.0).**
+- After a dead ball, P1 gave the set piece to whichever team had the ball first. When the defending team won the first touch (a corner headed clear), its chain started `set_piece:corner_kick`, and P4 labelled the clearance a set play.
+- Now a chain starts with a set piece only when its team took it; otherwise it starts `won`.
+- Only Metrica's chain start types change; possession labels, and so Gate 1, are unchanged.
+- One review case moved the wrong way because of the fix. Metrica 3 grid point 25151 is a clearance from the team's own box after the opponent's set piece. The reviewer had accepted "set play" there; it is now `chaotic`.
+
+**Corners from player positions (the founder's proposal, P4 0.2.0).**
+- Without an event feed the ball is usually undetected until a corner is in the air, so the ball rule found about 1 corner in 20 on SkillCorner.
+- The founder proposed reading the set-up instead: one attacker at a corner flag while players crowd that penalty area. `plaiq_engine/context/restarts.py` implements it without using the ball.
+- `tools/context_corner_sweep.py` swept the taker radius, box margin, crowd and hold time on 10 SkillCorner matches and read them on the other 10 and on Metrica. References (comparison only):
+  - SkillCorner's restart markers (`corner_for`, `corner_against`): 138 corners;
+  - Metrica's 26 logged corner kicks.
+
+| Rule | SkillCorner, held-out matches: found / detections right | Metrica: found / detections right |
+|---|---|---|
+| Ball near a corner flag (P4 0.1.0) | 4% / 8% | 23% / 86% |
+| **Set-up: taker within 4 m, at least 12 players in the box, held at least 1 s** | **73% / 55%** | **69% / 55%** |
+
+- **Generalisation:** the settings were chosen on SkillCorner alone and hold on Metrica's different tracking.
+- **False alarms:** about half the detections are false. The likely cause is throw-ins near the corner flag, which share the shape; not yet checked.
+- **Scope:** the rule is used only without a logged feed; with events, logged corners are used.
+
+**Final result (P1 0.2.0, P4 0.2.0, thresholds 0.5.0):**
+- **Review:** 34 of 50, against 28 for the old rules with the corrected P1.
+- **SkillCorner κ pooled over the 20 matches:** 0.610 against event spans (0.609 and 0.611 by half) and 0.619 against the phases-of-play file.
+- **Per match** (`tools/context_reference_set.py`, event spans):
+  - 13 of 20 matches clear κ 0.55 on both halves (11 before), and the median of the weaker half rose from 0.56 to 0.57;
+  - the changes are not uniform: one match rose from 0.54 to 0.64 on its weaker half, while three fell just below 0.50 (0.53 to 0.48, 0.50 to 0.50, 0.55 to 0.50);
+  - with roles and formations unchanged, 6 of 20 matches meet all four bars (5 before).
+  - On the reference match 1886347 (newer copy of the events): κ 0.60 (0.61 and 0.58 by half).
+- **Runtime:** a median 14 s per match for P1 to P4 on the 20 matches; two runs of about 150 s were the laptop, not the code (13.8 s when re-timed).
+- **What the review says is still wrong:**
+  - long balls and lost possessions while the ball travels (Metrica 1 grid point 9197, Metrica 2 grid point 4206, SkillCorner grid point 24345);
+  - a goal kick credited to the receiving team while the ball is undetected (Metrica 2 grid point 8943), a P1 issue;
+  - restarts other than corners without an event feed (SkillCorner grid point 16221, a throw-in);
+  - recycling the ball backwards to rebuild, which the reviewer calls build-up (Metrica 2 grid point 5864, Metrica 3 grid point 11497);
+  - a regain that gained less than 15 m in 3 s (Metrica 3 grid point 4277).
+- **Thresholds:** the six new values are `measured`, not `agreed`, until the founder agrees them.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
@@ -330,6 +395,8 @@ Taken on 17 November 2026: the five Gate 2a bars and every Stage B threshold agr
 - **A pattern to check on the replays:** "finish" follows the defending team's low block, whether or not the ball is in the final third.
 
 Still open:
-1. **Phase replay check:** the founder judges the 50 replays and copies the results back.
+1. ~~Phase replay check~~ done: 29 of 50 against P4 0.1.0; see the review section above.
 2. **Roles across the 20 matches:** approve the short P2 role-fit revision recommended above, or accept roles as they are and keep them out of later packages.
-3. **Phase bar for a set of matches:** keep "κ at least 0.55 on each half" per match, or restate it pooled with a per-match floor.
+3. **Phase bar for a set of matches:** keep "κ at least 0.55 on each half" per match, or restate it pooled with a per-match floor. After P4 0.2.0 the pooled bar is met (0.609 and 0.611 by half), but the floor of 0.50 proposed earlier fails three matches by up to 0.02. Choosing a lower floor after seeing that would be moving the bar to fit the result, so the choice is the founder's: keep 0.50 and count those three as below it, or set the bar another way with the reason recorded.
+4. **The six new thresholds (P4 0.2.0):** agree the three phase refinements from the replay review and the three corner set-up values, or change them.
+5. **Phase replay check again (optional):** the same 50 moments re-rendered with P4 0.2.0, to confirm the changes look right in replays.

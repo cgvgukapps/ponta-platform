@@ -171,15 +171,17 @@ def _restart_name(subtype) -> str:
     return "_".join(re.sub(r"[^A-Z]+", "_", t).strip("_").lower() for t in toks) or "set_piece"
 
 
-def dead_ball_on_grid(match: NormalisedMatch, grid: pd.DataFrame, cfg: dict) -> tuple[np.ndarray | None, np.ndarray]:
+def dead_ball_on_grid(match: NormalisedMatch, grid: pd.DataFrame, cfg: dict, *, teams: bool = False):
     """
     Dead-ball flag and the coming restart's type, from logged set pieces. ``None`` when the
-    feed has no set pieces (dead ball is then unknown, not false).
+    feed has no set pieces (dead ball is then unknown, not false). With ``teams=True`` also the
+    team taking the coming restart (``home``/``away``), as a third array.
     """
     ev = match.events
     setp = np.full(len(grid), None, dtype=object)
+    setp_team = np.full(len(grid), None, dtype=object)
     if not logged_events(match) or "Type" not in ev.columns or not (ev["Type"].astype(str) == "SET PIECE").any():
-        return None, setp
+        return (None, setp, setp_team) if teams else (None, setp)
     ev = ev.sort_values(["Start Frame"], kind="stable").reset_index(drop=True)
     dead = np.zeros(len(grid), dtype=bool)
     nf = grid["native_frame"].to_numpy()
@@ -195,7 +197,9 @@ def dead_ball_on_grid(match: NormalisedMatch, grid: pd.DataFrame, cfg: dict) -> 
         m = (nf >= stop) & (nf < restart)
         dead[m] = True
         setp[m] = _restart_name(ev.at[i, "Subtype"])
-    return dead, setp
+        team = str(ev.at[i, "Team"]).lower() if "Team" in ev.columns else ""
+        setp_team[m] = team if team in TEAMS else None
+    return (dead, setp, setp_team) if teams else (dead, setp)
 
 
 def goals_and_cards(match: NormalisedMatch, cfg: dict) -> tuple[list[dict], list[dict]]:
@@ -318,10 +322,14 @@ def label_possession(grid: pd.DataFrame, ball: pd.DataFrame, near: pd.DataFrame,
 
 
 def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.ndarray, match: NormalisedMatch,
-                 cfg: dict, goals: list[dict]) -> tuple[np.ndarray, pd.DataFrame]:
+                 cfg: dict, goals: list[dict], setp_team: np.ndarray | None = None) -> tuple[np.ndarray, pd.DataFrame]:
     """
     Possession chains: maximal stretches held by one team. Contested and unknown points do not
     break a chain; the other team taking the ball, a dead ball or the end of a period do.
+
+    A chain after a dead ball starts with the set piece only when its team took the set piece
+    (``setp_team``); when the other team wins the first touch (a corner headed clear), its chain
+    starts ``won``. Before P1 0.2.0 the set piece went to whichever team had the ball first.
     """
     n = len(grid)
     ts, per, minute = grid["frame_ts"].to_numpy(float), grid["period"].to_numpy(), grid["minute"].to_numpy()
@@ -341,7 +349,7 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
 
     rows, cid = [], 0
     cur = None  # [team, start_i, start_type]
-    last_break, pending_sp = "period_start", None
+    last_break, pending_sp, pending_team = "period_start", None, None
 
     def close(end_i: int, end_type: str):
         nonlocal cur, cid
@@ -364,12 +372,13 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
         if i > 0 and per[i] != per[i - 1]:
             if cur is not None:
                 close(i - 1, "period_end")
-            last_break, pending_sp = "period_start", None
+            last_break, pending_sp, pending_team = "period_start", None, None
         lab_i = lab[i]
         if lab_i == "dead_ball":
             if cur is not None:
                 close(i - 1, "dead_ball")
             last_break, pending_sp = "dead_ball", setp[i]
+            pending_team = setp_team[i] if setp_team is not None else None
             continue
         if lab_i in TEAMS:
             if cur is not None and cur[0] == lab_i:
@@ -380,7 +389,10 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
             if last_break == "period_start":
                 s_type = "period_start"
             elif last_break == "dead_ball":
-                s_type = f"set_piece:{pending_sp}" if pending_sp else "restart"
+                if pending_sp and pending_team is not None and pending_team != lab_i:
+                    s_type = "won"  # the other team's restart; this team won the first touch
+                else:
+                    s_type = f"set_piece:{pending_sp}" if pending_sp else "restart"
             elif last_break == "other_team":
                 rec = near_event(lab_i, ts[i], {"RECOVERY"}, cfg["p1_chain_event_window_s"])
                 s_type = "recovery" if not rec.empty else "won"
@@ -443,7 +455,7 @@ class _Fields:
 
 class PossessionPackage(ContextPackage):
     name = "p1"
-    version = "0.1.0"
+    version = "0.2.0"
     fields = _Fields().items
 
     def compute(self, ctx: ContextInput) -> PackageOutput:
@@ -452,10 +464,10 @@ class PossessionPackage(ContextPackage):
         ball = ball_on_grid(m, g)
         near = nearest_on_grid(m, g, ball)
         event_poss = event_possession_on_grid(m, g)
-        dead, setp = dead_ball_on_grid(m, g, cfg)
+        dead, setp, setp_team = dead_ball_on_grid(m, g, cfg, teams=True)
         lab, src, control = label_possession(g, ball, near, event_poss, dead, cfg)
         gs, gs_source, gs_info = game_state_on_grid(m, g, cfg, upload)
-        chain, chains = build_chains(g, lab, src, setp, m, cfg, gs_info.get("goals", []) if gs_source == "events" else [])
+        chain, chains = build_chains(g, lab, src, setp, m, cfg, gs_info.get("goals", []) if gs_source == "events" else [], setp_team)
 
         frames = pd.DataFrame({
             "p1_possession": lab,

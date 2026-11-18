@@ -94,12 +94,21 @@ def test_corner_rule():
     assert not corner_at_start(bx, by, np.arange(1), 105.0, 68.0, 4.0)
 
 
+REVIEW_REFINEMENTS = ("p4_finish_min_depth_share", "p4_build_up_max_depth_share", "p4_break_end_depth_share")
+CORNER_SETUP = ("p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s")
+
+
 def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
-    stage_b = [t for name, t in THRESHOLDS.items() if name.startswith(("p2_", "p3_", "p4_"))]
+    stage_b = [t for name, t in THRESHOLDS.items() if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP]
     assert len(stage_b) == 22
     for t in stage_b:
         assert t.reason and t.status == "agreed"
         assert "agreed by the founder, 17 November 2026" in t.source
+    for name in REVIEW_REFINEMENTS:
+        t = THRESHOLDS[name]
+        assert t.status == "measured" and "replay review" in t.source  # the founder has not agreed them yet
+    for name in CORNER_SETUP:
+        assert THRESHOLDS[name].status in ("proposed", "measured")  # the founder has not agreed them yet
     for name in ("p4_low_block_max_m", "p4_high_block_min_m", "p4_break_min_gain_m"):
         assert "CONTEXT_STRUCTURE_REPORT.md" in THRESHOLDS[name].source
 

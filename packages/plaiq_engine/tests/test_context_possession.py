@@ -144,6 +144,21 @@ def test_chains_start_and_end_types():
     assert (chain[20:25] == -1).all()
 
 
+def test_a_set_piece_starts_only_the_taking_teams_chain():
+    """A corner headed clear: the defending team's chain starts 'won', not with the corner."""
+    m = tiny_match([], seconds=6.0)
+    grid = pd.DataFrame({"frame_ts": np.round(np.arange(30) / 5.0, 3), "period": 1, "minute": 1})
+    lab = np.array(["home"] * 10 + ["dead_ball"] * 5 + ["away"] * 5 + ["home"] * 10, dtype=object)
+    src = np.full(30, "observed", dtype=object)
+    setp = np.array([None] * 10 + ["corner_kick"] * 5 + [None] * 15, dtype=object)
+    setp_team = np.array([None] * 10 + ["home"] * 5 + [None] * 15, dtype=object)
+    _, segs = build_chains(grid, lab, src, setp, m, CFG, [], setp_team)
+    assert list(segs["team"]) == ["home", "away", "home"]
+    assert list(segs["start_type"]) == ["period_start", "won", "won"]
+    _, same = build_chains(grid, lab, src, setp, m, CFG, [], np.where(setp_team == "home", "away", setp_team))
+    assert same["start_type"].iloc[1] == "set_piece:corner_kick"
+
+
 def test_package_output_has_every_field_and_no_names():
     m = tiny_match([event("PASS", "Home", 1)], seconds=10.0, ball=lambda t: (0.5, 0.0) if t < 6 else None)
     res = Registry([PossessionPackage()]).run(m)

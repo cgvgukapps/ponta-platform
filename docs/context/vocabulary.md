@@ -1,6 +1,6 @@
 # Context vocabulary (P0 to P4)
 
-Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe`, `p1`, `p2`, `p3` and `p4` all 0.1.0; thresholds 0.4.0 (every value agreed by the founder). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
+Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe`, `p2` and `p3` 0.1.0, `p1` and `p4` 0.2.0 (18 November 2026); thresholds 0.5.0 (Stage A and B values agreed by the founder; six P4 values from the founder's replay review and corner rule measured, not yet agreed). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
 
 **Observed** means a fact read from the data (a distance, whether the ball was seen, an event). **Estimated** means a label the engine assigns by rules. Nothing in the frame table reaches the AI layer directly; the semantic events carry only the labels listed at the end.
 
@@ -43,7 +43,7 @@ Rate: `context_grid_rate_hz` (5 Hz). Nothing is interpolated: a ball or player n
 - **Dead ball:** from logged events only, the span between the last action before a set piece and the set piece (at most `p1_dead_ball_max_s`), excluding a period's opening kick-off.
 - **Goals:** a `SHOT` whose subtype has a `GOAL` token (`ON TARGET-GOAL`, `ON TARGET, GOAL`; never `GOAL KICK`). A goal is confirmed when the other team kicks off within `p1_goal_kickoff_window_s`. Red cards are `CARD` events with `RED` or `SECOND YELLOW`.
 - **Game state without a logged feed:** from an uploaded JSON (`final_score`, `goals` and `red_cards` with team, period and `clock_s`), validated against the final score.
-- **Chains:** a team's stretch of possession; contested and unknown points do not break it. A chain ends when the other team takes the ball, at a dead ball or at the end of a period. Start types are `period_start`, `set_piece:<type>`, `restart`, `recovery` (a recovery event at the start) and `won`. End types are `lost`, `dead_ball`, `period_end`, `shot` and `goal` (a shot by the team just before the end).
+- **Chains:** a team's stretch of possession; contested and unknown points do not break it. A chain ends when the other team takes the ball, at a dead ball or at the end of a period. Start types are `period_start`, `set_piece:<type>`, `restart`, `recovery` (a recovery event at the start) and `won`. Since P1 0.2.0 a chain starts with a set piece only when its team took it; the other team winning the first touch (a corner headed clear) starts `won`. End types are `lost`, `dead_ball`, `period_end`, `shot` and `goal` (a shot by the team just before the end).
 
 **Data check.**
 
@@ -120,11 +120,11 @@ Measured for the team in possession (P1) against the team out of possession, on 
 
 **Rules** (within each P1 chain, highest priority first; the vocabulary follows SkillCorner's published phases, the rules and numbers are Ponta's):
 
-1. **Set play:** a chain starting with a logged corner, or a free kick in the attacking half, for up to `p4_set_play_max_s`. Without a logged feed, only corners: the ball within `p4_corner_radius_m` of a corner flag in the chain's first `p4_corner_window_s`.
+1. **Set play:** a chain starting with a logged corner, or a free kick in the attacking half, for up to `p4_set_play_max_s`. Without a logged feed, only corners, found from player positions (the founder's rule, P4 0.2.0): one attacker within `p4_corner_setup_radius_m` of a corner flag and no defender, while at least `p4_corner_setup_crowd_min` players of both teams are in that penalty area, for at least `p4_corner_setup_hold_s`; the set play runs from the end of the set-up. With `p4_corner_setup_crowd_min` at 0 the older ball rule is used (the ball within `p4_corner_radius_m` of a flag in the chain's first `p4_corner_window_s`).
 2. **Direct:** from the own half, the ball gains `p4_direct_min_gain_m` towards goal within `p4_direct_window_s`.
 3. **Chaotic:** a chain shorter than `p4_chaotic_max_s`, or contested possession.
-4. **Quick break or transition:** a chain won from the other team in open play (regain in the opponent's half or the own half) where the ball gains `p4_break_min_gain_m` within `p4_break_eval_s`. It ends when `p4_recovered_players` defenders are goal-side of the ball, at the chain's end or after `p4_break_max_s`.
-5. **Established play:** the defending team's block from `p4_defending_depth_m`: below `p4_low_block_max_m` low (`finish`), at or above `p4_high_block_min_m` high (`build_up`), otherwise medium (`create`).
+4. **Quick break or transition:** a chain won from the other team in open play (regain in the opponent's half or the own half) where the ball gains `p4_break_min_gain_m` within `p4_break_eval_s`. It ends when `p4_recovered_players` defenders are goal-side of the ball, at the chain's end, after `p4_break_max_s`, or (P4 0.2.0) when a break that began further back reaches `p4_break_end_depth_share` of the pitch (the final third).
+5. **Established play:** the defending team's block from `p4_defending_depth_m`: below `p4_low_block_max_m` low (`finish`), at or above `p4_high_block_min_m` high (`build_up`), otherwise medium (`create`). Since P4 0.2.0 the ball's position refines it: `finish` needs the ball past `p4_finish_min_depth_share` of the pitch (the attacking half), otherwise `create`; with the ball inside `p4_build_up_max_depth_share` (the own third) the phase is `build_up` whatever the block.
 
 Runs shorter than `p4_min_phase_s` merge into the run before them in the same chain.
 
@@ -136,7 +136,7 @@ Runs shorter than `p4_min_phase_s` merge into the run before them in the same ch
 
 - **Validation:** formations, roles, zones and phases are estimated, not yet validated by analysts (Gate 2b). Reference agreement is in `CONTEXT_STRUCTURE_REPORT.md`.
 - **Central midfield:** most role disagreements are among defensive, central and attacking midfield.
-- **Set plays without events:** the corner rule finds about a quarter of corners; free kicks are not found.
+- **Set plays without events:** the position rule finds about 70% of corners (about 55% of its detections are right); throw-ins, goal kicks and free kicks are not found.
 - **Runtime:** P3 and P4 rebuild the team frames from P2's segments; about 13 s of the 16 s per match is Stage B.
 
 ## In the semantic events (schema 1.1)

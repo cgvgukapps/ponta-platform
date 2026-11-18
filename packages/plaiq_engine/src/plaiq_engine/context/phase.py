@@ -25,7 +25,11 @@ Within each P1 possession chain, in priority order:
 5. Established play, from the defending team's block: the mean depth of its three deepest
    outfield players (SkillCorner's measure) below ``p4_low_block_max_m`` is a low block
    (``finish``), at or beyond ``p4_high_block_min_m`` a high block (``build_up``), between
-   them a medium block (``create``).
+   them a medium block (``create``). Since version 0.2.0 (the founder's replay review) where
+   the ball is refines the block: ``finish`` needs the ball past ``p4_finish_min_depth_share``
+   of the pitch (else ``create``), and with the ball inside ``p4_build_up_max_depth_share`` of
+   it the team is building up whatever the block. A quick break or transition that began
+   further back ends when the ball reaches ``p4_break_end_depth_share`` of the pitch.
 
 Runs shorter than ``p4_min_phase_s`` merge into the run before them in the same chain. The
 team out of possession gets the paired label (``low_block``, ``defending_transition`` …).
@@ -48,6 +52,7 @@ from plaiq_engine.context.registry import (
     ContextPackage,
     PackageOutput,
 )
+from plaiq_engine.context.restarts import corner_setups
 from plaiq_engine.context.structure import (
     OTHER,
     TEAMS,
@@ -142,7 +147,7 @@ class _Fields:
 
 class PhasePackage(ContextPackage):
     name = "p4"
-    version = "0.1.0"
+    version = "0.2.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -187,6 +192,17 @@ class PhasePackage(ContextPackage):
         # Established play everywhere first, then the chain rules on top.
         for k in np.where(team != None)[0]:
             phase[k] = BLOCK_PHASE.get(block[k])
+        # Where the ball is refines the block: finish needs the ball far enough forward (else
+        # create); a ball deep in the team's own end is build-up whatever the block (0 = off).
+        fin_min, bu_max = cfg["p4_finish_min_depth_share"] * L, cfg["p4_build_up_max_depth_share"] * L
+        for t in TEAMS:
+            rows = team == t
+            dep = a_depth[t]
+            known = rows & np.isfinite(dep)
+            if fin_min > 0:
+                phase[known & (phase == "finish") & (dep < fin_min)] = "create"
+            if bu_max > 0:
+                phase[known & np.isin(phase, ["create", "finish"]) & (dep < bu_max)] = "build_up"
         phase[contested] = "chaotic"
 
         w_direct = int(round(cfg["p4_direct_window_s"] * hz))
@@ -198,6 +214,15 @@ class PhasePackage(ContextPackage):
             c = ch.loc[j]
             prev_team[int(c["chain_id"])] = ch.loc[j - 1, "team"] if j > 0 and ch.loc[j - 1, "period"] == c["period"] else None
         dead = p1.frames["p1_dead_ball"].to_numpy(dtype=float, na_value=np.nan)
+        # Without a logged feed, corners from player positions (the founder's proposal): the end
+        # of each set-up is about when the corner is taken.
+        setups: dict[str, np.ndarray] = {}
+        if not logged and cfg["p4_corner_setup_crowd_min"] > 0:
+            for t in TEAMS:
+                found = corner_setups(tf[t].depth, tf[t].width, tf[OTHER[t]].depth, tf[OTHER[t]].width, ts, per, L, W,
+                                      radius=cfg["p4_corner_setup_radius_m"], crowd_min=int(cfg["p4_corner_setup_crowd_min"]),
+                                      hold_s=cfg["p4_corner_setup_hold_s"])
+                setups[t] = np.array([e for _, e in found], dtype=float)
 
         for c in ch.itertuples() if len(ch) else ():
             t = c.team
@@ -212,11 +237,18 @@ class PhasePackage(ContextPackage):
             start_depth = a_depth[t][s_i] if np.isfinite(a_depth[t][s_i]) else (first[np.isfinite(first)][0] if np.isfinite(first).any() else np.nan)
             # 1. Set play
             sp = start.split(":", 1)[1] if start.startswith("set_piece:") else ""
-            if not logged and corner_at_start(bx, by, in_team[: max(1, int(round(cfg["p4_corner_window_s"] * hz)))], L, W, cfg["p4_corner_radius_m"]):
+            kick = ts[s_i]
+            if setups:
+                # A set-up that ends just before or during this chain: the set play runs from its end.
+                hits = setups.get(t, np.array([]))
+                hits = hits[(hits >= ts[s_i] - cfg["p4_corner_setup_hold_s"] - 1.0) & (hits <= ts[e_i])]
+                if len(hits):
+                    sp, kick = "corner_kick", float(hits[0])
+            elif not logged and corner_at_start(bx, by, in_team[: max(1, int(round(cfg["p4_corner_window_s"] * hz)))], L, W, cfg["p4_corner_radius_m"]):
                 sp = "corner_kick"
             if sp.startswith(SET_PLAY_STARTS) and (sp.startswith("corner_kick") or (np.isfinite(start_depth) and start_depth >= L / 2)):
-                end = ts[s_i] + cfg["p4_set_play_max_s"]
-                sel = in_team[ts[in_team] <= end]
+                end = kick + cfg["p4_set_play_max_s"]
+                sel = in_team[(ts[in_team] >= kick) & (ts[in_team] <= end)]
                 phase[sel] = "set_play"
                 set_end = sel[-1] if len(sel) else s_i
             else:
@@ -234,8 +266,11 @@ class PhasePackage(ContextPackage):
                     label = "quick_break" if start_depth >= L / 2 else "transition"
                     stop = ts[s_i] + cfg["p4_break_max_s"]
                     D_def = tf[OTHER[t]].depth
+                    end_depth = cfg["p4_break_end_depth_share"] * L
                     for k in in_team:
                         if ts[k] > stop:
+                            break
+                        if end_depth > 0 and start_depth < end_depth and np.isfinite(a_depth[t][k]) and a_depth[t][k] >= end_depth:
                             break
                         if k > s_i + w_eval and np.isfinite(a_depth[t][k]):
                             ball_def_depth = L - a_depth[t][k]
