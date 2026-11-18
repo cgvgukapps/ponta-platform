@@ -59,3 +59,40 @@ Their product equals POV exactly (tests in `test_option_split.py`).
 - **Value tracks a provider's threat well** (0.78 held out), and availability predicts completion better than POV (0.77 against 0.66).
 - **POV's progressive factor and distance decay lower agreement with threat** (0.78, against 0.88 for xT at the receiver alone). This is evidence for the data-driven threat step, not a reason to drop them yet: SkillCorner's threat is its own model.
 - **Availability is not what makes a passing option.** SkillCorner lists far fewer options than there are open team-mates. Its options look like players offering to receive (FIFA's term), which is movement: P6's job, not Plaiq's. Line-breaking options wait for it.
+
+## Step 4: pressure version 2 (18 November 2026)
+
+**What was built.** `plaiq_engine/analytics/pressure_v2.py` (0.1.0) is a directional, count-aware pressure, added beside 1v1 and zonal pressure, which are untouched. It follows FIFA's EFI inputs and the pressure zone of Andrienko et al. (2017):
+- a defender's pressure falls with distance inside a zone that reaches further in front of the player (9 m by default) than behind (3 m);
+- the pressures are summed across defenders.
+
+**How it was measured** (`tools/plaiq_pressure.py`), against two references:
+- **SkillCorner's pressure level** at the start and end of every player possession: 33,270 moments on 20 matches. Settings were chosen on the fit matches.
+- **The league's pressure on 164 shots,** an independent check nothing was fitted to.
+
+| Pressure on the player | SkillCorner, held out: rank correlation / weighted κ (5 levels) | League shot pressure: rank correlation |
+|---|---|---|
+| **Plaiq 1v1** (nearest opponent) | **0.82 / 0.80** | 0.30 |
+| **Plaiq zonal** (three nearest) | 0.80 / 0.78 | **0.49** |
+| v2, published defaults (9 m front, 3 m behind, q 1.75, sum) | 0.76 / 0.68 | 0.43 |
+| v2, best on fit (6 m front, 5 m behind, q 1.75, sum) | 0.80 / 0.73 | 0.41 |
+
+**Reading.**
+- **Pressure version 2 is not adopted.** It does not beat Plaiq's existing measures on either reference. The fit even moved it towards the same reach in front and behind, so direction did not help.
+- **The two references measure different things,** as FIFA's two notions do:
+  - **SkillCorner's level follows the nearest opponent.** That is the engaging defender of FIFA's coded direct, indirect or no pressure. Plaiq's 1v1 matches it best.
+  - **The league's shot pressure follows how many defenders are around,** like EFI's collective "pressure on the ball". Plaiq's zonal pressure matches it best.
+- **Correction to step 1:** 1v1 pressure looked weak against the league's shots (0.30) because that reference measures collective pressure. Against SkillCorner's level it is the best measure here.
+
+**Named bands for 1v1 pressure** (the open "named high-pressure threshold"). These cut points on Plaiq's 1 to 10 scale reproduce SkillCorner's level shares on the fit matches; weighted κ 0.80 held out:
+
+| 1v1 score | SkillCorner's level | Plaiq's specification's own reading |
+|---|---|---|
+| 1 to 2 | no pressure | 10 m or more, unchallenged |
+| 3 to 5 | low | loose tracking |
+| 6 to 7 | medium | nearby challenge |
+| **8 to 9** | **high** | 1 to 2 m, immediate pressure |
+| 10 | very high | contact |
+
+- **For FIFA's three coded levels,** direct pressure ≈ 8 or more, indirect ≈ 3 to 7, none ≈ 1 to 2. That is a proposal for the founder to confirm on a judged sample, since FIFA publishes no distances.
+- **For collective pressure,** zonal pressure is the measure to report.
