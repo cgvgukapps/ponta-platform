@@ -653,6 +653,21 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 - **Detecting touches at 25 Hz did no better** (18 to 21 of 50 for radii of 1 to 2 m and velocity changes of 3 to 5 m/s), so it was not pursued. Its prototype also missed the brief control that matters most.
 - **Not adopted.** Turning it on changes P1's labels on about 9% of in-play time, and through them P2's possession states and P4's phases. That needs the founder's decision, the downstream checks (phase κ, the phase review) and a larger judged sample.
 
+**Downstream checks with the rule on (18 November 2026, at the founder's request).** Measured with `--set p1_loose_on_opponent_touch=1` in `tools/context_phase_review.py` and `tools/context_reference_set.py`:
+
+| | Off | On |
+|---|---|---|
+| Founder's phase review | 36 of 50 | **34** |
+| SkillCorner κ, event spans, pooled (by half) | 0.6104 (0.6089 / 0.6104) | 0.6105 (0.6078 / 0.6116) |
+| SkillCorner κ, phases-of-play file | 0.6249 | **0.6317** |
+| Matches below the 0.50 phase floor | 2 | **4** (1996436, 2013725, 2015213, 2017461) |
+| Roles: matches meeting 75% / 85% merged | 19 / 17 | 18 / 17 |
+| Matches meeting all four bars | 10 | 9 |
+
+- **Review moments affected:** 8 of the 50 become loose (no phase). The founder had accepted a phase at 6 of them, the same over-firing seen in the possession review.
+- **Recommendation: keep it off.** The principle matches FIFA's "in contest" ("when neither team has controlled possession of the ball"), but a player near the ball is not a touch.
+- **FIFA computes its possession control from the event sequence.** Where a logged feed exists, "in contest" can come from logged clearances, blocks and duels instead (see `ponta-blueprint/fifa-alignment.md`).
+
 ## Runtime and storage
 
 Measured alone by the golden harness:

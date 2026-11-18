@@ -73,6 +73,15 @@ VARIANTS: dict[str, dict] = {
     "adopted": {},
 }
 
+def _overrides(items: list[str] | None) -> dict[str, float]:
+    """``NAME=VALUE`` pairs from ``--set`` as threshold overrides."""
+    out = {}
+    for item in items or []:
+        name, _, value = item.partition("=")
+        out[name.strip()] = float(value)
+    return out
+
+
 def _outside(path: Path) -> bool:
     root = repo_root()
     return not (path.resolve() == root or root in path.resolve().parents)
@@ -102,7 +111,9 @@ def main() -> None:
     ap.add_argument("--sc-cache", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--only", nargs="*", help="score only these variants")
+    ap.add_argument("--set", action="append", help="override a threshold for every run, e.g. p1_loose_on_opponent_touch=1 (repeatable)")
     args = ap.parse_args()
+    overrides = _overrides(args.set)
     if args.only:
         for name in list(VARIANTS):
             if name not in args.only:
@@ -111,7 +122,7 @@ def main() -> None:
         if not _outside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")
     cases = load_cases()
-    cfgs = {name: values(over) for name, over in VARIANTS.items()}
+    cfgs = {name: values(overrides | over) for name, over in VARIANTS.items()}
     review_labels: dict[str, dict[str, str]] = {name: {} for name in VARIANTS}
     by_match: dict[str, list[int]] = {}
     for c in cases:
@@ -119,7 +130,7 @@ def main() -> None:
         by_match.setdefault(key, []).append(int(i))
     for key, ids in by_match.items():
         m = load(key, args.cache)
-        res = Registry([PossessionPackage(), StructurePackage()]).run(m)
+        res = Registry([PossessionPackage(), StructurePackage()]).run(m, config=values(overrides))
         for name, cfg in cfgs.items():
             ph = _p4(m, res, cfg)["p4_phase"].astype(object).to_numpy()
             for i in ids:
@@ -132,7 +143,7 @@ def main() -> None:
         if not (d / f"{d.name}_phases_of_play.csv").exists():
             continue
         m = _load(d, args.sc_cache)
-        res = Registry([PossessionPackage(), StructurePackage()]).run(m)
+        res = Registry([PossessionPackage(), StructurePackage()]).run(m, config=values(overrides))
         g = res.frames
         per = g["period"].to_numpy()
         refs = {"event_spans": sc_phase_spans(g, d), "phase_file": sc_phase_file(g, d)}
@@ -142,7 +153,7 @@ def main() -> None:
                 pooled[name][r].append(_pairs(ref, f, per))
         print("skillcorner", d.name, flush=True)
 
-    out = {"review_file": REVIEW.name, "variants": {}}
+    out = {"review_file": REVIEW.name, "overrides": overrides, "variants": {}}
     for name, over in VARIANTS.items():
         sc = {}
         for r, parts in pooled[name].items():

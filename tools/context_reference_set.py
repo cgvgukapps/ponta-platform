@@ -36,6 +36,7 @@ from plaiq_engine.context.phase import PhasePackage
 from plaiq_engine.context.possession import PossessionPackage
 from plaiq_engine.context.registry import Registry
 from plaiq_engine.context.structure import StructurePackage
+from plaiq_engine.context.thresholds import values
 from plaiq_engine.context.zones import ZonesPackage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -50,6 +51,15 @@ BARS = {"roles_grouped_tw": 0.75, "roles_cm_merged_tw": 0.85, "formation_changes
 def _inside(path: Path) -> bool:
     root = repo_root()
     return path.resolve() == root or root in path.resolve().parents
+
+
+def _overrides(items: list[str] | None) -> dict[str, float]:
+    """``NAME=VALUE`` pairs from ``--set`` as threshold overrides."""
+    out = {}
+    for item in items or []:
+        name, _, value = item.partition("=")
+        out[name.strip()] = float(value)
+    return out
 
 
 def _load(match_dir: Path, cache: Path):
@@ -80,10 +90,10 @@ def _kappa(a: np.ndarray, b: np.ndarray) -> dict:
     return {"points": int(len(a)), "accuracy": round(po, 4), "kappa": round((po - pe) / (1 - pe), 4) if pe < 1 else None}
 
 
-def one(match_dir: Path, cache: Path) -> tuple[dict, dict]:
+def one(match_dir: Path, cache: Path, overrides: dict[str, float] | None = None) -> tuple[dict, dict]:
     m = _load(match_dir, cache)
     t0 = time.perf_counter()
-    res = Registry([PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage()]).run(m)
+    res = Registry([PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage()]).run(m, config=values(overrides or {}))
     seconds = time.perf_counter() - t0
     g, p2, p4 = res.frames, res.outputs["p2"], res.outputs["p4"]
     per = g["period"].to_numpy()
@@ -153,7 +163,9 @@ def main() -> None:
     ap.add_argument("--data", type=Path, required=True, help="local copy of SkillCorner's open data (has matches/<id>/)")
     ap.add_argument("--cache", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--set", action="append", help="override a threshold for every run, e.g. p1_loose_on_opponent_touch=1 (repeatable)")
     args = ap.parse_args()
+    overrides = _overrides(args.set)
     for p in (args.data, args.cache, args.out):
         if _inside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")
@@ -161,12 +173,12 @@ def main() -> None:
     for d in sorted((args.data / "matches").iterdir()):
         if not (d / f"{d.name}_phases_of_play.csv").exists() or not (d / f"{d.name}_tracking_extrapolated.jsonl").exists():
             continue
-        report[d.name], raw[d.name] = one(d, args.cache)
+        report[d.name], raw[d.name] = one(d, args.cache, overrides)
         e = report[d.name]
         print(d.name, json.dumps({"roles": e["roles"]["grouped_time_weighted"], "forms": e["formation_changes_max"],
                                   "kappa_h1_h2": [e["phases"]["event_spans"][h].get("kappa") for h in ("half_1", "half_2")],
                                   "s": e["runtime_s"]}), flush=True)
-    out = {"bars": BARS, "summary": summarise(report, raw), "matches": report}
+    out = {"bars": BARS, "overrides": overrides, "summary": summarise(report, raw), "matches": report}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps(out["summary"], indent=1, default=str))
