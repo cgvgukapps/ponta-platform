@@ -96,3 +96,29 @@ Their product equals POV exactly (tests in `test_option_split.py`).
 
 - **For FIFA's three coded levels,** direct pressure ≈ 8 or more, indirect ≈ 3 to 7, none ≈ 1 to 2. That is a proposal for the founder to confirm on a judged sample, since FIFA publishes no distances.
 - **For collective pressure,** zonal pressure is the measure to report.
+
+## Step 5: a learned threat surface (18 November 2026)
+
+**What was built.** `plaiq_engine/analytics/xt_learned.py` (0.1.0) is a candidate beside Plaiq's geometric `V_xT`, which is untouched. It is learned by the expected-threat method (Singh 2019) on a 16 × 12 grid:
+- **Data:** Wyscout's events from 970 matches (even positions in match id order), 869,289 actions.
+- **Moves:** passes and accelerations, successful when tagged accurate.
+- **Shots:** penalties left out.
+- **Kept outside the repository:** the learned surface.
+
+**Measured** by `tools/plaiq_threat.py` on data it never saw:
+
+| | Learned | Geometric |
+|---|---|---|
+| Wyscout, 971 held-out matches: team scores within 10 s of the event, AUC (1.6 million events) | **0.671** | 0.641 |
+| Same, by zone, rank correlation | **0.59** | 0.54 |
+| Wyscout held out: goal rate of shots by zone (42 zones with 30+ shots) | 0.83 | **0.89** |
+| SkillCorner's threat for the targeted player (15,154 passes) | 0.87 | **0.89** |
+| SkillCorner's "dangerous" flag, AUC | 0.94 | **0.95** |
+| The league's xG (164 shots) | 0.53 | **0.54** |
+| The league's goals, AUC | 0.62 | **0.67** |
+
+**Reading.**
+- **Not adopted.** The learned surface wins only on its own source, Wyscout, on matches it did not see, and loses slightly on every other reference. The likely reason is resolution: zones of about 6.6 × 5.7 m against a continuous surface, which matters near goal, where shots and expected goals are decided.
+- **Plaiq's geometric threat surface holds up against three independent references,** so it stays.
+- **For pass option value,** the gap between the threat at the receiver (0.88 against SkillCorner's threat) and POV's value part (0.78) comes from POV's progressive factor and distance decay, not from the surface. That is where a value change should look.
+- **What the learned surface offers:** a scale in probability units (its maximum is 0.40, the chance of scoring within the possession), which the geometric surface, normalised to [0, 1], lacks. A finer grid or smoothing could close the resolution gap. Both are noted, not pursued.
