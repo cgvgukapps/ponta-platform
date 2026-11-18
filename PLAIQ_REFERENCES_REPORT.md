@@ -30,3 +30,32 @@
 3. **Pass option value** is the weakest model against the references. Its value part should be rebuilt, separating availability (0.78 AUC is a reasonable start) from value. The unit-aware and data-driven threat proposals feed this.
 4. **Kinematics:** completion at 0.78 against SkillCorner's 0.90 leaves room. Calibrating ball speed and reaction time on the league's 25 Hz tracking is worth measuring.
 5. **Failed-pass targets** need a reference first. A blind judged sample (the replay method) is the way to get one.
+
+## Step 3: availability and value split (18 November 2026)
+
+**The split.** `plaiq_engine/analytics/option_split.py` (version 0.1.0, a new metric beside POV; POV and decision quality untouched) writes pass option value as the product it is:
+- **availability** = control at the receiver × (1 − interception risk);
+- **value** = xT at the receiver × progressive factor × (1 − distance decay).
+
+Their product equals POV exactly (tests in `test_option_split.py`).
+
+**Measured** by `tools/plaiq_option_split.py`:
+- **Data:** every SkillCorner pass on the 20 open-data matches; every team-mate of the passer scored as an option.
+- **Fit and test:** a threshold chosen on 10 fit matches and read on the other 10.
+
+| | Fit | Held out |
+|---|---|---|
+| **Availability** predicting completion of the targeted pass, AUC | **0.79** | **0.77** |
+| POV predicting the same, AUC | 0.66 | 0.66 |
+| Availability picking SkillCorner's listed options, AUC | 0.67 | 0.66 |
+| **Value** of the targeted player against SkillCorner's threat, rank correlation | **0.79** | **0.78** |
+| Same, against its "dangerous" flag, AUC | **0.87** | **0.88** |
+| POV against SkillCorner's threat; against "dangerous" | 0.30; 0.54 | 0.26; 0.51 |
+| xT at the receiver alone against threat; against "dangerous" | 0.89; 0.95 | 0.88; 0.95 |
+| Line-breaking options: available (≥ 0.45, chosen on fit) and beyond a line, per pass, against SkillCorner's count | 4.9 against 0.6; κ 0.01 | 5.0 against 0.5; κ 0.01 |
+
+**Reading.**
+- **Each half is sound for its own question. Multiplying them hid both.** SkillCorner's threat is a value-if-received measure, and POV mixes in the chance of arrival.
+- **Value tracks a provider's threat well** (0.78 held out), and availability predicts completion better than POV (0.77 against 0.66).
+- **POV's progressive factor and distance decay lower agreement with threat** (0.78, against 0.88 for xT at the receiver alone). This is evidence for the data-driven threat step, not a reason to drop them yet: SkillCorner's threat is its own model.
+- **Availability is not what makes a passing option.** SkillCorner lists far fewer options than there are open team-mates. Its options look like players offering to receive (FIFA's term), which is movement: P6's job, not Plaiq's. Line-breaking options wait for it.
