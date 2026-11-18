@@ -532,6 +532,52 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 
 **Not done here:** phases (the league gives no phase labels; its shots carry a counter-attack flag and a build-up type, a small check for later), and Plaiq's metrics (the league's shot pressure and expected goals are a possible comparison).
 
+## Event data: possessions from events alone, and patterns at scale (18 November 2026)
+
+**Data.**
+- Wyscout's open events: Pappalardo et al. (2019), *Scientific Data* 6, 236, CC BY 4.0.
+  - 1,941 matches of seven competitions in 2017/18 (five leagues, the 2018 World Cup, Euro 2016), about 3.25 million events.
+  - Downloaded with `tools/fetch_reference_data.py wyscout` to `~/ponta-reference-data/wyscout-opendata`.
+  - The players file holds real names and is never opened.
+- **The rule:** possessions from events alone (`tools/event_chains.py`), re-implemented from the paper's "play action" (not its code). A possession starts when a team gains the ball. It ends at an interruption, a shot (the save belongs to it) or when the other team acts. Paired duels never switch it.
+- **Measured by** `tools/context_event_chains.py`.
+
+**A. How much does an event feed alone say about possession?**
+- **Same feeds:** on the three Metrica matches, possession from events alone agrees with P1's tracking possession on 90% to 92% of the time both label (the events cover 82% to 97% of P1's labelled time).
+- **Official reference:** on the seven IDSSE matches, against the league's frame-level possession with the ball in play:
+
+| | Median agreement | Range |
+|---|---|---|
+| Events alone | 84.6% | 74.5% to 87.8% |
+| P1 (tracking and events) | 88.0% | 81.7% to 89.4% |
+
+- **So tracking adds about 3 points** of possession agreement over events alone on this reference. This measures the possession part of the "event-only analysis" decision, nothing more.
+
+**B. Possession patterns at scale.** The same rule on Wyscout, set beside the same rule on our feeds and P1's tracking chains (10 matches: Metrica 1 to 3 and IDSSE):
+
+| | Possessions per match | Median duration | Start: regain / throw-in / free kick / goal kick / corner | End: lost / out / foul / shot | Reach the final third |
+|---|---|---|---|---|---|
+| Wyscout, five leagues | 335 to 352 | 6.1 to 6.6 s | 69–72% / 13% / 7–10% / 5% / 3% | 65–68% / 17–19% / 6–8% / 6–7% | 38% to 41% |
+| Wyscout, World Cup and Euro | 323 to 326 | 8.1 to 8.5 s | 71% / 13% / 7–8% / 5–6% / 3% | 65% / 18–19% / 8% / 7% | 42% to 43% |
+| Event rule on our 10 matches | 295 | 7.7 s | 68% / 14% / 8% / 4% / 3% | 62% / 22% / 8% / 8% | 38% |
+| P1 tracking chains, same 10 | 247 | 8.6 s | 71% / 14% / 7% / 4% / under 2% | 61% lost, 34% dead ball, 3% shot | (not measured) |
+
+- **P1's possession starts match the norms of 1,941 matches.** Regains, throw-ins, free kicks and goal kicks start P1's tracking possessions in the same proportions as Wyscout's (71%, 14%, 7%, 4% against 69–72%, 13%, 7–10%, 5%).
+- **P1 finds fewer, longer possessions** than an event rule: 247 against about 300 to 350 a match. A brief touch shorter than `p1_min_switch_s` does not switch possession in P1. This is by design, but it means "possessions per match" is not comparable between Ponta and an event provider without saying so.
+- **Corner starts look low in P1** (under 2% against 3%). Since P1 0.2.0, a corner cleared at the first touch starts the defenders' possession as `won`. This is worth a look when P1 is next revised.
+- **Shots end 3% of P1's possessions against 6% to 8% for the event rule.** The definitions differ: P1 ends a possession at the next change or stoppage, and a shot that goes out ends as `dead_ball`.
+- **Counter-attacks:**
+  - Wyscout tags 1.8% to 2.1% of possessions as counter-attacks.
+  - On IDSSE the league flags 14 of 164 shots as counter-attacks. Ponta had a quick break or transition in the 5 s before 5 of them and before 2 of the 150 others. When Ponta labels a break the league mostly agrees (5 of 7), but it catches only about a third of counter-attacks.
+  - A likely cause: since P4 0.2.0 a break ends when the ball reaches the final third, so the phase at the shot is `finish`.
+  - At 60 of the 164 shots, P4's team at the shot frame is not the shooting team: the possession lag in the P1 finding above.
+  - A small sample, and SkillCorner's transition is not the same concept as a counter-attack, so this is a direction for the next phase round, not a verdict.
+
+**What this gives Ponta.**
+- **Base rates** for the Data check (possessions and restarts per match; a feed far outside them is suspect).
+- **A measured answer** for event-only possession.
+- **Three leads for the next rounds:** P1's possession lag at switches and on shots; corner starts in P1; and counter-attacks in P4, now measurable against both the league's and Wyscout's flags.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
