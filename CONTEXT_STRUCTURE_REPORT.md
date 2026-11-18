@@ -336,7 +336,7 @@ The phase bar sits below published analyst agreement (κ about 0.7) because the 
 - **Scope:** the rule is used only without a logged feed; with events, logged corners are used.
 
 **Final result (P1 0.2.0, P4 0.2.0, thresholds 0.5.0):**
-- **Review:** 34 of 50, against 28 for the old rules with the corrected P1.
+- **Review:** 34 of 50, against 28 for the old rules with the corrected P1. *(After the founder's re-check of the seven changed cases, 18 November 2026: 35 of 50, against 29.)*
 - **SkillCorner κ pooled over the 20 matches:** 0.610 against event spans (0.609 and 0.611 by half) and 0.619 against the phases-of-play file.
 - **Per match** (`tools/context_reference_set.py`, event spans):
   - 13 of 20 matches clear κ 0.55 on both halves (11 before), and the median of the weaker half rose from 0.56 to 0.57;
@@ -464,8 +464,10 @@ Taken on 18 November 2026:
 - **Not met:** roles on three matches (one on the grouped bar, three on the merged bar) and the phase floor on three. All three phase failures are within 0.02 of the floor.
 - **On the reference match:** every bar is met.
 
-Still open:
-5. **Phase replay check again (optional):**
+5. **Phase replay check again:** done on 18 November 2026.
    - The same 50 moments were re-rendered with P4 0.2.0 on 18 November 2026. The sample is drawn by the ball's P3 band, which did not change, so the moments are the same. The page holds positions, so it is kept outside the repository.
    - Seven cases changed label: Metrica 1 grid point 25371 (create to build_up), Metrica 2 grid points 4809 (finish to create), 18016 and 20789 (transition to finish), Metrica 3 grid point 25151 (set_play to chaotic), and SkillCorner grid points 7820 (create to build_up) and 20372 (finish to set_play).
-   - Six of the seven now carry a label the founder accepted. Re-judging only these seven confirms the changes on the pitch.
+   - Six of the seven already carried a label the founder had accepted.
+   - **The founder re-judged the seven replays: all seven right.** On Metrica 3 grid point 25151 the note reads "this is right but the start frames show set_play, labelled moment is correct", so the P1 fix is confirmed there.
+   - Kept in `tools/data/phase_review_2026-11-18_recheck.json`. `tools/context_phase_review.py` adds the re-check's accepted labels to the review's.
+   - **The review now stands at 35 of 50 with P1 and P4 0.2.0.** The old rules with the corrected P1 also gain grid point 25151, so they score 29.

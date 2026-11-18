@@ -2,7 +2,7 @@
 context_phase_review.py — score P4 rule variants against the founder's replay review and SkillCorner.
 
 The founder judged Ponta's phase on 50 replayed moments (``tools/data/phase_review_2026-11-17.json``,
-from ``tools/context_spotcheck.py --replay``). Rules tuned to 50 moments judged by one person
+from ``tools/context_spotcheck.py --replay``), with the re-check of 18 November 2026 added. Rules tuned to 50 moments judged by one person
 can overfit, so every variant is also scored against SkillCorner's phases on its 20 open-data
 matches (pooled Cohen's kappa by half, against event spans and against the phases-of-play file).
 A variant is worth adopting only if it agrees better with the review **and** does not lose
@@ -37,6 +37,22 @@ from context_reference_set import _kappa, _load, _pairs
 from context_references import sc_phase_file, sc_phase_spans
 
 REVIEW = Path(__file__).resolve().parent / "data" / "phase_review_2026-11-17.json"
+#: Later re-checks of single cases: their accepted labels are added to the review's (never removed).
+RECHECKS = (Path(__file__).resolve().parent / "data" / "phase_review_2026-11-18_recheck.json",)
+
+
+def load_cases() -> list[dict]:
+    """The review's cases, with labels accepted on a later re-check added to each case's 'accept'."""
+    cases = json.loads(REVIEW.read_text())["cases"]
+    extra: dict[str, list[str]] = {}
+    for path in RECHECKS:
+        for c in json.loads(path.read_text())["cases"]:
+            if c["judged_right"]:
+                extra.setdefault(c["id"], []).extend(c["accept"])
+    for c in cases:
+        if c["id"] in extra and c.get("accept"):
+            c["accept"] = sorted(set(c["accept"]) | set(extra[c["id"]]))
+    return cases
 GRID_COLS = ["match_id", "frame_ts", "period", "native_frame", "clock_s", "minute"]
 
 #: The rules before the review (P4 0.1.0) and each refinement on its own, against the adopted
@@ -87,7 +103,7 @@ def main() -> None:
     for p in (args.cache, args.sc_data, args.sc_cache, args.out):
         if not _outside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")
-    cases = json.loads(REVIEW.read_text())["cases"]
+    cases = load_cases()
     cfgs = {name: values(over) for name, over in VARIANTS.items()}
     review_labels: dict[str, dict[str, str]] = {name: {} for name in VARIANTS}
     by_match: dict[str, list[int]] = {}

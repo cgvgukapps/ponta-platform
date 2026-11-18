@@ -1,0 +1,14 @@
+{
+ "reviewer": "founder (former semi-professional footballer)",
+ "date": "2026-11-18",
+ "method": "Re-check of the 7 moments from phase_review_2026-11-17.json whose label changed under P1 and P4 0.2.0 (thresholds 0.6.0), replayed 5 s before and 2 s after with tools/context_spotcheck.py --replay. The reviewer judged the new label at the moment. 'accept' adds to the earlier review's accepted labels for the case. Notes are the reviewer's words.",
+ "cases": [
+  {"id": "metrica_1-25371", "was": "create", "ponta_v2": "build_up", "judged_right": true, "accept": ["build_up"], "note": ""},
+  {"id": "metrica_2-4809", "was": "finish", "ponta_v2": "create", "judged_right": true, "accept": ["create"], "note": ""},
+  {"id": "metrica_2-18016", "was": "transition", "ponta_v2": "finish", "judged_right": true, "accept": ["finish"], "note": ""},
+  {"id": "metrica_2-20789", "was": "transition", "ponta_v2": "finish", "judged_right": true, "accept": ["finish"], "note": ""},
+  {"id": "metrica_3-25151", "was": "set_play", "ponta_v2": "chaotic", "judged_right": true, "accept": ["chaotic"], "note": "this is right but the start frames show set_play, labelled moment is correct"},
+  {"id": "skillcorner_1886347-7820", "was": "create", "ponta_v2": "build_up", "judged_right": true, "accept": ["build_up"], "note": ""},
+  {"id": "skillcorner_1886347-20372", "was": "finish", "ponta_v2": "set_play", "judged_right": true, "accept": ["set_play"], "note": ""}
+ ]
+}
