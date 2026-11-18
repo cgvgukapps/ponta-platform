@@ -466,7 +466,7 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
   - 13 of 20 still clear 0.55 on both halves;
   - 2015213 moves from 0.496 to 0.501, so **two matches remain below the 0.50 floor** (2013725 at 0.482, 2017461 at 0.490). Moves this small are noise, not a fix.
 - **Unchanged:** matches with a logged feed (Metrica): P4's output there is unchanged.
-- **Thresholds 0.7.0:** four new `measured` values (`p4_throw_in_hold_s` 2 s, `p4_throw_in_out_m` 0 m, `p4_throw_in_still_mps` 2 m/s, `p4_throw_in_ball_m` 5 m), for the founder to agree. The detector's edge (3 m from a goal line), bridging (1 s) and look-back (2 s) are module constants, as measured.
+- **Thresholds 0.7.0** *(agreed by the founder on 18 November 2026, thresholds 0.8.0)*: four new `measured` values (`p4_throw_in_hold_s` 2 s, `p4_throw_in_out_m` 0 m, `p4_throw_in_still_mps` 2 m/s, `p4_throw_in_ball_m` 5 m), for the founder to agree. The detector's edge (3 m from a goal line), bridging (1 s) and look-back (2 s) are module constants, as measured.
 - **Not done:** free kicks (not attempted; 59% have a tracking gap before them), goal kicks (above), and P1 chain start types without a feed. P1 runs before team frames exist, so the restarts live in P4's segment.
 
 ## Runtime and storage
@@ -539,6 +539,5 @@ Taken on 18 November 2026:
 
 Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.0; section above).
 
-Still open:
-6. **The four throw-in thresholds (P4 0.3.0):** agree them or change them.
-7. **SkillCorner grid point 16221:** confirm that "no phase" (the ball is dead during the throw-in set-up) is right there.
+6. **The four throw-in thresholds (P4 0.3.0):** agreed (thresholds 0.8.0, no value changed).
+7. **SkillCorner grid point 16221:** the founder confirmed that "no phase" (the ball is dead during the throw-in set-up) is right there, so the review stands at 36 of 50.

@@ -118,7 +118,8 @@ THROW_IN = ("p4_throw_in_hold_s", "p4_throw_in_out_m", "p4_throw_in_still_mps", 
 def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
     for name in THROW_IN:
         t = THRESHOLDS[name]
-        assert t.reason and t.status in ("measured", "agreed") and "restart sweep" in t.source
+        assert t.reason and t.status == "agreed" and "restart sweep" in t.source
+        assert "agreed by the founder, 18 November 2026" in t.source
     stage_b = [t for name, t in THRESHOLDS.items()
                if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP + THROW_IN]
     assert len(stage_b) == 22

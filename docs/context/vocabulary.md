@@ -1,6 +1,6 @@
 # Context vocabulary (P0 to P4)
 
-Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` and `p3` 0.1.0, `p1` and `p2` 0.2.0, `p4` 0.3.0 (18 November 2026); thresholds 0.7.0 (every Stage A and B value agreed by the founder except the four throw-in values of P4 0.3.0, measured and not yet agreed). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
+Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` and `p3` 0.1.0, `p1` and `p2` 0.2.0, `p4` 0.3.0 (18 November 2026); thresholds 0.8.0 (every Stage A and B value agreed by the founder, the last four on 18 November 2026). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
 
 **Observed** means a fact read from the data (a distance, whether the ball was seen, an event). **Estimated** means a label the engine assigns by rules. Nothing in the frame table reaches the AI layer directly; the semantic events carry only the labels listed at the end.
 
