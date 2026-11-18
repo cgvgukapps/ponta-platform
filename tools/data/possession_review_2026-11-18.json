@@ -1,0 +1,457 @@
+{
+ "reviewer": "founder (former semi-professional footballer)",
+ "date": "2026-11-18",
+ "method": "Blind replay check from tools/context_possession_replay.py on the seven IDSSE matches: 40 moments where P1 (1.5 m, 16 m/s, 0.4 s) and the league's frame-level possession name different teams for at least 1 s, and 10 control moments where they agree, shuffled; 5 s before and 2 s after each. No label was shown. The reviewer said who has the ball at the moment: home, away, or nobody (the ball in flight or loose). Positions are not kept here.",
+ "cases": [
+  {
+   "id": "J03WQQ-1604",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.2,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-9396",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 3.4,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-14467",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.6,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-21344",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 10.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-1067",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.0,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-13125",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-8824",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 4.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-26627",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 3.0,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-25713",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 5.0,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-5034",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.2,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-13581",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 3.4,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-11185",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 17.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-14916",
+   "kind": "agree",
+   "p1": "home",
+   "league": "home",
+   "run_s": 3.6,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-24247",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 4.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-22369",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.6,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-6147",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.4,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-27935",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.8,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-5524",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.4,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-11911",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.4,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-29052",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.8,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-13079",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 2.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-26477",
+   "kind": "agree",
+   "p1": "home",
+   "league": "home",
+   "run_s": 4.6,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-4003",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 3.8,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-18070",
+   "kind": "agree",
+   "p1": "home",
+   "league": "home",
+   "run_s": 17.4,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-452",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.8,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-27466",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.0,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-17268",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.2,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-13321",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.4,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-12898",
+   "kind": "agree",
+   "p1": "home",
+   "league": "home",
+   "run_s": 12.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-18652",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 11.8,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-8176",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.8,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-4934",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.8,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-21602",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.6,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-13848",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 4.0,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-5269",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 5.8,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-4866",
+   "kind": "agree",
+   "p1": "away",
+   "league": "away",
+   "run_s": 8.2,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-23869",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.8,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-19993",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.2,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-9729",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-9852",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.8,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-11681",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 4.2,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-17335",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.6,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-9299",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-24420",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 6.4,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-16329",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 1.8,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-23922",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-14601",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 5.4,
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-24031",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 3.0,
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-11966",
+   "kind": "disagree",
+   "p1": "away",
+   "league": "home",
+   "run_s": 1.0,
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-22080",
+   "kind": "disagree",
+   "p1": "home",
+   "league": "away",
+   "run_s": 2.4,
+   "call": "nobody",
+   "note": ""
+  }
+ ]
+}

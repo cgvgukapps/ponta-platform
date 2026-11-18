@@ -609,6 +609,28 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 - The founder says who has the ball at each moment (home, away or nobody yet) without seeing either label. The key is kept apart from the page.
 - Scoring both sources against the founder's calls says which definition matches a football reading, and where P1's real errors are.
 
+**The founder's blind calls (18 November 2026)**, kept without positions in `tools/data/possession_review_2026-11-18.json`:
+- **Controls:** 10 of 10 called as both sources had them, so the judging is consistent.
+- **The 40 disagreements:**
+
+| | P1's team | The league's team | Nobody (ball in flight or loose) |
+|---|---|---|---|
+| All 40 | 11 | 15 | 14 |
+| Disagreements of 1 to 2.2 s (25) | 11 | 9 | 5 |
+| Disagreements of 2.4 s or more (15) | **0** | 6 | **9** |
+
+- **Short disagreements are a draw.** They are the timing of a switch, and neither source is systematically better (11 against 9 with 25 cases).
+- **Long disagreements are P1's errors.** P1 holds the old team while the ball is in flight or loose, or after the other team has it.
+- **What marks them:**
+  - in the controls, the nearest player was a median 1.2 m from the ball;
+  - in the moments called the league's way or nobody's, 2.6 to 3.5 m, with the ball at about 9 to 10 m/s: a pass or clearance travelling.
+  - Time since P1 last saw control does not separate them (2 s or less everywhere).
+- **The league's definition is not better either.** It names a team at all 14 "nobody" moments, usually the eventual receiver.
+- **Not tuned on these 40 calls** (too few to fit a rule). The open question is one of definition, for the founder:
+  - **Keep team possession as it is.** It carries through the ball's flight, as SkillCorner's possessions and Gate 1's event reference do, and phases and chains depend on it.
+  - **Add a separate observed ball-state field** on each grid point: controlled by home, controlled by away, in flight, or loose. That gives the AI "nobody had it yet" without changing possession.
+  - **Either way, measure before agreeing:** the thresholds for "in flight" (ball speed, distance to the nearest player) would be swept against a larger judged sample, as for phases.
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
