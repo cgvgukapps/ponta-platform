@@ -1,6 +1,6 @@
 # Context vocabulary (P0 to P4)
 
-Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` and `p3` 0.1.0, `p1` and `p2` 0.2.0, `p4` 0.3.0 (18 November 2026); thresholds 0.9.0 (every Stage A and B value agreed by the founder, the last four on 18 November 2026; `p1_loose_on_opponent_touch` proposed and off). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
+Definitions of every field the context packages produce, as built on 17 November 2026. Package versions: `probe` and `p3` 0.1.0, `p1` and `p2` 0.2.0, `p4` 0.3.0, `p5` 0.1.0 (18 November 2026); thresholds 0.10.0 (every Stage A and B value agreed by the founder, the last four on 18 November 2026; `p1_loose_on_opponent_touch` proposed and off; `p5_min_unit_players` proposed). The specification is `ponta-blueprint/context-packages.md` (Stage B: `ponta-blueprint/context-structure-task.md`); the measurements behind the thresholds are in `CONTEXT_FOUNDATIONS_REPORT.md` (P1) and `CONTEXT_STRUCTURE_REPORT.md` (P2 to P4).
 
 **Observed** means a fact read from the data (a distance, whether the ball was seen, an event). **Estimated** means a label the engine assigns by rules. Nothing in the frame table reaches the AI layer directly; the semantic events carry only the labels listed at the end.
 
@@ -141,6 +141,33 @@ Runs shorter than `p4_min_phase_s` merge into the run before them in the same ch
 - **Roles:** after P2 0.2.0 most remaining disagreements with SkillCorner are a central midfielder given a defensive-midfield slot, and a forward who drops given an attacking-midfield slot (`CONTEXT_STRUCTURE_REPORT.md`).
 - **Restarts without events:** the position rules find about 70% of corners (about 55% of detections right) and about 55% of throw-ins on broadcast tracking (about 61% right; 87% right on Metrica's full-pitch tracking). Goal kicks and free kicks are not found; most goal kicks have a gap in broadcast tracking before them.
 - **Runtime:** P3 and P4 rebuild the team frames from P2's segments; about 13 s of the 16 s per match is Stage B.
+
+## P5 Line breaks (0.1.0, 18 November 2026)
+
+Ponta's rule after the definitions FIFA publishes in its Football Language and EFI documents (`ponta-blueprint/fifa-alignment.md`).
+
+| Field | Unit | Kind | Definition |
+|---|---|---|---|
+| `p5_pass_units_broken` | count | estimated | At the grid point where a completed pass starts: how many opposition units it broke; null elsewhere |
+| `p5_pass_furthest_line` | label | estimated | `first`, `second_last`, `last` or `none`; `unknown` for a failed pass |
+| `p5_pass_line_break_type` | label | estimated | `through` or `around` for the deepest broken unit |
+
+- **Units:** the defending team's outfield players at the moment of the pass, grouped by depth (exact 3-means), without the goalkeeper (P2's for the window). A unit counts only with at least `p5_min_unit_players`.
+- **Break:** a unit is broken when the ball starts in front of its deepest player and is received beyond it.
+- **Through or around:** through when the ball crosses that line between the unit's two widest players, around otherwise. FIFA's "over" needs the ball's height and is not labelled.
+- **Names:** from the attacking team's view, the first unit met is `first`, the deepest `last`, and with three units the middle one `second_last`.
+- **Failed passes** are listed with their line breaks unknown. FIFA judges them by the intended team-mate, and Ponta has no target yet.
+
+**Segments.** `p5_line_breaks`: one row per pass (event row, period, team, time, completed or failed, units counted, each unit broken, furthest, type, units broken).
+
+**Data check.** `line_breaks`:
+- `full` with completed passes and full team shape;
+- `degraded` when team shape is degraded (players out of view);
+- `blocked` without passes that have end positions.
+
+**Measured:**
+- against SkillCorner's labels on its 20 open-data matches: any line broken κ 0.65 / 0.63 and furthest line κ 0.53 / 0.54 (fit / held out, completed passes); through or around 87%;
+- not yet validated by analysts.
 
 ## In the semantic events (schema 1.1)
 

@@ -699,8 +699,18 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
   - Keeping only those with Plaiq's option value at or above a threshold gives at best κ 0.11 on "any option" and rank correlation 0.19 (held out).
   - Plaiq's option value measures a pass's worth, not whether the team-mate is available. An availability test (for example Plaiq's control of the ball at the team-mate) has to be built and measured first.
 
+**Built as P5 0.1.0 (18 November 2026, at the founder's request):** `plaiq_engine/context/line_breaks.py`.
+- **Inputs:** completed passes with lines at the pass moment; failed passes listed with their breaks unknown.
+- **Threshold:** `p5_min_unit_players` (2, FIFA's definition), proposed.
+- **Its own output, scored against SkillCorner** (`tools/context_line_breaks.py --package`, 5,873 completed passes):
+  - any line broken κ 0.65 / 0.63 (fit / held out);
+  - furthest line κ 0.53 / 0.54 (79.7% agreement), the prototype's figure;
+  - through or around 87% (κ 0.73).
+- **Data check:** `line_breaks` is degraded on broadcast tracking.
+- **Tests:** full local gate 1,080 passed, 12 skipped.
+
 **Next, for the founder to decide:**
-1. Bring completed-pass line breaks into P5, with lines at the pass moment.
+1. ~~Bring completed-pass line breaks into P5~~ done (P5 0.1.0).
 2. A target rule for failed passes, in the context layer or as a Plaiq change.
 3. An availability model for line-breaking options, measured against SkillCorner's option lists.
 

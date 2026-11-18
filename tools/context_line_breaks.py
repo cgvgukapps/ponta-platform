@@ -1,7 +1,8 @@
 """
 context_line_breaks.py — a line-break rule on the FIFA definition, measured against SkillCorner's labels.
 
-Prototype for context package P5 (Stage C), not yet a package. The rule follows the FIFA Football
+The measurement behind context package P5's line breaks (``plaiq_engine/context/line_breaks.py``,
+which holds the rule; ``--package`` scores the package's own output). The rule follows the FIFA Football
 Language and EFI documents (``ponta-blueprint/fifa-alignment.md``):
 
 - **units** are the defending team's lines (P2's per-window line membership: defence, midfield,
@@ -33,6 +34,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from matrix_engine.sample_data import repo_root
+from plaiq_engine.context.line_breaks import breaks, furthest, unit_names
 from plaiq_engine.context.possession import PossessionPackage
 from plaiq_engine.context.registry import Registry
 from plaiq_engine.context.structure import (
@@ -53,53 +55,9 @@ from context_reference_set import _kappa, _load
 MIN_UNIT_PLAYERS = 2
 
 
-def unit_names(b: dict) -> dict[int, str]:
-    """
-    SkillCorner's names for the units that count (at least two players), from the attacking team's
-    view: the first met is ``first``, the deepest ``last``, and with three units the middle one
-    ``second_last``. P2's codes are 2 (attack), 1 (midfield), 0 (defence).
-    """
-    valid = [c for c in (2, 1, 0) if b.get(c) is not None]
-    if len(valid) == 3:
-        return dict(zip(valid, ("first", "second_last", "last"), strict=True))
-    if len(valid) == 2:
-        return dict(zip(valid, ("first", "last"), strict=True))
-    return {valid[0]: "last"} if valid else {}
-
-
 def _outside(path: Path) -> bool:
     root = repo_root()
     return not (path.resolve() == root or root in path.resolve().parents)
-
-
-def breaks(start: tuple[float, float], end: tuple[float, float], units: dict[int, np.ndarray]) -> dict:
-    """
-    Units broken by a ball moving from ``start`` to ``end`` (attacking frame: depth towards the
-    opponent's goal, width). ``units`` maps a unit code to its players' (depth, width) in the
-    same frame. Returns, per unit, None (fewer than two players), False, or "through"/"around".
-    """
-    out = {}
-    (d0, w0), (d1, w1) = start, end
-    for code, pts in units.items():
-        if len(pts) < MIN_UNIT_PLAYERS:
-            out[code] = None
-            continue
-        line = float(pts[:, 0].max())  # the unit's deepest player, nearest its own goal
-        if not (d0 < line <= d1):
-            out[code] = False
-            continue
-        u = (line - d0) / (d1 - d0) if d1 != d0 else 0.0
-        w = w0 + u * (w1 - w0)
-        out[code] = "through" if pts[:, 1].min() <= w <= pts[:, 1].max() else "around"
-    return out
-
-
-def furthest(b: dict) -> str:
-    names = unit_names(b)
-    for code in (0, 1, 2):  # defence, midfield, attack: the deepest broken line counts
-        if b.get(code):
-            return names[code]
-    return "none"
 
 
 def sc_passes(match_dir: Path, home_id: int) -> pd.DataFrame:
@@ -130,6 +88,29 @@ def intents(pov: pd.DataFrame) -> dict[int, tuple[float, float]]:
     """
     rows = pov.loc[pov["intent_x"].notna(), ["event_idx", "intent_x", "intent_y"]].drop_duplicates("event_idx")
     return {int(r.event_idx): (float(r.intent_x), float(r.intent_y)) for r in rows.itertuples()}
+
+
+def one_package(match_dir: Path, cache: Path) -> pd.DataFrame:
+    """P5's own output (``context.line_breaks``) joined to SkillCorner's passes: completed passes only."""
+    from plaiq_engine.context.line_breaks import LineBreakPackage
+    m = _load(match_dir, cache)
+    res = Registry([PossessionPackage(), StructurePackage(), LineBreakPackage()]).run(m)
+    seg = res.outputs["p5"].segments["line_breaks"]
+    seg = seg.loc[seg["outcome"] == "completed"].assign(start_frame=lambda d: m.events.loc[d["event_row"], "Start Frame"].to_numpy())
+    meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
+    ref = sc_passes(match_dir, meta["home_team"]["id"])
+    rows = []
+    for r in ref.itertuples():
+        c = seg.loc[(seg["team"] == r.team) & ((seg["start_frame"] - r.frame_end).abs() <= 2)]
+        if c.empty:
+            continue
+        x = c.iloc[0]
+        rows.append({"match": match_dir.name, "outcome": "completed", "sc_lines": r.n_defensive_lines,
+                     "sc_furthest": r.furthest_line_break if isinstance(r.furthest_line_break, str) else "none", "sc_type": r.furthest_line_break_type,
+                     "sc_first": r.first_line_break, "sc_second_last": r.second_last_line_break, "sc_last": r.last_line_break,
+                     "ponta_furthest": x["furthest"] if isinstance(x["furthest"], str) else "none", "ponta_type": x["type"],
+                     "ponta_first": x["first"], "ponta_second_last": x["second_last"], "ponta_last": x["last"]})
+    return pd.DataFrame(rows)
 
 
 def one(match_dir: Path, cache: Path, unit_mode: str = "window", use_intent: bool = False, options: bool = False) -> pd.DataFrame:
@@ -243,6 +224,7 @@ def main() -> None:
                     help="window: P2's per-window lines; moment: lines grouped at the pass moment (FIFA)")
     ap.add_argument("--intent", action="store_true", help="judge a failed pass by Plaiq's intended meeting point")
     ap.add_argument("--options", action="store_true", help="count line-breaking passing options (Plaiq option values)")
+    ap.add_argument("--package", action="store_true", help="score P5's own output (completed passes) instead of the prototype")
     args = ap.parse_args()
     for p in (args.data, args.cache, args.out):
         if not _outside(p):
@@ -252,14 +234,14 @@ def main() -> None:
         dirs = [d for d in dirs if d.name in args.matches]
     parts = []
     for n, d in enumerate(dirs):
-        df = one(d, args.cache, args.units, args.intent, args.options)
+        df = one_package(d, args.cache) if args.package else one(d, args.cache, args.units, args.intent, args.options)
         df.to_pickle(args.out.parent / f"line_breaks_{d.name}.pkl")
         df["set"] = "fit" if n % 2 == 0 else "test"
         parts.append(df)
         print(d.name, len(df), "passes", flush=True)
     allp = pd.concat(parts, ignore_index=True)
     out = {"all": score(allp), "fit": score(allp.loc[allp["set"] == "fit"]), "test": score(allp.loc[allp["set"] == "test"]),
-           "by_outcome": {o: score(allp.loc[allp["outcome"] == o]) for o in ("completed", "failed")}}
+           "by_outcome": {o: score(allp.loc[allp["outcome"] == o]) for o in ("completed", "failed") if (allp["outcome"] == o).any()}}
     if args.options:
         out["options"] = {s_: score_options(allp.loc[allp["set"] == s_]) for s_ in ("fit", "test")}
     args.out.parent.mkdir(parents=True, exist_ok=True)

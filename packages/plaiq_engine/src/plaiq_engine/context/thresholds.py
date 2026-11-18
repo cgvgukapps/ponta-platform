@@ -22,6 +22,7 @@ Version 0.8.0 records the founder's agreement of those four values on 18 Novembe
 changed, so package output is unchanged.
 Version 0.9.0 adds ``p1_loose_on_opponent_touch`` (the founder's loose-ball rule), proposed and off,
 so package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, possession round).
+Version 0.10.0 adds ``p5_min_unit_players`` for P5's line breaks (proposed, from FIFA's definition).
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -35,7 +36,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.9.0"
+THRESHOLDS_VERSION = "0.10.0"
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,10 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p4_throw_in_ball_m", 5.0, "m", "agreed",
               "The ball is within this distance of the thrower at some point in the set-up's last 2 s. Without a ball test, about half of all detections are wrong (wide players on the line in open play).",
               "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins; agreed by the founder, 18 November 2026"),
+    # -- P5 line breaks (18 November 2026; proposed, from FIFA's definition) --
+    Threshold("p5_min_unit_players", 2.0, "players", "proposed",
+              "A defending line (unit) counts for line breaks only with at least this many players, as FIFA's Football Language defines a unit line.",
+              "FIFA Football Language, penetrative action; ponta-blueprint/fifa-alignment.md; CONTEXT_STRUCTURE_REPORT.md, line breaks"),
     Threshold("p4_min_phase_s", 1.0, "s", "agreed",
               "A phase shorter than this merges into the phase before it in the same possession.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
 )

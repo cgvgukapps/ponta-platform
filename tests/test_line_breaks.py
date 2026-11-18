@@ -1,12 +1,7 @@
-"""The line-break rule (tools/context_line_breaks.py) on hand-built units."""
-
-import sys
-from pathlib import Path
+"""P5 line breaks (plaiq_engine/context/line_breaks.py) on hand-built units."""
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from context_line_breaks import breaks, furthest, unit_names
+from plaiq_engine.context.line_breaks import breaks, furthest, unit_names, units_at
 
 # Defending units in the attacking team's frame (depth towards the opponent's goal, width).
 UNITS = {
@@ -37,3 +32,12 @@ def test_a_unit_needs_two_players_and_names_follow_the_count():
     b = breaks((30.0, 0.0), (70.0, 0.0), units)
     assert b[2] is None and unit_names(b) == {1: "first", 0: "last"}
     assert furthest(b) == "first"
+
+
+def test_units_at_leaves_out_the_keeper_and_groups_by_depth():
+    # Defending team's own frame: keeper at 3 m, back four ~20 m, midfield ~40 m, two forwards ~55 m.
+    depth = np.array([3.0, 20.0, 21.0, 20.5, 19.5, 40.0, 41.0, 39.0, 40.5, 55.0, 56.0])
+    width = np.array([0.0, 20.0, 7.0, -7.0, -20.0, 15.0, 5.0, -5.0, -15.0, 5.0, -5.0])
+    u = units_at(depth, width, 105.0, keeper=0)
+    assert [len(u[c]) for c in (2, 1, 0)] == [2, 4, 4]
+    assert u[0][:, 0].max() == 105.0 - 19.5      # the back line, in the attacking team's frame
