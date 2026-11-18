@@ -689,7 +689,7 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 **Failed passes and Plaiq's pass intent.**
 - For a failed pass, FIFA judges the break by where the intended team-mate was. Plaiq's failed-pass inference gave an intended meeting point for 740 of the 759 failed passes.
 - Using it changed nothing: furthest line κ 0.27 before, 0.26 after.
-- **The reason:** Plaiq picks the *first* team-mate along the ball's line who would have controlled it, usually short of a long ball's target. Ponta then credits first-line breaks (170 against SkillCorner's 31) where SkillCorner credits last-line breaks (211 against 51).
+- **The reason:** Plaiq picks the *first* team-mate along the ball's line who would have controlled it, usually short of a long ball's target. Ponta then credits first-line breaks (170 against SkillCorner's 31) where SkillCorner credits last-line breaks (211 against 51). *(Corrected 18 November 2026, `PLAIQ_REFERENCES_REPORT.md`: on SkillCorner's data a failed pass's end point is already SkillCorner's own targeted player at the pass, not the interception point. The likelier reason for the low agreement is runs in behind: at the pass the runner is still in front of the back line, and SkillCorner credits the break.)*
 - **Line breaks need the pass's target.** Plaiq's inference stays as it is for decision quality; changing it is an engine decision for the founder.
 
 **Line-breaking options** (team-mates beyond at least one line from the ball, at the pass):

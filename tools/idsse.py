@@ -254,6 +254,15 @@ def to_p1_events(ev: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _slots(tracking: pd.DataFrame) -> dict[str, tuple[str, ...]]:
+    """Per team, the shirt numbers as Plaiq's wide frames expect them (``home_7`` gives ``7``)."""
+    out = {}
+    for team in ("home", "away"):
+        ids = tracking.loc[tracking["team"] == team, "player_id"].unique()
+        out[team] = tuple(sorted((i.split("_", 1)[1] for i in ids), key=lambda j: (len(j), j)))
+    return out
+
+
 def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[NormalisedMatch, Official]:
     """One IDSSE match as a ``NormalisedMatch`` and the league's references. Cached as a pickle."""
     cache.mkdir(parents=True, exist_ok=True)
@@ -262,7 +271,7 @@ def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[Normal
         with open(pk, "rb") as fh:
             m, official = pickle.load(fh)
         # The P1 event table is rebuilt from the league's events, so a mapping change needs no re-parse.
-        return dataclasses.replace(m, events=to_p1_events(official.events)), official
+        return dataclasses.replace(m, events=to_p1_events(official.events), slots=_slots(m.tracking)), official
     f = _files(Path(data_dir), match_id)
     info = read_info(f["info"])
     pos = read_positions(f["positions"], info["persons"], info["team_of"])
