@@ -469,6 +469,69 @@ The settings were swept by `tools/context_restart_sweep.py` on 10 SkillCorner ma
 - **Thresholds 0.7.0** *(agreed by the founder on 18 November 2026, thresholds 0.8.0)*: four new `measured` values (`p4_throw_in_hold_s` 2 s, `p4_throw_in_out_m` 0 m, `p4_throw_in_still_mps` 2 m/s, `p4_throw_in_ball_m` 5 m), for the founder to agree. The detector's edge (3 m from a goal line), bridging (1 s) and look-back (2 s) are module constants, as measured.
 - **Not done:** free kicks (not attempted; 59% have a tracking gap before them), goal kicks (above), and P1 chain start types without a feed. P1 runs before team frames exist, so the restarts live in P4's segment.
 
+## Against official league data: IDSSE (18 November 2026)
+
+**The data.**
+- Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195. Data: **Deutsche Fußball Liga (DFL)**, CC BY 4.0; any publication must credit the DFL and cite the paper.
+- Seven 2022/23 matches (two Bundesliga, five 2. Bundesliga), each with:
+  - full-pitch TRACAB tracking at 25 Hz;
+  - the league's official events;
+  - match information, including each player's official playing position and each team's line-up.
+- The ball's tracking carries the **official ball status** (in play or dead) and **team in possession on every frame**: a frame-level reference that SkillCorner and Metrica do not give.
+- **Download and reading:**
+  - `tools/fetch_reference_data.py idsse` downloads the files to `~/ponta-reference-data/idsse`, outside every repository, and checks each figshare MD5.
+  - `tools/idsse.py` reads them as a `NormalisedMatch` without reading any name. It rotates halves so home attacks +x and translates the league's events into the vocabulary P1 reads.
+  - This is a reference reader for measurement, not a supported provider.
+- **Reader checks:**
+  - the home keeper's mean x is −35 to −38 m in both halves;
+  - an event sits a median 2.7 m from the tracked player who made it (37 m with the y axis mirrored);
+  - the official team in possession matches the acting team on 81% of events.
+- **Measured by** `tools/context_idsse.py`. Nothing was tuned on these matches: every threshold was set on SkillCorner and Metrica.
+
+| Match | P1 vs official possession (ball in play): with events / tracking only | P1 dead ball: official dead time found / P1 dead right | Main roles vs official positions: grouped / merged | Official line-up → P2 out of possession |
+|---|---|---|---|---|
+| J03WMX | 88.0% / 86.9% | 74% / 94% | 95.2% / 95.5% | 4-2-3-1 → 4-2-3-1; 4-2-3-1 → 4-2-3-1 |
+| J03WN1 | 81.7% / 79.5% | 73% / 94% | 91.2% / 97.4% | 4-3-3 → 4-3-3; 4-2-3-1 → 4-2-3-1 |
+| J03WOH | 88.1% / 86.7% | 72% / 94% | 78.6% / 82.7% | 4-2-3-1 → 4-2-3-1; 4-2-3-1 → 4-1-2-1-2 |
+| J03WOY | 85.6% / 83.5% | 83% / 96% | 97.4% / 97.4% | 4-2-3-1 → 4-2-3-1; 3-3-2-2 → 3-5-2 |
+| J03WPY | 87.6% / 85.8% | 70% / 96% | 58.1% / 76.0% | 4-2-3-1 → 4-4-2; 4-1-3-2 → 5-3-2 |
+| J03WQQ | 88.9% / 87.6% | 78% / 97% | 86.1% / 99.1% | 3-4-1-2 → 3-5-2; 3-3-2-2 → 5-3-2 |
+| J03WR9 | 89.4% / 88.2% | 72% / 98% | 93.5% / 99.6% | 4-4-2 → 4-4-2; 4-2-3-1 → 4-2-3-1 |
+
+**P1 possession.**
+- **Agreement:** 82% to 89% (87.2% pooled), below Gate 1's 93%. Gate 1 measured agreement with possession inferred from events (a rule), so this is the first independent check, and it is lower.
+- **Tracking alone** costs 1 to 2 points.
+- **Where P1 disagrees:**
+  - 74% agreement in the first half-second after a P1 switch (timing lag);
+  - 82% with the ball at 4 to 10 m/s (short passes and contested balls);
+  - 89% even more than 5 s after a switch, so part of the gap is the two sources defining possession differently.
+- **Dead ball:** P1 finds 70% to 83% of the official dead time, and 94% to 98% of what it calls dead is dead.
+- **The league logs restarts 1 to 3 s before the ball is played.** The ball first moves, and the official status turns live, a median 2.5 to 3.4 s after a logged corner and 1 to 2 s after a logged throw-in. A dead-ball span that ends at the logged restart therefore ends early.
+- **Next:** a P1 round tuned against the official frame-level possession, fitted on some matches and read on the others. Gate 1 is not reopened by this; it is a finding for the founder.
+
+**P2 roles and formations.**
+- **Official positions to groups** (`POSITION_GROUP` in the tool):
+  - most codes map directly;
+  - LM / RM and DLM / DRM in a back three stand 46 to 48 m deep and 16 to 18 m wide, so they are wing-backs, grouped with full-backs;
+  - HL / HR stand centrally, so central midfield.
+- **Roles:** main roles agree at a median 91.2% (97.4% merged); 6 of 7 matches clear 75%.
+- **Independent check of P2 0.2.0:** reading main roles from the defensive shape beats reading them from all windows here too (median 91.2% against 90.3%, merged 97.4% against 95.9%), though not on every match.
+- **The weakest match (J03WPY, 58%):** the home 4-2-3-1 defends as a 4-4-2 and the away 4-1-3-2 fits a 5-3-2. Line-up labels that differ from the defensive shape are the main source of misses.
+- **Formations:** the out-of-possession formation matches the official line-up's shape on 8 of 14 teams. Of the rest, four play shapes Ponta has no template for (3-3-2-2 twice, 4-1-3-2, 3-4-1-2) and two defend in another shape.
+
+**P4 restarts from positions, on full-pitch tracking** (the events removed; each restart timed when the official ball status turns live):
+
+| From positions (settings chosen on SkillCorner) | Found | Detections right |
+|---|---|---|
+| Corners (the founder's rule) | **93%** (53 of 57) | **67%** |
+| Throw-ins | **83%** (256 of 308) | **79%** |
+
+- Against the logged times (1 to 3 s early), corners scored 33% / 24% even though every set-up was found. The detector was right; the reference time was early.
+- Extra corner detections are mostly a set-up that broke and reformed, or a second corner straight after the first.
+- **Goal kicks:** the full-pitch tracking shows their set-up, so a goal-kick rule can now be measured here (not built yet).
+
+**Not done here:** phases (the league gives no phase labels; its shots carry a counter-attack flag and a build-up type, a small check for later), and Plaiq's metrics (the league's shot pressure and expected goals are a possible comparison).
+
 ## Runtime and storage
 
 Measured alone by the golden harness:
