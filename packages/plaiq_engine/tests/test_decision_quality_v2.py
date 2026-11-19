@@ -95,7 +95,11 @@ def test_run_cells_are_the_rings_around_the_run():
     assert np.linalg.norm(h[c0[0]] - (10.0, 5.0)) <= R
     corner = h[np.argmax(h[:, 0] + h[:, 1])]
     assert 1 <= len(run_cells(corner, h, q, r, R, 2)) < 19  # the cells off the pitch drop out
-    assert len(run_cells((200.0, 0.0), h, q, r, R, 2)) == 1  # off the grid: the nearest cell
+    # A run ending off the pitch is centred on the nearest cell on it, whatever the distance.
+    far, near = run_cells((200.0, 0.0), h, q, r, R, 2), run_cells((h[:, 0].max() + 1.0, 0.0), h, q, r, R, 2)
+    assert 1 < len(far) < 19 and set(far) == set(near)
+    nearest = int(np.argmin(np.linalg.norm(h - (200.0, 0.0), axis=1)))
+    assert nearest in far and set(run_cells((200.0, 0.0), h, q, r, R, 0)) == {nearest}
 
 
 def test_cell_probabilities_are_the_pass_completion_probability_at_each_cell():
@@ -135,3 +139,17 @@ def test_one_moment_arrays_equal_the_shipped_pass_arrays():
     a, b = pass_arrays(batch, m, max_players=3), pass_arrays_one_moment(ball, targets, mates, defenders, m)
     for field in a.__dataclass_fields__:
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field), err_msg=field)
+
+
+def test_agreed_bands_are_descriptive_and_not_version_1s():
+    from plaiq_engine.analytics.decision_quality_v2 import dq_v2_band
+    assert [dq_v2_band(v) for v in (0.0, 0.4499, 0.45, 0.5999, 0.60, 0.9499, 0.95, 1.0)] == [
+        "well_below_best", "well_below_best", "below_best", "below_best", "near_best", "near_best", "best_option", "best_option"]
+    assert dq_v2_band(None) is None and dq_v2_band(np.nan) is None
+    from plaiq_engine.semantic_builder import BAND_CUTS
+    assert not {b for _, b in BAND_CUTS} & {"best_option", "near_best", "below_best", "well_below_best"}
+
+
+def test_the_adopted_score_is_ring_one_cells():
+    from plaiq_engine.analytics.decision_quality_v2 import DQ_V2_RINGS, DQ_V2_VERSION
+    assert DQ_V2_RINGS == 1 and DQ_V2_VERSION == "1.1.0"

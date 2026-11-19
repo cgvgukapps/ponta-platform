@@ -569,3 +569,14 @@ Decision quality version 2 shipped 0 to 1 with no bands. `tools/plaiq_dq_v2_band
 **Note for the AI layer:** a cell on a 1 m² grid is effectively a coordinate. Cells can be stored, aggregated and drawn, but the AI layer should keep receiving zones and player references, never cell indices.
 
 Evidence: `tools/plaiq_dq_v2.py` (columns `hex_r0`, `hex_r1`, `hex_r2`); bands on ring 1 with `tools/plaiq_dq_v2_bands.py` on the same rows.
+
+## Decision quality version 2 1.1.0 adopted: hex cells (ring 1) with bands (19 November 2026)
+
+**Founder decision:** ring 1 replaces the point-based 1.0.0 as decision quality version 2 (`decision_quality_v2` 1.1.0, `DQ_V2_RINGS = 1`), beside version 1, labelled estimated. **Bands agreed** at 0.45 / 0.60 / 0.95 with descriptive names, distinct from version 1's: `best_option` (0.95 and above), `near_best` (0.60 to 0.94), `below_best` (0.45 to 0.59), `well_below_best` (under 0.45). Version 1 stays the default.
+
+- **Engine:** `MatchAnalysis.decision_quality_v2` scores each team-mate's option as the best of the 7 cells around where their run reaches when the ball arrives, and adds `dq_v2_band`, the chosen option's best cell probability (`p_chosen`), and `chosen_cell` and `best_cell` (grid indices, for storage and the replay only). `decision_quality_projected` stays as the record of 1.0.0.
+- **Semantic events, schema 1.4:** adds `dq_v2_band`; nested as `decision_quality_v2.band`. Cell indices never enter the semantic events (a 1 m² cell is effectively a coordinate), and a test pins that.
+- **Fixed on the way:** a run predicted to end off the pitch got a partial ring or a single cell depending on how far off it ended, and the measuring tool and the engine handled it differently (126 of 12,095 passes differed, up to 0.86). `run_cells` now centres such a run on the nearest cell on the pitch, then takes the ring. The fix changed 54 passes at ring 1 and 153 at ring 2; ring 0 is unchanged.
+- **Re-measured after the fix, through the shipped property:** the shipped score equals the tool's ring 1 exactly (largest difference 2×10⁻¹⁶) on all 12,095 passes. Against the earlier ring 1 figures: shot AUC 0.623 (completed) and 0.620 (all), unchanged; SkillCorner analogue 0.294; picks its best 0.581; completion AUC 0.495; goal AUC 0.648 (held-out half 0.576); optimal share 31% completed against 30% failed.
+- **The agreed bands on the shipped score, held-out half:** shots 2.6% [1.7, 4.0], 4.5% [3.1, 6.4], 7.0% [6.0, 8.2], 9.2% [7.8, 10.7] from well below best to best option; shares 14 / 14 / 41 / 31%; rising in 99% of match resamples (three seeds: 99.2, 99.5, 99.1%). Failed passes 31% best option against 31% for completed. Goals 1, 6, 10, 14: not evidence.
+- **Not established, unchanged:** the goal link; a single provider; the bands describe the score, they do not validate it.

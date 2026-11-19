@@ -12,7 +12,9 @@ fitted on the even matches, so for the two candidates the odd matches are the he
 founder adopted projected beside v1 (1.0.0, 19 November 2026), ``projected`` is read from what ships,
 ``MatchAnalysis.decision_quality_v2``. The hex-cell candidates (19 November 2026) are measured beside it:
 ``hex_r0``, ``hex_r1`` and ``hex_r2``, each team-mate's option the best cell within 0, 1 or 2 rings of where
-their run reaches when the ball arrives (``decision_quality_cells``). Plus:
+their run reaches when the ball arrives (``decision_quality_cells``). Since 1.1.0 (ring 1, adopted the same day)
+``projected`` reads the shipped ring-1 score, so it equals ``hex_r1``; ``hex_r0`` stands in for the point-based
+1.0.0 (rank correlation 0.993). Plus:
 
 - **consistency:** the band shares of completed and failed passes (judging the intention, failed passes
   should not look better than completed ones);

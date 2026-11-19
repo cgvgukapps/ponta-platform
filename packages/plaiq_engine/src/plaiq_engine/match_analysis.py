@@ -28,14 +28,17 @@ from matrix_engine.match import NormalisedMatch, to_wide_frames
 from scipy.spatial import cKDTree
 
 from plaiq_engine.analytics.decision_quality_v2 import (
+    DQ_V2_RINGS,
     DQ_V2_VERSION,
-    decision_quality_projected,
-    option_probabilities,
+    decision_quality_cells,
+    dq_v2_band,
+    option_cells_probabilities,
     option_value,
 )
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.analytics.hex_analytics import (
     assign_all_players,
+    cartesian_to_hex,
     compute_pressure,
     infer_possession,
     tag_possession,
@@ -287,26 +290,36 @@ class MatchAnalysis:
         return surface[self._hex_tree.query(np.asarray(points, float).reshape(-1, 2))[1]]
 
     @cached_property
+    def _hex_axial(self) -> tuple[np.ndarray, np.ndarray]:
+        q, r = cartesian_to_hex(self.hex_centers[:, 0], self.hex_centers[:, 1], self.R)
+        return np.asarray(q, int), np.asarray(r, int)
+
+    @cached_property
     def decision_quality_v2(self) -> pd.DataFrame:
         """
-        Decision quality v2, projected (``analytics/decision_quality_v2.py``, adopted beside v1 19 November 2026).
+        Decision quality v2 (``analytics/decision_quality_v2.py`` 1.1.0, adopted beside v1 19 November 2026).
 
         One row per ``PASS`` and ``BALL LOST`` event that ``pass_completion`` covers. At the moment of the pass
-        every team-mate (not the passer) is an option: a pass into their run (``projected_target``), worth its
-        completion probability times its value there (``option_value``). The score is the chosen option's
-        expected value over the best one's, **0 to 1** (1.0: the best pass on offer was chosen); it has no bands
-        yet. The chosen option is the logged target, so completed and failed passes take one formula and the
-        outcome is never an input. A pass without a completion probability gets no score and the same reason.
-        v1 (``event_pov``) is unchanged and stays the default. Labelled estimated.
+        every team-mate (not the passer) is an option: **the best ball into their run**, the best of the hex
+        cells within ``DQ_V2_RINGS`` of the cell their run reaches when the ball arrives, each cell worth the
+        completion probability of a pass to it times its value. The score is the chosen option's expected value
+        over the best one's, **0 to 1** (1.0: the best option was chosen), with the agreed bands (``dq_v2_band``).
+        The chosen option is the logged target, scored like every other, so completed and failed passes take one
+        formula and the outcome is never an input. ``chosen_cell`` and ``best_cell`` are grid cell indices for
+        storage and the replay, never for the AI layer. v1 (``event_pov``) is unchanged and stays the default.
+        Labelled estimated.
         """
         params = parameters_for(self.match.provider)
-        cols = ["event_idx", "dq_v2", "ev_chosen", "ev_best", "p_chosen", "best_option", "best_is_chosen", "options",
-                "version", "parameter_set", "reason"]
+        q_all, r_all = self._hex_axial
+        h = self.hex_centers
+        cols = ["event_idx", "dq_v2", "dq_v2_band", "ev_chosen", "ev_best", "p_chosen", "chosen_cell", "best_option", "best_cell",
+                "best_is_chosen", "options", "cells", "version", "parameter_set", "reason"]
         pc = self.pass_completion.set_index("event_idx")
         rows = []
         for idx, r in pc.iterrows():
-            row = {"event_idx": idx, "dq_v2": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "p_chosen": np.nan, "best_option": None,
-                   "best_is_chosen": None, "options": 0, "version": DQ_V2_VERSION, "parameter_set": r["parameter_set"], "reason": None}
+            row = {"event_idx": idx, "dq_v2": np.nan, "dq_v2_band": None, "ev_chosen": np.nan, "ev_best": np.nan, "p_chosen": np.nan,
+                   "chosen_cell": None, "best_option": None, "best_cell": None, "best_is_chosen": None, "options": 0, "cells": 0,
+                   "version": DQ_V2_VERSION, "parameter_set": r["parameter_set"], "reason": None}
             rows.append(row)
             if pd.isna(r["pass_completion_probability"]):
                 row["reason"] = r["reason"]
@@ -321,16 +334,21 @@ class MatchAnalysis:
             if m["target"] not in names:
                 row["reason"] = "the target is not tracked at the pass"
                 continue
-            targets, p = option_probabilities(m["ball"], mates, m["defenders"], params.model)
+            cells, p = option_cells_probabilities(m["ball"], mates, m["defenders"], params.model, h, q_all, r_all, self.R, rings=DQ_V2_RINGS)
+            xt = self.xt_home if m["team"] == "Home" else self.xt_away
             xt_ball = float(self._xt_at(m["team"], m["ball"])[0])
-            value = np.array([option_value(m["ball"], t, xt_ball, x) for t, x in zip(targets, self._xt_at(m["team"], targets), strict=True)])
+            values = [np.array([option_value(m["ball"], h[c], xt_ball, xt[c]) for c in cs]) for cs in cells]
             k = names.index(m["target"])
-            out = decision_quality_projected(p, value, k)
-            row.update({"ev_chosen": out["ev_chosen"], "ev_best": out["ev_best"], "p_chosen": float(p[k]), "options": out["options"]})
+            out = decision_quality_cells(p, values, k)
+            kc = out["best_cell"][k]
+            row.update({"ev_chosen": out["ev_chosen"], "ev_best": out["ev_best"], "p_chosen": float(p[k][kc]), "chosen_cell": int(cells[k][kc]),
+                        "options": out["options"], "cells": int(sum(len(c) for c in cells))})
             if not np.isfinite(out["dq"]):
                 row["reason"] = "no option on offer has any value"
                 continue
-            row.update({"dq_v2": out["dq"], "best_option": names[int(np.argmax(p * value))], "best_is_chosen": out["best_is_chosen"]})
+            b = out["best_option"]
+            row.update({"dq_v2": out["dq"], "dq_v2_band": dq_v2_band(out["dq"]), "best_option": names[b],
+                        "best_cell": int(cells[b][out["best_cell"][b]]), "best_is_chosen": out["best_is_chosen"]})
         return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
 
     # -- per-frame surfaces (computed on demand) ------------------------------------------

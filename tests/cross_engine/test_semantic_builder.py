@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.3").all()  # 1.1: context (P1); 1.2: pass completion; 1.3: decision quality v2
+    assert sem["schema_version"].eq("1.4").all()  # 1.1: P1; 1.2: pass completion; 1.3: DQ v2; 1.4: DQ v2 on cells, banded
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -205,22 +205,25 @@ def test_decision_quality_v2_beside_v1(built):
     # The open-play pass is scored, 0 to 1, labelled estimated, with no band; v1's columns are untouched.
     r = passes.loc[2]
     assert 0.0 <= r["dq_v2_score"] <= 1.0
-    assert r["dq_v2_status"] == "estimated" and r["dq_v2_version"] == "1.0.0"
+    assert r["dq_v2_status"] == "estimated" and r["dq_v2_version"] == "1.1.0"
+    from plaiq_engine.analytics.decision_quality_v2 import dq_v2_band
+    assert r["dq_v2_band"] == dq_v2_band(r["dq_v2_score"]) and r["dq_v2_band"] in {"best_option", "near_best", "below_best", "well_below_best"}
     assert r["dq_v2_best_option_ref"].startswith("home_") and r["dq_v2_best_option_ref"] != "home_4"  # never the passer
     assert r["dq_band"] == dq_band(r["dq_score"])
     # Not scored where v1 is not: the set piece and the goalkeeper, each with its reason.
     assert passes.loc[1, "dq_v2_status"].startswith("set piece") and pd.isna(passes.loc[1, "dq_v2_score"])
     assert passes.loc[4, "dq_v2_status"].startswith("goalkeeper") and pd.isna(passes.loc[4, "dq_v2_score"])
     assert sem.loc[sem["action_type"] != "pass", "dq_v2_score"].isna().all()
-    # The engine's numbers: the chosen pass's probability is the shipped pass completion probability.
+    # The engine's numbers: the chosen and best options are cells, each the best of 7 around its run.
     d2 = analysis.decision_quality_v2.set_index("event_idx")
-    pc = analysis.pass_completion.set_index("event_idx")
     assert r["dq_v2_score"] == pytest.approx(d2.at[2, "dq_v2"], abs=1e-4)
-    assert d2.at[2, "p_chosen"] == pytest.approx(pc.at[2, "pass_completion_probability"], abs=1e-12)
     assert d2.at[2, "dq_v2"] == pytest.approx(d2.at[2, "ev_chosen"] / d2.at[2, "ev_best"])
+    assert 0.0 <= d2.at[2, "p_chosen"] <= 1.0 and d2.at[2, "cells"] == 7 * d2.at[2, "options"]
+    assert d2.at[2, "chosen_cell"] is not None and d2.at[2, "best_cell"] is not None
+    assert "chosen_cell" not in sem.columns and "best_cell" not in sem.columns  # cells are coordinates: never in the AI's rows
     assert bool(d2.at[2, "best_is_chosen"]) == (d2.at[2, "dq_v2"] >= 1.0 - 1e-12)
     rec = nested_record(passes.reset_index().loc[lambda d: d["event_idx"] == 2].iloc[0].to_dict())
-    assert set(rec["spatial_intelligence"]["decision_quality_v2"]) == {"score", "status", "best_option_player_ref", "version"}
+    assert set(rec["spatial_intelligence"]["decision_quality_v2"]) == {"score", "band", "status", "best_option_player_ref", "version"}
 
 
 def test_decision_quality_v2_ignores_the_outcome():

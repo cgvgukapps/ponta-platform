@@ -53,6 +53,13 @@ cell. The chosen option is scored the same way, so placement within the cluster 
 the choice. Ring 0 is the run's single cell (the grid alone); rings 1 and 2 hold 7 and 19 cells per
 team-mate. Only cells a run is heading into are evaluated, never every reachable cell (about a fifth of the
 pitch on a typical pass), so passes into space no run is heading for are still not options.
+
+**1.1.0 adopted** (founder decision, 19 November 2026): **ring 1** replaces the point-based 1.0.0 as decision
+quality v2, beside v1, labelled estimated (``MatchAnalysis.decision_quality_v2``). **Bands agreed the same
+day**, with descriptive names that say where the choice sits against the best option rather than judge the
+player (``dq_v2_band``): best option (0.95 and above), near best (0.60 to 0.94), below best (0.45 to 0.59),
+well below best (under 0.45). They are not version 1's bands and never share its names. ``decision_quality_projected``
+(1.0.0) stays as the record of the point-based score.
 """
 
 from __future__ import annotations
@@ -77,8 +84,27 @@ from plaiq_engine.analytics.pass_probability import (
 
 #: 0.1.0 (19 November 2026): expected value at the pass, measured, not adopted. 0.2.0 (19 November 2026):
 #: adds the two narrower candidates with the pass completion probability as the risk term. 1.0.0
-#: (19 November 2026): projected adopted beside v1 by the founder, maths unchanged from 0.2.0.
-DQ_V2_VERSION = "1.0.0"
+#: (19 November 2026): projected adopted beside v1 by the founder, maths unchanged from 0.2.0. 1.1.0
+#: (19 November 2026): the hex-cell candidate at ring 1 adopted in its place, with bands.
+DQ_V2_VERSION = "1.1.0"
+
+#: The rings of cells around each run that the adopted score evaluates (7 cells per team-mate).
+DQ_V2_RINGS = 1
+
+#: Bands agreed by the founder 19 November 2026 (measured: ``ponta-platform/PLAIQ_REFERENCES_REPORT.md``,
+#: "Candidate bands" and "on Plaiq's hex grid"). Descriptive names, distinct from version 1's.
+DQ_V2_BANDS: tuple[tuple[float, str], ...] = ((0.95, "best_option"), (0.60, "near_best"), (0.45, "below_best"))
+DQ_V2_LOWEST_BAND = "well_below_best"
+
+
+def dq_v2_band(score: float | None) -> str | None:
+    """The agreed band of a decision quality v2 score (0 to 1); None without a score."""
+    if score is None or not np.isfinite(score):
+        return None
+    for cut, band in DQ_V2_BANDS:
+        if score >= cut:
+            return band
+    return DQ_V2_LOWEST_BAND
 
 
 def decision_quality_v2(
@@ -161,14 +187,15 @@ def ring_distance(q: np.ndarray, r: np.ndarray, q0: int, r0: int) -> np.ndarray:
 def run_cells(target_xy, hex_centers: np.ndarray, q_all: np.ndarray, r_all: np.ndarray, R: float, rings: int) -> np.ndarray:
     """
     Indices of the grid cells within ``rings`` of the cell containing ``target_xy`` (a run's point at the ball's
-    arrival). Near a touchline only the cells on the pitch remain; a point off the grid falls back to its
-    nearest cell.
+    arrival). A run that ends off the pitch is centred on the nearest cell on it first, so every option is a
+    full ring clipped only at the pitch's edge (fixed 19 November 2026: before, such a run got a partial ring
+    or a single cell depending on how far off the pitch it ended).
     """
     q0, r0 = (int(np.asarray(v).ravel()[0]) for v in cartesian_to_hex(np.array([target_xy[0]]), np.array([target_xy[1]]), R))
-    cells = np.where(ring_distance(q_all, r_all, q0, r0) <= rings)[0]
-    if not len(cells):
-        cells = np.array([int(np.argmin(np.linalg.norm(hex_centers - np.asarray(target_xy, float), axis=1)))])
-    return cells
+    if not ((q_all == q0) & (r_all == r0)).any():
+        c = int(np.argmin(np.linalg.norm(hex_centers - np.asarray(target_xy, float), axis=1)))
+        q0, r0 = int(q_all[c]), int(r_all[c])
+    return np.where(ring_distance(q_all, r_all, q0, r0) <= rings)[0]
 
 
 def option_cells_probabilities(ball_xy, mates: list[dict], defenders: list[dict], model: PassModel, hex_centers: np.ndarray,
@@ -230,12 +257,15 @@ def pass_arrays_one_moment(ball_xy, targets: np.ndarray, attackers: list, defend
 def decision_quality_cells(p_cells: list[np.ndarray], value_cells: list[np.ndarray], chosen: int) -> dict:
     """
     Each option's expected value is its best cell (probability × value); the score is the chosen option's over
-    the best option's, 0 to 1.
+    the best option's, 0 to 1. ``best_cell`` is each option's best cell (a position in its list), ``best_option``
+    the option with the highest expected value.
     """
-    ev = np.array([float(np.max(np.asarray(p, float) * np.asarray(v, float))) if len(p) else 0.0
-                   for p, v in zip(p_cells, value_cells, strict=True)])
+    evs = [np.asarray(p, float) * np.asarray(v, float) for p, v in zip(p_cells, value_cells, strict=True)]
+    ev = np.array([float(e.max()) if len(e) else 0.0 for e in evs])
+    best_cell = [int(np.argmax(e)) if len(e) else -1 for e in evs]
     if not len(ev) or not (0 <= chosen < len(ev)):
-        return {"dq": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "options": int(len(ev))}
+        return {"dq": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "options": int(len(ev)), "best_cell": best_cell}
     best = float(ev.max())
     return {"dq": float(ev[chosen] / best) if best > 0 else np.nan, "ev_chosen": float(ev[chosen]), "ev_best": best,
-            "best_is_chosen": bool(ev[chosen] >= best - 1e-12), "options": int(len(ev))}
+            "best_is_chosen": bool(ev[chosen] >= best - 1e-12), "options": int(len(ev)), "best_option": int(np.argmax(ev)),
+            "best_cell": best_cell}

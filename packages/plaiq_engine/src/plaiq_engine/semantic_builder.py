@@ -47,7 +47,9 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: 1.3 (19 November 2026): adds decision quality v2, projected (``MatchAnalysis.decision_quality_v2``, adopted
 #: beside v1 by the founder 19 November 2026): its score (0 to 1, no bands), status, best option and version.
 #: A failed pass that v2 scores now gets a row even when v1 has no failed-pass score. Earlier columns are unchanged.
-SCHEMA_VERSION = "1.3"
+#: 1.4 (19 November 2026): decision quality v2 1.1.0 (hex cells, ring 1) with its agreed band, ``dq_v2_band``
+#: (best_option, near_best, below_best, well_below_best; never version 1's names). Earlier columns are unchanged.
+SCHEMA_VERSION = "1.4"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
@@ -73,7 +75,7 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "dq_score", "dq_band", "chosen_option_pov", "best_option_player_ref", "best_option_pov",
     "xt_delta", "movement_value", "opposition_pressure", "pitch_zone", "mode",
     "pass_completion_probability", "pass_completion_status", "pass_completion_parameters",
-    "dq_v2_score", "dq_v2_status", "dq_v2_best_option_ref", "dq_v2_version",
+    "dq_v2_score", "dq_v2_band", "dq_v2_status", "dq_v2_best_option_ref", "dq_v2_version",
     "not_scored", "not_scored_reason",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
@@ -307,7 +309,7 @@ class SemanticBuilder:
                         pcp, pcs = round(float(r["pass_completion_probability"]), 4), PASS_COMPLETION_LABEL
                     else:
                         pcs = r["reason"]
-                d2s, d2st, d2best, d2v = None, None, None, None
+                d2s, d2b, d2st, d2best, d2v = None, None, None, None, None
                 if kind == "pass" and idx in dq2.index:
                     r2 = dq2.loc[idx]
                     d2v = r2["version"]
@@ -317,6 +319,7 @@ class SemanticBuilder:
                         d2st = "set piece: the decision model is built for open play"
                     elif pd.notna(r2["dq_v2"]):
                         d2s, d2st, d2best = round(float(r2["dq_v2"]), 4), DQ_V2_LABEL, self._ref(team, r2["best_option"])
+                        d2b = r2["dq_v2_band"]
                     else:
                         d2st = r2["reason"]
                 inferred = actor_pov.get("inferred_receiver") if actor_pov is not None else None
@@ -337,7 +340,7 @@ class SemanticBuilder:
                     "opposition_pressure": self._pressure(e, team, actor),
                     "pitch_zone": pitch_zone(float(e.get("Start X", np.nan)), float(e.get("Start Y", np.nan)), team),
                     "pass_completion_probability": pcp, "pass_completion_status": pcs, "pass_completion_parameters": pcset,
-                    "dq_v2_score": d2s, "dq_v2_status": d2st, "dq_v2_best_option_ref": d2best, "dq_v2_version": d2v,
+                    "dq_v2_score": d2s, "dq_v2_band": d2b, "dq_v2_status": d2st, "dq_v2_best_option_ref": d2best, "dq_v2_version": d2v,
                     "not_scored": not_scored,
                     "not_scored_reason": reason,
                 })
@@ -468,7 +471,7 @@ def nested_record(row: dict) -> dict:
             "not_scored": row["not_scored"], "not_scored_reason": row["not_scored_reason"],
             "pass_completion": {"probability": row.get("pass_completion_probability"), "status": row.get("pass_completion_status"),
                                 "parameters": row.get("pass_completion_parameters")},
-            "decision_quality_v2": {"score": row.get("dq_v2_score"), "status": row.get("dq_v2_status"),
+            "decision_quality_v2": {"score": row.get("dq_v2_score"), "band": row.get("dq_v2_band"), "status": row.get("dq_v2_status"),
                                     "best_option_player_ref": row.get("dq_v2_best_option_ref"), "version": row.get("dq_v2_version")},
         },
         "physiological_context": row["physiological_context"],
