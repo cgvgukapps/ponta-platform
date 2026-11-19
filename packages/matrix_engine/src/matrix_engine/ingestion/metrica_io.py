@@ -110,16 +110,23 @@ def to_single_playing_direction(
     in the same direction across both halves.
 
     Must be called AFTER to_metric_coordinates.
-    """
-    # First frame index where Period == 2
-    second_half_idx = home.loc[home.Period == 2].index[0]
 
+    Each table is split by its own ``Period`` column. *Fixed 19 November 2026:* the
+    prototype sliced every table from the first second-half *tracking frame label*
+    (about 70,000), which on the events table (indexed by event row) selected
+    nothing, so second-half event coordinates were never flipped and sat about 55 m
+    from the tracked ball (``ponta-platform/PLAIQ_REFERENCES_REPORT.md``). Tracking
+    output is unchanged: its rows from the first second-half frame on are exactly
+    those with ``Period >= 2``.
+    """
     for df in [home, away, events]:
         coord_cols = [c for c in df.columns if c.endswith("_x") or c.endswith("_y")]
         # Events use different column names
         if "Start X" in df.columns:
             coord_cols = ["Start X", "Start Y", "End X", "End Y"]
-        df.loc[second_half_idx:, coord_cols] *= -1
+        if "Period" not in df.columns or not coord_cols:
+            continue
+        df.loc[df["Period"] >= 2, coord_cols] *= -1
 
     return home, away, events
 

@@ -786,3 +786,38 @@ Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.
 
 6. **The four throw-in thresholds (P4 0.3.0):** agreed (thresholds 0.8.0, no value changed).
 7. **SkillCorner grid point 16221:** the founder confirmed that "no phase" (the ball is dead during the throw-in set-up) is right there, so the review stands at 36 of 50.
+
+## Metrica CSV second-half events fixed (19 November 2026)
+
+**The defect.** `matrix_engine.ingestion.metrica_io.to_single_playing_direction`, inherited from the prototype, flipped each table from the first second-half *tracking frame label* (about 70,000). On the events table, indexed by event row, that slice selected nothing. So the second-half event coordinates of Metrica's CSV games (Sample Games 1 and 2, and any Metrica CSV export through `providers/metrica.py`) were never flipped: they sat a median 55 m from the tracked ball.
+
+**The fix.** Each table is now split by its own `Period` column. Measured on Games 1 and 2:
+- tracking output is bit-identical;
+- 817 and 856 event rows change, all in the second half;
+- second-half pass starts now sit 0.35 m from the tracked ball, the same as first halves;
+- Game 3 (EPTS) and SkillCorner never used this path and are unchanged.
+
+**What changed downstream** (second halves of Games 1 and 2 only):
+- **Context packages:** P1 to P4 are identical; the golden check differs only in P5's line-break fields. Second-half line breaks were undercounted, and the first halves are identical:
+
+  | | Game 1 | Game 2 |
+  |---|---|---|
+  | Second half, before | 44 of 545 | 29 of 531 |
+  | Second half, after | 155 | 134 |
+  | First half | 125 of 511 | 167 of 666 |
+
+  The goldens were recaptured; P5's version is unchanged because its rules did not change.
+- **Plaiq:**
+
+  | | Game 1 | Game 2 |
+  |---|---|---|
+  | Events with ΔV changed | 569 | 538 |
+  | Decision-quality rows changed | 427 | 418 |
+  | Failed-pass decision-quality rows changed | 74 | 54 |
+  | Pass option value rows changed | 8,870 | 9,274 |
+  | Scored decisions | 900 → 941 | 1,029 → 1,078 |
+
+  Neither game is in the Plaiq equivalence goldens (Game 3 and SkillCorner), and the decision-quality bands were audited on Game 3, so no recorded Plaiq evidence changes.
+- **Semantic events:** `pitch_zone` and every value above, on those halves.
+
+**Not changed:** the frozen prototype carries the same defect and stays frozen. Its records cover Game 3 and SkillCorner, which are unaffected.

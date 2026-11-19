@@ -387,4 +387,4 @@ On the demo match (1886347), 881 of 884 pass rows carry a probability, averaging
 - **Unaffected:** first halves, Metrica's EPTS Game 3 and SkillCorner (under 1.4 m in both halves).
 - **The first symptom:** completed passes averaged 0.91 in first halves and 0.44 to 0.46 in second halves, until the metric switched to tracked positions (now 0.91 to 0.92 in both).
 - **Other readers of event coordinates on those two games are affected,** for example the semantic events' `pitch_zone`.
-- **Not fixed here.** Fixing it changes recorded outputs on those games, so it is reported for a decision.
+- **Not fixed here.** Fixing it changes recorded outputs on those games, so it is reported for a decision. *(Fixed 19 November 2026 at the founder's go-ahead: each table is split by its own `Period`; see `CONTEXT_STRUCTURE_REPORT.md`, "Metrica CSV second-half events fixed".)*

@@ -41,6 +41,18 @@ def test_single_playing_direction_flips_only_second_half():
     assert a["Away_1_x"].tolist() == [-10.0, -11.0, 12.0, 13.0]
 
 
+def test_single_playing_direction_flips_second_half_events_by_their_own_period():
+    # Tracking frames are labelled by frame number; events by row. The half-time split must
+    # come from each table's own Period (the prototype sliced events by a tracking frame label).
+    home = pd.DataFrame({"Period": [1, 2], "Home_1_x": [10.0, 12.0], "Home_1_y": [1.0, 3.0]}, index=[5000, 70000])
+    away = pd.DataFrame({"Period": [1, 2], "Away_1_x": [-10.0, -12.0], "Away_1_y": [1.0, 3.0]}, index=[5000, 70000])
+    events = pd.DataFrame({"Period": [1, 1, 2], "Start X": [5.0, 6.0, 7.0], "Start Y": [1.0, 2.0, 3.0],
+                           "End X": [8.0, 9.0, 10.0], "End Y": [-1.0, -2.0, -3.0]})
+    h, _, e = to_single_playing_direction(home.copy(), away.copy(), events.copy())
+    assert h["Home_1_x"].tolist() == [10.0, -12.0]
+    assert e["Start X"].tolist() == [5.0, 6.0, -7.0] and e["End Y"].tolist() == [-1.0, -2.0, 3.0]
+
+
 def _teams(home_gk_x: float):
     """A home goalkeeper at ``home_gk_x`` and an outfielder near the centre, after the half-time flip."""
     home = pd.DataFrame(
