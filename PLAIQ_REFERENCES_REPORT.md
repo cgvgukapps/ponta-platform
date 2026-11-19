@@ -171,3 +171,31 @@ Under high pressure fewer options are on, so both models judge the choice more k
 - **Completed-pass decision quality has outcome evidence** comparable to a provider's own model: "a defined, explainable score" can now cite it.
 - **Failed-pass decision quality needs fixing before use.**
 - **A candidate decision quality version 2,** to be measured against these same three groundings, fit and test by match: score the choice at the moment of the pass as expected value, using the option split (availability × value). That charges a failed pass for its availability and keeps one definition for completed and failed passes.
+
+## Decision quality version 2, measured (19 November 2026)
+
+**The design.** `plaiq_engine/analytics/decision_quality_v2.py` (0.1.0) is a candidate beside version 1, which is untouched. It judges the intention plus the risk known when the ball is played:
+- the chosen destination's expected value (availability × value) over the best expected value among all team-mates at that moment;
+- one formula for completed and failed passes, with the outcome never an input.
+
+Measured by `tools/plaiq_dq_v2.py` on 12,112 SkillCorner passes (9,920 completed), with the threat-only value as a sensitivity check:
+
+| | Version 1 | Version 2 | Version 2, threat only |
+|---|---|---|---|
+| Optimal share: completed / failed passes | 58% / **89%** | 30% / 19% | 37% / 17% |
+| Median: completed / failed | 0.98 / 1.24 | 0.76 / 0.41 | 0.87 / 0.41 |
+| Possession leads to a shot, completed passes, AUC | **0.60** | 0.51 | 0.48 |
+| Possession leads to a shot, all passes, AUC | **0.55** | 0.53 | 0.50 |
+| Possession leads to a goal, completed passes, AUC | **0.62** | 0.51 | 0.45 |
+| Rank correlation with SkillCorner's option-value analogue | **0.31** | 0.15 | 0.06 |
+| Picks out passes where SkillCorner's best option was chosen, AUC | **0.60** | 0.54 | 0.50 |
+| Predicts completion, AUC | 0.23 | 0.69 | 0.74 |
+
+The even and odd matches agree on every row.
+
+**Reading.**
+- **Not adopted; version 1 stays.** Version 2 removes the failed-pass leniency but becomes mostly a measure of risk: it predicts completion (0.69) and loses the link to chances (0.51) and to SkillCorner's analogue (0.15).
+- **Why version 1 keeps the signal.** It values the receiver at the end of the pass, which credits playing the ball into a team-mate's run. Version 2 compares the destination with where team-mates stood at the pass, so a through ball into a run looks like a ball into space a defender could reach.
+- **Plaiq's ball-speed model weighs on version 2.** At 5 m/s plus 0.2 m/s per metre, long forward passes look slower, and so riskier, than they are. Calibrating it on the league's 25 Hz tracking (programme step 6) comes before any risk-weighted decision quality.
+- **Version 1's failed-pass leniency stays a known flaw** (89% optimal). Until it is fixed, failed-pass decision quality should not be reported.
+- **The candidate for the next attempt:** keep version 1's end-of-pass credit and add only the risk at the pass, after the ball-speed calibration.
