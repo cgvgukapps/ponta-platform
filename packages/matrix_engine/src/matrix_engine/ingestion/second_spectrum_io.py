@@ -65,6 +65,25 @@ EVENT_COLUMNS = [
     "End Y",
 ]
 
+#: Optional event column: whether a pass was played high, as the provider logs it (nullable boolean).
+#: ``True`` a high pass, ``False`` not high, ``<NA>`` unknown or not a pass. Absent is valid, as for
+#: ``native_quality`` in the tracking schema: a provider that logs no height (Metrica) leaves it out, and
+#: a consumer treats a missing column as unknown, never as "not high". Each provider's own definition is
+#: kept, mapped to this one flag by its adapter:
+#:
+#: - SkillCorner: ``high_pass`` in the dynamic events. **Logged on completed passes only** (open data, 20
+#:   matches: 986 high and 11,821 not high, all successful; no unsuccessful pass carries it), so on
+#:   SkillCorner the flag is known only once the outcome is: it describes a completed pass and must never
+#:   be an input to a model that predicts the outcome;
+#: - StatsBomb: ``pass_height`` "High Pass" is ``True``; "Ground Pass" and "Low Pass" are ``False``
+#:   (logged on every pass).
+#:
+#: Added 19 November 2026. The pass completion probability (``plaiq_engine.analytics.pass_probability``)
+#: does not read it: SkillCorner's flag gives away the outcome, and on the league's reference tracking,
+#: where height is logged on every pass, it did not improve the model (``PLAIQ_REFERENCES_REPORT.md``).
+HIGH_PASS = "High Pass"
+OPTIONAL_EVENT_COLUMNS: tuple[str, ...] = (HIGH_PASS,)
+
 
 def load_secondspectrum_tracking(
     meta_data: FileLike,

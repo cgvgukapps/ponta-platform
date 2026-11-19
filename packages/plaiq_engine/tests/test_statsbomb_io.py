@@ -191,6 +191,20 @@ class TestEventMapping:
         out = self._load(rows)
         assert out.iloc[0]["Type"] == "BALL LOST"
 
+    def test_pass_height_becomes_matrix_high_pass_flag(self):
+        heights = ["High Pass", "Low Pass", "Ground Pass", None]
+        rows = []
+        for i, h in enumerate(heights):
+            ev = _pass_event(i + 1, 1, f"00:0{i + 1}:00.000", HOME_TEAM, [80.0, 40.0])
+            ev["pass_height"] = h
+            rows.append(ev)
+        rows.append(_carry_event(9, 1, "00:09:00.000", AWAY_TEAM, [70.0, 45.0]))
+        out = self._load(rows)
+        assert out["High Pass"].dtype == "boolean"
+        flags = out["High Pass"].tolist()
+        assert flags[:3] == [True, False, False]
+        assert pd.isna(flags[3]) and pd.isna(flags[4])
+
     def test_carry_type(self):
         rows = [_carry_event(1, 1, "00:02:00.000", AWAY_TEAM, [70.0, 45.0])]
         out = self._load(rows)

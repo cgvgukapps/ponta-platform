@@ -10,7 +10,8 @@ Loads SkillCorner open data format:
 Output conventions match second_spectrum_io / epts_io / metrica_io:
   home_df  index=Frame, cols: Period, Time [s], Home_{jersey}_x/y
   away_df  same for Away_{jersey}_* plus ball_x, ball_y
-  events_df  PLAIQ event schema (EVENT_COLUMNS from second_spectrum_io)
+  events_df  PLAIQ event schema (EVENT_COLUMNS from second_spectrum_io), plus the
+             optional HIGH_PASS column from SkillCorner's high_pass flag
   meta dict: team_a_id, team_b_id, team_a_name, team_b_name,
              team_a_players, team_b_players, periods, frame_rate, pitch
 
@@ -53,6 +54,7 @@ import pandas as pd
 
 from matrix_engine.ingestion.second_spectrum_io import (
     EVENT_COLUMNS,
+    HIGH_PASS,
     _period_time_seconds,
 )
 from matrix_engine.pitch_config import PitchConfig
@@ -552,6 +554,7 @@ def load_skillcorner_events(
     target_y_col         = _find_col(df, ["player_targeted_y_reception"])
     target_x_pass_col    = _find_col(df, ["player_targeted_x_pass"])
     target_y_pass_col    = _find_col(df, ["player_targeted_y_pass"])
+    high_pass_col        = _find_col(df, ["high_pass"])
 
     def _to_jersey(pid_int):
         if pid_int is None:
@@ -569,8 +572,9 @@ def load_skillcorner_events(
         return x, y
 
     def _append_event(evt_type, evt_subtype, period_id, from_id, to_id, team,
-                      sf, sf_t, sx, sy, ef, ef_t, ex, ey):
+                      sf, sf_t, sx, sy, ef, ef_t, ex, ey, high=pd.NA):
         rows.append({
+            HIGH_PASS:        high,
             "Type":           evt_type,
             "Subtype":        evt_subtype if evt_subtype is not None else np.nan,
             "Period":         period_id,
@@ -638,6 +642,9 @@ def load_skillcorner_events(
             trx_raw = _float_or_nan(row.get(target_x_pass_col)) * scale_x
             try_raw = _float_or_nan(row.get(target_y_pass_col)) * scale_y
 
+        # SkillCorner's own high-pass flag, on passes only (unknown when the column or the value is missing).
+        high = _high_pass(row.get(high_pass_col)) if high_pass_col and end_type in ("pass", "header") else pd.NA
+
         if is_carry:
             # ----------------------------------------------------------------
             # Carry events: emit a CARRY row (possession trajectory) THEN the
@@ -669,7 +676,7 @@ def load_skillcorner_events(
                 _append_event(
                     comp_type, comp_sub, period_id, from_id, to_id, team,
                     end_frame, end_t, comp_sx, comp_sy,
-                    end_frame, end_t, comp_ex, comp_ey,
+                    end_frame, end_t, comp_ex, comp_ey, high,
                 )
         else:
             # ----------------------------------------------------------------
@@ -694,10 +701,11 @@ def load_skillcorner_events(
             _append_event(
                 plaiq_type, subtype, period_id, from_id, to_id, team,
                 start_frame, start_t, sx, sy,
-                end_frame, end_t, ex, ey,
+                end_frame, end_t, ex, ey, high,
             )
 
-    result = pd.DataFrame(rows, columns=EVENT_COLUMNS)
+    result = pd.DataFrame(rows, columns=[*EVENT_COLUMNS, HIGH_PASS])
+    result[HIGH_PASS] = result[HIGH_PASS].astype("boolean")
     if not result.empty:
         result = result.sort_values(
             ["Start Frame", "Period"], kind="stable"
@@ -773,6 +781,16 @@ def _float_or_nan(val) -> float:
         return f if not np.isnan(f) else np.nan
     except (TypeError, ValueError):
         return np.nan
+
+
+def _high_pass(val):
+    """SkillCorner's ``high_pass`` as a nullable flag: ``True``, ``False`` or ``pd.NA`` when not logged."""
+    if val is None or (isinstance(val, float) and np.isnan(val)):
+        return pd.NA
+    if isinstance(val, str):
+        v = val.strip().lower()
+        return True if v == "true" else False if v == "false" else pd.NA
+    return bool(val)
 
 
 def _bool_val(val) -> bool:

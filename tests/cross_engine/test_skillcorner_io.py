@@ -254,6 +254,22 @@ class TestLoadSkillcornerEvents:
         for col in EVENT_COLUMNS:
             assert col in df.columns, f"Missing column: {col}"
 
+    def test_high_pass_flag_carried_on_passes_only(self, tmp_path):
+        """SkillCorner's high_pass becomes Matrix's nullable High Pass flag; absent stays unknown."""
+        from matrix_engine.ingestion.second_spectrum_io import HIGH_PASS
+        raw = pd.read_csv(_tmp_events_csv(tmp_path), dtype=str)
+        raw["high_pass"] = ["True", "False", "True", ""][: len(raw)]
+        path = tmp_path / "with_height.csv"
+        raw.to_csv(path, index=False)
+        kw = {"home_team_id": HOME_ID, "away_team_id": AWAY_ID, "periods": _periods(), "fps": SC_FPS,
+              "pitch_length": 104.0, "pitch_width": 68.0, "h1_home_sign": -1}
+        df = load_skillcorner_events(str(path), **kw)
+        assert df[HIGH_PASS].dtype == "boolean"
+        assert df.loc[df["Type"] == "PASS", HIGH_PASS].tolist() == [True]
+        assert df.loc[df["Type"] == "BALL LOST", HIGH_PASS].tolist() == [False]
+        assert df.loc[df["Type"] == "CARRY", HIGH_PASS].isna().all()  # not a pass, whatever the column says
+        assert self._load(tmp_path)[HIGH_PASS].isna().all()            # the fixture logs no height
+
     def test_team_side_assigned(self, tmp_path):
         df = self._load(tmp_path)
         home_events = df[df["Team"] == "Home"]

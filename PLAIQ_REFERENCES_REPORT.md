@@ -321,6 +321,8 @@ Refitted on SkillCorner's even matches and tested on its odd ones (5,930 passes)
 - the IDSSE-fitted model on the same passes: 0.375 / 0.835;
 - SkillCorner's own model: 0.283 / 0.894.
 
+*(Corrected 19 November 2026: every SkillCorner result above that uses height reads SkillCorner's `high_pass` flag, which is logged on completed passes only, so it partly gives away the outcome. The refit's 0.321 / 0.859, its calibration column below and its parameters are not a valid measure of the model; its no-height refit, 0.356 / 0.838, is. The IDSSE-fitted rows move little (0.370 against 0.373). See "Pass height through Matrix" below.)*
+
 Observed completion by predicted probability (projected target), predicted → completed:
 
 | Predicted | IDSSE held out (IDSSE fit) | SkillCorner (IDSSE fit) | SkillCorner held out (its own refit) |
@@ -379,7 +381,7 @@ SkillCorner's refit gives arrival spread 0.55 s, rates 4.4 and 7.1 per s, reacti
 On the demo match (1886347), 881 of 884 pass rows carry a probability, averaging 0.90 on completed passes and 0.64 on lost ones. About 4 s a match.
 
 **Correction to the section above:**
-- The no-height model refitted on SkillCorner scores 0.356 / 0.838 held out, against 0.321 / 0.859 with SkillCorner's `high_pass` flag. **On SkillCorner the height flag helps;** it is on the league's data that it does not.
+- The no-height model refitted on SkillCorner scores 0.356 / 0.838 held out, against 0.321 / 0.859 with SkillCorner's `high_pass` flag. **On SkillCorner the height flag helps;** it is on the league's data that it does not. *(Withdrawn 19 November 2026: SkillCorner logs the flag on completed passes only, so the gain is the outcome leaking in. See "Pass height through Matrix" below.)*
 - Carrying a provider's height flag through Matrix's normalised events, and refitting with it, is the follow-up.
 
 **Found on the way: Metrica CSV second-half events are not rotated.**
@@ -388,3 +390,38 @@ On the demo match (1886347), 881 of 884 pass rows carry a probability, averaging
 - **The first symptom:** completed passes averaged 0.91 in first halves and 0.44 to 0.46 in second halves, until the metric switched to tracked positions (now 0.91 to 0.92 in both).
 - **Other readers of event coordinates on those two games are affected,** for example the semantic events' `pitch_zone`.
 - **Not fixed here.** Fixing it changes recorded outputs on those games, so it is reported for a decision. *(Fixed 19 November 2026 at the founder's go-ahead: each table is split by its own `Period`; see `CONTEXT_STRUCTURE_REPORT.md`, "Metrica CSV second-half events fixed".)*
+
+## Pass height through Matrix (19 November 2026)
+
+**What was asked:** carry a provider's pass-height flag into Matrix's normalised events and refit the pass completion parameters with it, on the strength of the SkillCorner refit (0.356 to 0.321 log-loss).
+
+**Built:**
+- **`High Pass`**, an optional, nullable event column (`second_spectrum_io.HIGH_PASS`; `True`, `False` or unknown). As with `native_quality` in the tracking schema, absent is valid, and a consumer treats a missing column as unknown, never as "not high".
+- **SkillCorner:** from `high_pass`, on passes only.
+- **StatsBomb:** from `pass_height`. "High Pass" is high; "Ground Pass" and "Low Pass" are not.
+- **Metrica:** no column. Metrica logs no height, and `HEAD`, `CROSS` and `DEEP BALL` are not heights, so none is inferred.
+- **Tests:** a loader test for each of SkillCorner and StatsBomb.
+
+**Found: SkillCorner's flag records the outcome.** On the 20 open-data matches, `high_pass` (and `pass_range`) is present on completed passes only:
+- 986 high and 11,821 not high, all of them completed;
+- no unsuccessful pass carries the flag.
+
+So on SkillCorner a pass's height is known only once its outcome is.
+- **The earlier refit** read a missing flag as "not high", so every high pass in its data was completed. Its fitted reachable share of 0 ("a high ball cannot be cut out in flight") is that leak, not football.
+- **The shipped path showed the same leak** when a with-height set was tried per pass:
+  - held-out log-loss fell from 0.327 to 0.305;
+  - on the 500 held-out high passes, all completed, it fell from 0.549 to 0.243;
+  - on the other passes it barely moved (0.109 to 0.106);
+  - and only completed passes can be flagged.
+- **Where height is logged on every pass** (IDSSE: 390 of the 627 failed passes in step 6's set are high), height made no difference held out (0.296 against 0.301 log-loss; AUC 0.762 against 0.773).
+
+**Decision taken here:**
+- **The with-height set was not shipped.** The pass completion probability does not read `High Pass` (`pass_probability` stays 1.0.0, and a cross-engine test pins that the flag changes nothing).
+- **The column stays in Matrix as a description of the pass,** with its provenance documented: on SkillCorner it is known only for completed passes, so it must never feed a model of the outcome. On StatsBomb it is logged on every pass, but StatsBomb is event-only, so the metric is Blocked there anyway.
+- **Withdrawn:** "on SkillCorner the height flag helps", and the 0.321 / 0.859 refit as evidence for it (corrections marked above).
+
+**Still open:**
+- height from the tracking itself, for providers with ball height (TRACAB-like feeds);
+- a provider that logs height on every pass and has tracking.
+
+Neither is available in the reference data except IDSSE, where it did not help.

@@ -58,6 +58,7 @@ from functools import lru_cache
 
 import numpy as np
 import pandas as pd
+from matrix_engine.ingestion.second_spectrum_io import HIGH_PASS
 from matrix_engine.pitch_config import PitchConfig
 
 # ---------------------------------------------------------------------------
@@ -95,6 +96,7 @@ SB_EVENT_COLUMNS = [
     "End Time [s]",
     "End X",
     "End Y",
+    HIGH_PASS,            # Matrix's optional pass-height flag, from pass_height (nullable boolean)
     # StatsBomb-native extras preserved for enriched analytics
     "sb_event_id",        # UUID — primary key for 360 join
     "sb_event_index",     # sequential index within match
@@ -410,6 +412,7 @@ def sb_events_to_plaiq(
             "End Time [s]":      end_time_offset,
             "End X":             ex,
             "End Y":             ey,
+            HIGH_PASS:           _high_pass(ev.get("pass_height")) if sb_type == "Pass" else pd.NA,
             "sb_event_id":       _safe_str(ev.get("id")),
             "sb_event_index":    event_idx,
             "sb_possession":     int(ev.get("possession") or 0),
@@ -424,11 +427,18 @@ def sb_events_to_plaiq(
         })
 
     df = pd.DataFrame(rows, columns=SB_EVENT_COLUMNS)
+    df[HIGH_PASS] = df[HIGH_PASS].astype("boolean")
     df = df.reset_index(drop=True)
 
     # Compute cumulative match time properly (period 2 continues from period 1)
     _add_cumulative_match_time(df, events_df, home_team)
     return df
+
+
+def _high_pass(pass_height):
+    """StatsBomb's ``pass_height`` as Matrix's flag: "High Pass" is high; "Ground Pass" and "Low Pass" are not."""
+    name = _safe_str(pass_height.get("name") if isinstance(pass_height, dict) else pass_height)
+    return pd.NA if not name else name == "High Pass"
 
 
 def _add_cumulative_match_time(

@@ -34,7 +34,9 @@ targeted PCZ, POV, decision quality and every persisted score are untouched (eng
 **Adopted 19 November 2026** (founder) as the pass completion probability metric, beside v1 and labelled
 estimated. Parameters are fitted per provider (``PARAMETER_SETS``, ``parameters_for``); a provider without
 its own set uses the default set and the Data check marks the metric Degraded. The shipped sets use the
-projected target and no height flag (normalised events carry none yet).
+projected target and no height flag. Matrix's events now carry a provider's height flag (``High Pass``,
+19 November 2026), but it is not read here: SkillCorner logs it on completed passes only, so it gives away
+the outcome, and on IDSSE, where it is logged on every pass, it made no difference held out.
 """
 
 from __future__ import annotations

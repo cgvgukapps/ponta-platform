@@ -180,6 +180,19 @@ def test_pass_completion_probability_on_passes_only(built):
         assert r.pass_completion_probability == pytest.approx(pc.at[r.event_idx, "pass_completion_probability"], abs=1e-4)
 
 
+def test_pass_completion_ignores_the_pass_height_flag():
+    """SkillCorner logs High Pass on completed passes only, so the outcome model must not read it."""
+    from dataclasses import replace
+
+    from matrix_engine.ingestion.second_spectrum_io import HIGH_PASS
+    m = replace(synthetic_match(), provider="skillcorner")
+    ev = m.events.copy()
+    ev[HIGH_PASS] = pd.array([pd.NA, True, True, pd.NA, True, pd.NA], dtype="boolean")
+    with_flag = MatchAnalysis(replace(m, events=ev)).pass_completion
+    without = MatchAnalysis(m).pass_completion
+    pd.testing.assert_frame_equal(with_flag, without)
+
+
 def test_pass_completion_providers_agree_across_engines():
     from matrix_engine.parity import PASS_COMPLETION_FITTED_PROVIDERS
     from plaiq_engine.analytics.pass_probability import PARAMETER_SETS

@@ -11,6 +11,9 @@ and did not close the gap to a provider's completion model, so ``analytics/pass_
   league's recipient, the kick found in the tracking, the target where the recipient stands at the
   kick, the league's flat or high flag; SkillCorner's passes to the targeted player at the pass, with
   its ``high_pass`` flag;
+- **SkillCorner's height flag leaks the outcome** (found 19 November 2026): ``high_pass`` is logged on
+  completed passes only, and a missing flag is read here as "not high", so every high pass in its rows
+  was completed. Its with-height results measure that, not the model; compare its no-height variant;
 - **fit:** maximum likelihood (log-loss) on IDSSE's even matches, for the arrival spread, the two
   control rates, the two reaction times and the reachable share of a high ball; the ball flight is the
   measured one, not fitted again;
