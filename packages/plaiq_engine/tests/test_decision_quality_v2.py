@@ -32,3 +32,45 @@ def test_a_risky_choice_scores_below_a_safe_better_one():
 def test_the_outcome_is_not_an_input():
     params = set(inspect.signature(decision_quality_v2).parameters)
     assert not params & {"completed", "outcome", "success", "end_frame"}
+
+
+# -- 0.2.0: the narrower candidates, with the pass completion probability as the risk term ------------------
+
+def _players(*xy, v=(0.0, 0.0)):
+    return [{"pos": np.array(p, float), "vel": np.array(v, float)} for p in xy]
+
+
+def test_v1_with_risk_scales_v1_by_the_completion_probability():
+    from plaiq_engine.analytics.decision_quality_v2 import decision_quality_risk
+    assert decision_quality_risk(1.2, 0.5) == pytest.approx(0.6)
+    assert decision_quality_risk(1.4, 1.0) == pytest.approx(1.4)
+    assert np.isnan(decision_quality_risk(np.nan, 0.9)) and np.isnan(decision_quality_risk(1.0, np.nan))
+
+
+def test_option_probabilities_match_the_shipped_pass_completion_for_each_mate():
+    from plaiq_engine.analytics.decision_quality_v2 import option_probabilities
+    from plaiq_engine.analytics.pass_probability import (
+        PassModel,
+        pass_probability,
+        projected_target,
+    )
+    m = PassModel()
+    ball = np.array([0.0, 0.0])
+    mates = _players((20.0, 0.0), (10.0, 15.0), v=(2.0, 0.0))
+    defenders = _players((10.0, 1.0), (30.0, 20.0))
+    targets, p = option_probabilities(ball, mates, defenders, m)
+    for i, mate in enumerate(mates):
+        t = projected_target(ball, mate["pos"], mate["vel"], m.flight)
+        assert targets[i] == pytest.approx(t)
+        assert p[i] == pytest.approx(pass_probability(ball, t, mates, defenders, m)["p_complete"], abs=1e-9)
+    assert p[0] < p[1]  # the defender stands in the first lane
+
+
+def test_projected_scores_the_choice_against_the_best_expected_value():
+    from plaiq_engine.analytics.decision_quality_v2 import decision_quality_projected
+    p, v = np.array([0.9, 0.5, 0.95]), np.array([0.02, 0.06, 0.01])  # expected values 0.018, 0.030, 0.0095
+    best = decision_quality_projected(p, v, 1)
+    assert best["dq"] == pytest.approx(1.0) and best["best_is_chosen"]
+    safe = decision_quality_projected(p, v, 2)
+    assert safe["dq"] == pytest.approx(0.0095 / 0.030)
+    assert np.isnan(decision_quality_projected(p, v, 5)["dq"])

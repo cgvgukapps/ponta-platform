@@ -425,3 +425,61 @@ So on SkillCorner a pass's height is known only once its outcome is.
 - a provider that logs height on every pass and has tracking.
 
 Neither is available in the reference data except IDSSE, where it did not help.
+
+## Decision quality version 2 with the pass completion probability as its risk term (19 November 2026)
+
+**What was asked:** use the adopted pass completion probability as the risk term of a narrower decision quality version 2.
+
+**Two candidates** (`analytics/decision_quality_v2.py` 0.2.0, beside version 1 and the measured 0.1.0, all unchanged):
+- **v1 with risk** (`decision_quality_risk`): version 1's score times the chosen pass's completion probability. Version 1's numerator is a value already realised, once the ball has arrived. Its denominator weighs every alternative by risk. The factor puts the chosen pass on the same footing and keeps version 1's credit for a ball played into a run.
+- **Projected** (`decision_quality_projected`):
+  - each team-mate's option is a pass into their run (`projected_target`);
+  - each is worth its completion probability times POV's value part there (`option_value`);
+  - the score is the chosen option's expected value over the best one's (0 to 1).
+  - It is one formula for completed and failed passes, and the outcome is never an input.
+  - It answers 0.1.0's flaw: comparing the destination with where team-mates stood, so a ball into a run looked like a ball into space.
+
+**Measured** by `tools/plaiq_dq_v2.py` on the same 12,112 SkillCorner passes (9,920 completed). The completion probability's SkillCorner parameters were fitted on the even matches, so the odd matches are its held-out half.
+- **Coverage:** projected scores 9,909 completed and 2,186 failed passes, because it needs only a logged, tracked target. Version 1 scores 9,910 and 2,102.
+- **Check:** the projected candidate's chosen-pass probability equals the shipped `MatchAnalysis.pass_completion` exactly.
+
+| | Version 1 | v1 with risk | **Projected** | Completion probability alone | 0.1.0 |
+|---|---|---|---|---|---|
+| Optimal share: completed / failed passes | 58% / **89%** | 31% / 23% | **31% / 27%** | 47% / 5% | 30% / 19% |
+| Median: completed / failed | 0.98 / 1.24 | 0.88 / 0.70 | 0.78 / 0.75 | 0.94 / 0.62 | 0.76 / 0.41 |
+| Possession leads to a shot, completed passes, AUC | 0.60 | 0.42 | **0.62** | 0.27 | 0.51 |
+| Possession leads to a shot, all passes, AUC | 0.55 | 0.44 | **0.62** | 0.33 | 0.53 |
+| Possession leads to a goal, completed passes, AUC (89 goals) | 0.62 | 0.35 | **0.63** | 0.23 | 0.51 |
+| Rank correlation with SkillCorner's option-value analogue | **0.31** | 0.09 | 0.29 | −0.39 | 0.15 |
+| Picks out passes where SkillCorner's best option was chosen, AUC | **0.60** | 0.51 | 0.58 | 0.37 | 0.54 |
+| Predicts completion, AUC | 0.23 | 0.64 | **0.51** | 0.85 | 0.69 |
+
+Shot rate by band, completed passes, poor → optimal: version 1 1.2%, 1.6%, 5.5%, 9.1%; projected 2.6%, 6.9%, 8.0%, 9.6%; v1 with risk 9.9%, 7.3%, 7.3%, 4.8% (reversed).
+
+**By half** (even: fit half of the probability; odd: held out):
+
+| | Version 1, even / odd | Projected, even / odd |
+|---|---|---|
+| Shot, completed passes, AUC | 0.61 / 0.60 | 0.63 / 0.61 |
+| Shot, all passes, AUC | 0.55 / 0.55 | 0.63 / 0.61 |
+| Goal, completed passes, AUC | 0.62 / 0.61 | 0.67 / 0.57 |
+| Rank correlation with SkillCorner's analogue | 0.32 / 0.30 | 0.29 / 0.29 |
+| Picks out SkillCorner's best, AUC | 0.60 / 0.60 | 0.58 / 0.58 |
+
+**Reading.**
+- **v1 with risk fails.** Multiplying by the completion probability turns the score into a measure of safety. It reverses the link to chances (shot AUC 0.42, and poor passes lead to shots twice as often as optimal ones) and loses SkillCorner's analogue (0.09). Not a candidate.
+- **Projected is the first version 2 to keep version 1's signal and fix its flaw.**
+  - **Failed passes:** they are no longer lenient (27% optimal against 31% for completed, where version 1 gives 89% against 58%), and one formula covers both.
+  - **Chances:** shot AUC 0.62 against 0.60 on completed passes, and 0.62 against 0.55 on all passes, held on both halves. Shot rate rises steadily by band.
+  - **SkillCorner's analogue:** close to version 1 (0.29 against 0.31; picking out its best 0.58 against 0.60).
+  - **Completion:** neutral (AUC 0.51). It neither rewards safety (0.1.0, 0.69) nor penalises it (version 1, 0.23).
+- **Where it is weaker or uncertain:**
+  - The goal AUC rests on 89 goals and falls on the held-out half (0.57 against version 1's 0.61), so it is not established.
+  - Its range is 0 to 1, not version 1's 0 to 1.5. The bands are kept untuned, which puts 31% of completed passes in optimal, near SkillCorner's own "chose its best" share of 37%.
+  - Like version 1, it judges choices more kindly under pressure (median 0.70 unpressured, 0.89 under high pressure), because fewer options are on.
+- **It inherits:**
+  - Plaiq's threat surface for value (step 3: it hardly tracks a provider's threat; step 5's learned surface was not adopted);
+  - the pass completion probability's per-provider fit, so on a provider without its own set it would be Degraded, as that metric is;
+  - and it needs a logged target, as pass completion does (Metrica logs none for a failed pass).
+
+**Not adopted; version 1 stays the default** (engine governance). Projected is a candidate for the founder: decision quality version 2 (0.2.0, projected), beside version 1 and labelled estimated. If adopted, failed-pass decision quality could be reported for the first time, from the same formula.

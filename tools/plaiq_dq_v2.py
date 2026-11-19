@@ -3,7 +3,12 @@ plaiq_dq_v2.py — decision quality v2 (``analytics/decision_quality_v2.py``) ag
 
 The same three groundings as ``plaiq_dq_grounding.py`` (independent maths, outcomes, context), on every
 SkillCorner pass of its 20 open-data matches, for v1 (cached ``MatchAnalysis.event_pov``), v2 (expected
-value at the pass, POV's value part) and v2 with the threat alone as value, plus:
+value at the pass, POV's value part) and v2 with the threat alone as value, and (0.2.0, 19 November 2026)
+the two narrower candidates whose risk term is the pass completion probability: ``v1_risk`` (v1 times the
+chosen pass's completion probability, from ``MatchAnalysis.pass_completion``) and ``projected`` (each
+team-mate's pass into their run, completion probability × value, chosen over best). The completion
+probability alone (``p_complete``) is reported beside them as a reference. Its SkillCorner parameters were
+fitted on the even matches, so for the two candidates the odd matches are the held-out half. Plus:
 
 - **consistency:** the band shares of completed and failed passes (judging the intention, failed passes
   should not look better than completed ones);
@@ -26,8 +31,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from matrix_engine.sample_data import repo_root
-from plaiq_engine.analytics.decision_quality_v2 import decision_quality_v2
+from plaiq_engine.analytics.decision_quality_v2 import (
+    decision_quality_projected,
+    decision_quality_risk,
+    decision_quality_v2,
+    option_probabilities,
+    option_value,
+)
+from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.analytics.pass_option_value import _build_defender_data
+from plaiq_engine.analytics.pass_probability import parameters_for
 from plaiq_engine.match_analysis import MatchAnalysis
 from scipy.spatial import cKDTree
 
@@ -36,7 +49,7 @@ from context_reference_set import _load
 from plaiq_dq_replay import BANDS, band_of
 from plaiq_references import auc, spearman
 
-SCORES = ("v1", "v2", "v2_xt")
+SCORES = ("v1", "v1_risk", "projected", "p_complete", "v2", "v2_xt")
 
 
 def _outside(path: Path) -> bool:
@@ -58,6 +71,8 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
     m = _load(match_dir, cache)
     ma = MatchAnalysis(m)
     tree = cKDTree(ma.hex_centers)
+    pc = ma.pass_completion.set_index("event_idx")
+    model = parameters_for(m.provider).model
     meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
     home = meta["home_team"]["id"]
     ev = pd.read_csv(match_dir / f"{match_dir.name}_dynamic_events.csv", low_memory=False,
@@ -93,15 +108,46 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
         if e.name in actor.index:
             a = actor.loc[e.name]
             v1 = a["decision_quality"] if e["Type"] == "PASS" else a["decision_quality_failed"]
+        p_chosen = float(pc.at[e.name, "pass_completion_probability"]) if e.name in pc.index else np.nan
+        proj = _projected(ma, e, f, team, own, opp, jer, ojer, oprof, xt, tree, model)
         o = by_pass.get(r.event_id)
         sc_dq = chose = np.nan
         if o is not None and o["targeted"].any() and o["evx"].max() > 0:
             t = o.loc[o["targeted"], "evx"].max()
             sc_dq, chose = float(t / o["evx"].max()), bool(t >= o["evx"].max() - 1e-12)
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "v1": float(v1), "v2": v2["dq"], "v2_xt": v2x["dq"],
+                     "p_complete": p_chosen, "v1_risk": decision_quality_risk(float(v1), p_chosen), "projected": proj["dq"],
+                     "p_chosen_projected": proj.get("p_chosen", np.nan), "projected_best_is_chosen": proj.get("best_is_chosen"),
                      "availability": v2["availability_chosen"], "sc_dq": sc_dq, "sc_chose_best": chose, "lead_to_shot": bool(r.lead_to_shot),
                      "lead_to_goal": bool(r.lead_to_goal), "pressure": r.overall_pressure_end if isinstance(r.overall_pressure_end, str) else None})
     return pd.DataFrame(rows)
+
+
+def _projected(ma, e, f, team, own, opp, jer, ojer, oprof, xt, tree, model) -> dict:
+    """The projected candidate for one pass, from the ball and players at the pass (as pass completion takes them)."""
+    passer, target = clean_jersey(e.get("From")), clean_jersey(e.get("To"))
+    ball = np.array([ma.away.at[f, "ball_x"], ma.away.at[f, "ball_y"]], float) if "ball_x" in ma.away.columns else np.full(2, np.nan)
+    if not np.isfinite(ball).all() and f"{team}_{passer}_x" in own.columns:
+        ball = np.array([own.at[f, f"{team}_{passer}_x"], own.at[f, f"{team}_{passer}_y"]], float)
+    if not target or not np.isfinite(ball).all():
+        return {"dq": np.nan}
+    prof = ma.profiles_home if team == "Home" else ma.profiles_away
+    names, mates = [], []
+    for j in jer:
+        if str(j) == passer:
+            continue
+        d = _build_defender_data(own.loc[f], team, [j], prof)
+        if d:
+            names.append(str(j))
+            mates.append(d[0])
+    if target not in names:
+        return {"dq": np.nan}
+    defenders = _build_defender_data(opp.loc[f], "Away" if team == "Home" else "Home", ojer, oprof)
+    targets, p = option_probabilities(ball, mates, defenders, model)
+    xb = _xt_at(xt, tree, [ball])[0]
+    value = np.array([option_value(ball, t, xb, x) for t, x in zip(targets, _xt_at(xt, tree, list(targets)), strict=True)])
+    k = names.index(target)
+    return {**decision_quality_projected(p, value, k), "p_chosen": float(p[k])}
 
 
 def measures(df: pd.DataFrame, s: str) -> dict:
