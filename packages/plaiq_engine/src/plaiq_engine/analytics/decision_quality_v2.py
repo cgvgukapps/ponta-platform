@@ -44,19 +44,32 @@ v2 (``MatchAnalysis.decision_quality_v2``; semantic events schema 1.3), labelled
 0.2.0's, unchanged. It runs **0 to 1** and has **no bands** yet: v1's bands (cut on v1's 0 to 1.5 scale) are
 not applied to it until bands for v2 are measured and agreed. v1 stays the default decision quality.
 ``decision_quality_v2`` (0.1.0) and ``decision_quality_risk`` (0.2.0) stay here as measured, not adopted.
+
+**Hex-cell candidates** (19 November 2026, measured, not adopted; the shipped score stays 1.0.0): the same
+expected value, computed on Plaiq's hexagonal grid. Each team-mate's option is **the best ball into their
+run**: the cells within ``rings`` of the cell their run reaches when the ball arrives (``run_cells``), each
+worth the completion probability of a pass to the cell's centre times the cell's value; the option is its best
+cell. The chosen option is scored the same way, so placement within the cluster (execution) is not charged to
+the choice. Ring 0 is the run's single cell (the grid alone); rings 1 and 2 hold 7 and 19 cells per
+team-mate. Only cells a run is heading into are evaluated, never every reachable cell (about a fifth of the
+pitch on a typical pass), so passes into space no run is heading for are still not options.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from plaiq_engine.analytics.hex_analytics import cartesian_to_hex
 from plaiq_engine.analytics.option_split import option_components
 from plaiq_engine.analytics.pass_option_value import (
     _distance_decay,
     _progressive_factor,
 )
 from plaiq_engine.analytics.pass_probability import (
+    _INF,
+    PassArrays,
     PassModel,
+    _kinematic,
     pass_arrays,
     probability_from_arrays,
     projected_target,
@@ -130,6 +143,97 @@ def decision_quality_projected(p_complete: np.ndarray, value: np.ndarray, chosen
     0 to 1, where 1.0 means the best pass on offer was chosen.
     """
     ev = np.asarray(p_complete, float) * np.asarray(value, float)
+    if not len(ev) or not (0 <= chosen < len(ev)):
+        return {"dq": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "options": int(len(ev))}
+    best = float(ev.max())
+    return {"dq": float(ev[chosen] / best) if best > 0 else np.nan, "ev_chosen": float(ev[chosen]), "ev_best": best,
+            "best_is_chosen": bool(ev[chosen] >= best - 1e-12), "options": int(len(ev))}
+
+
+# -- hex-cell candidates (measured, not adopted) ---------------------------------------------------------------
+
+def ring_distance(q: np.ndarray, r: np.ndarray, q0: int, r0: int) -> np.ndarray:
+    """Axial ring distance from cell ``(q0, r0)``."""
+    dq, dr = np.asarray(q) - q0, np.asarray(r) - r0
+    return (np.abs(dq) + np.abs(dr) + np.abs(dq + dr)) // 2
+
+
+def run_cells(target_xy, hex_centers: np.ndarray, q_all: np.ndarray, r_all: np.ndarray, R: float, rings: int) -> np.ndarray:
+    """
+    Indices of the grid cells within ``rings`` of the cell containing ``target_xy`` (a run's point at the ball's
+    arrival). Near a touchline only the cells on the pitch remain; a point off the grid falls back to its
+    nearest cell.
+    """
+    q0, r0 = (int(np.asarray(v).ravel()[0]) for v in cartesian_to_hex(np.array([target_xy[0]]), np.array([target_xy[1]]), R))
+    cells = np.where(ring_distance(q_all, r_all, q0, r0) <= rings)[0]
+    if not len(cells):
+        cells = np.array([int(np.argmin(np.linalg.norm(hex_centers - np.asarray(target_xy, float), axis=1)))])
+    return cells
+
+
+def option_cells_probabilities(ball_xy, mates: list[dict], defenders: list[dict], model: PassModel, hex_centers: np.ndarray,
+                               q_all: np.ndarray, r_all: np.ndarray, R: float, rings: int) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """
+    For every team-mate: the cells around where their run reaches when the ball arrives, and the completion
+    probability of a pass to each cell's centre (one batch; the same attackers and defenders as
+    ``option_probabilities``).
+    """
+    ball = np.asarray(ball_xy, float)
+    cells = [run_cells(projected_target(ball, m["pos"], m.get("vel", np.zeros(2)), model.flight), hex_centers, q_all, r_all, R, rings)
+             for m in mates]
+    if not cells:
+        return [], []
+    targets = hex_centers[np.concatenate(cells)]
+    p = probability_from_arrays(pass_arrays_one_moment(ball, targets, mates, defenders, model), model)["p_complete"]
+    split = np.cumsum([len(c) for c in cells])[:-1]
+    return cells, np.split(np.asarray(p, float), split)
+
+
+def pass_arrays_one_moment(ball_xy, targets: np.ndarray, attackers: list, defenders: list, model: PassModel) -> PassArrays:
+    """
+    ``pass_arrays`` for many passes from one moment (one ball, the same players): identical arrays, but each
+    player's travel times are computed once over every target and waypoint instead of once per pass.
+    """
+    ball, targets = np.asarray(ball_xy, float), np.asarray(targets, float).reshape(-1, 2)
+    max_players = max(1, len(attackers), len(defenders))
+    lengths = np.hypot(*(targets - ball).T)
+    k_max = max(1, int(lengths.max(initial=1.0) // model.step_m))
+    n = len(targets)
+    out = PassArrays(np.zeros((n, k_max)), np.zeros((n, k_max)), np.zeros((n, k_max)), np.full((n, max_players, k_max), _INF),
+                     np.zeros(n), np.full((n, max_players), _INF), np.full((n, max_players), _INF), np.zeros(n, bool))
+    paths = []
+    for i, (target, length) in enumerate(zip(targets, lengths, strict=True)):
+        out.t_target[i] = float(model.flight.time_to(float(length)))
+        k = min(int(length // model.step_m), k_max)
+        if k < 1 or length < 1e-6:
+            paths.append(np.zeros((0, 2)))
+            continue
+        s = (np.arange(k) + 0.5) * (length / k)
+        edges = np.concatenate([[0.0], (np.arange(1, k) * (length / k)), [length]])
+        out.t_ball[i, :k] = model.flight.waypoint_times(float(length), s)
+        out.dt_ball[i, :k] = np.diff(model.flight.waypoint_times(float(length), edges))
+        out.frac[i, :k] = s / length
+        paths.append(ball + np.outer(s, (target - ball) / length))
+    if attackers:
+        out.tau_att[:, :len(attackers)] = _kinematic(attackers, targets, model).T
+    if defenders:
+        out.tau_def[:, :len(defenders)] = _kinematic(defenders, targets, model).T
+        sizes = [len(x) for x in paths]
+        if sum(sizes):
+            tau = _kinematic(defenders, np.concatenate(paths), model)
+            for i, (lo, k) in enumerate(zip(np.cumsum([0, *sizes[:-1]]), sizes, strict=True)):
+                if k:
+                    out.tau_def_path[i, :len(defenders), :k] = tau[:, lo:lo + k]
+    return out
+
+
+def decision_quality_cells(p_cells: list[np.ndarray], value_cells: list[np.ndarray], chosen: int) -> dict:
+    """
+    Each option's expected value is its best cell (probability × value); the score is the chosen option's over
+    the best option's, 0 to 1.
+    """
+    ev = np.array([float(np.max(np.asarray(p, float) * np.asarray(v, float))) if len(p) else 0.0
+                   for p, v in zip(p_cells, value_cells, strict=True)])
     if not len(ev) or not (0 <= chosen < len(ev)):
         return {"dq": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "options": int(len(ev))}
     best = float(ev.max())

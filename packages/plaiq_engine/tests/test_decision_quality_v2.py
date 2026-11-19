@@ -74,3 +74,64 @@ def test_projected_scores_the_choice_against_the_best_expected_value():
     safe = decision_quality_projected(p, v, 2)
     assert safe["dq"] == pytest.approx(0.0095 / 0.030)
     assert np.isnan(decision_quality_projected(p, v, 5)["dq"])
+
+
+# -- hex-cell candidates: the best ball into each run, on Plaiq's grid -------------------------------------------
+
+def _grid():
+    from plaiq_engine.analytics.hex_analytics import cartesian_to_hex
+    from plaiq_engine.analytics.pitch_control import build_pitch_hex_grid
+    from plaiq_engine.match_analysis import HEX_RADIUS
+    h = build_pitch_hex_grid(HEX_RADIUS)
+    q, r = (np.asarray(a, int) for a in cartesian_to_hex(h[:, 0], h[:, 1], HEX_RADIUS))
+    return h, q, r, HEX_RADIUS
+
+
+def test_run_cells_are_the_rings_around_the_run():
+    from plaiq_engine.analytics.decision_quality_v2 import run_cells
+    h, q, r, R = _grid()
+    assert [len(run_cells((10.0, 5.0), h, q, r, R, k)) for k in (0, 1, 2)] == [1, 7, 19]
+    c0 = run_cells((10.0, 5.0), h, q, r, R, 0)
+    assert np.linalg.norm(h[c0[0]] - (10.0, 5.0)) <= R
+    corner = h[np.argmax(h[:, 0] + h[:, 1])]
+    assert 1 <= len(run_cells(corner, h, q, r, R, 2)) < 19  # the cells off the pitch drop out
+    assert len(run_cells((200.0, 0.0), h, q, r, R, 2)) == 1  # off the grid: the nearest cell
+
+
+def test_cell_probabilities_are_the_pass_completion_probability_at_each_cell():
+    from plaiq_engine.analytics.decision_quality_v2 import option_cells_probabilities
+    from plaiq_engine.analytics.pass_probability import PassModel, pass_probability
+    h, q, r, R = _grid()
+    m = PassModel()
+    ball = np.array([0.0, 0.0])
+    mates = _players((20.0, 0.0), (10.0, 15.0), v=(2.0, 0.0))
+    defenders = _players((10.0, 1.0), (30.0, 20.0))
+    cells, p = option_cells_probabilities(ball, mates, defenders, m, h, q, r, R, rings=1)
+    assert [len(c) for c in cells] == [7, 7] and [len(x) for x in p] == [7, 7]
+    for i in range(2):
+        for c, pc in zip(cells[i], p[i], strict=True):
+            assert pc == pytest.approx(pass_probability(ball, h[c], mates, defenders, m)["p_complete"], abs=1e-9)
+    assert p[0].max() < p[1].max()  # the defender stands in the first lane
+
+
+def test_each_option_is_its_best_cell():
+    from plaiq_engine.analytics.decision_quality_v2 import decision_quality_cells
+    p = [np.array([0.9, 0.5]), np.array([0.4, 0.8, 0.6])]
+    v = [np.array([0.02, 0.05]), np.array([0.03, 0.04, 0.02])]  # best cells: 0.025 and 0.032
+    assert decision_quality_cells(p, v, 1)["dq"] == pytest.approx(1.0)
+    assert decision_quality_cells(p, v, 0)["dq"] == pytest.approx(0.025 / 0.032)
+    assert np.isnan(decision_quality_cells(p, v, 3)["dq"])
+
+
+def test_one_moment_arrays_equal_the_shipped_pass_arrays():
+    from plaiq_engine.analytics.decision_quality_v2 import pass_arrays_one_moment
+    from plaiq_engine.analytics.pass_probability import PassModel, pass_arrays
+    m = PassModel()
+    ball = np.array([-5.0, 3.0])
+    mates = _players((20.0, 0.0), (10.0, 15.0), (-20.0, -10.0), v=(2.0, -1.0))
+    defenders = _players((10.0, 1.0), (30.0, 20.0), (0.0, 0.0))
+    targets = np.array([[20.0, 0.0], [12.0, 16.0], [-5.2, 3.1], [40.0, -30.0]])
+    batch = [{"ball": ball, "target": t, "attackers": mates, "defenders": defenders, "high": False} for t in targets]
+    a, b = pass_arrays(batch, m, max_players=3), pass_arrays_one_moment(ball, targets, mates, defenders, m)
+    for field in a.__dataclass_fields__:
+        np.testing.assert_array_equal(getattr(a, field), getattr(b, field), err_msg=field)

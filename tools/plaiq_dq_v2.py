@@ -10,7 +10,9 @@ team-mate's pass into their run, completion probability × value, chosen over be
 probability alone (``p_complete``) is reported beside them as a reference. Its SkillCorner parameters were
 fitted on the even matches, so for the two candidates the odd matches are the held-out half. Since the
 founder adopted projected beside v1 (1.0.0, 19 November 2026), ``projected`` is read from what ships,
-``MatchAnalysis.decision_quality_v2``. Plus:
+``MatchAnalysis.decision_quality_v2``. The hex-cell candidates (19 November 2026) are measured beside it:
+``hex_r0``, ``hex_r1`` and ``hex_r2``, each team-mate's option the best cell within 0, 1 or 2 rings of where
+their run reaches when the ball arrives (``decision_quality_cells``). Plus:
 
 - **consistency:** the band shares of completed and failed passes (judging the intention, failed passes
   should not look better than completed ones);
@@ -34,10 +36,17 @@ import numpy as np
 import pandas as pd
 from matrix_engine.sample_data import repo_root
 from plaiq_engine.analytics.decision_quality_v2 import (
+    decision_quality_cells,
     decision_quality_risk,
     decision_quality_v2,
+    option_cells_probabilities,
+    option_value,
+    ring_distance,
+    run_cells,
 )
+from plaiq_engine.analytics.hex_analytics import cartesian_to_hex
 from plaiq_engine.analytics.pass_option_value import _build_defender_data
+from plaiq_engine.analytics.pass_probability import parameters_for, projected_target
 from plaiq_engine.match_analysis import MatchAnalysis
 from scipy.spatial import cKDTree
 
@@ -46,7 +55,8 @@ from context_reference_set import _load
 from plaiq_dq_replay import BANDS, band_of
 from plaiq_references import auc, spearman
 
-SCORES = ("v1", "v1_risk", "projected", "p_complete", "v2", "v2_xt")
+SCORES = ("v1", "v1_risk", "projected", "hex_r0", "hex_r1", "hex_r2", "p_complete", "v2", "v2_xt")
+RINGS = (0, 1, 2)
 
 
 def _outside(path: Path) -> bool:
@@ -70,6 +80,8 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
     tree = cKDTree(ma.hex_centers)
     pc = ma.pass_completion.set_index("event_idx")
     d2 = ma.decision_quality_v2.set_index("event_idx")
+    model = parameters_for(m.provider).model
+    q_all, r_all = (np.asarray(a, int) for a in cartesian_to_hex(ma.hex_centers[:, 0], ma.hex_centers[:, 1], ma.R))
     meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
     home = meta["home_team"]["id"]
     ev = pd.read_csv(match_dir / f"{match_dir.name}_dynamic_events.csv", low_memory=False,
@@ -108,6 +120,7 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
         p_chosen = float(pc.at[e.name, "pass_completion_probability"]) if e.name in pc.index else np.nan
         proj = {"dq": d2.at[e.name, "dq_v2"], "p_chosen": d2.at[e.name, "p_chosen"], "best_is_chosen": d2.at[e.name, "best_is_chosen"]} \
             if e.name in d2.index else {"dq": np.nan}
+        cells = _hex(ma, e.name, model, q_all, r_all) if np.isfinite(proj["dq"]) else {}
         o = by_pass.get(r.event_id)
         sc_dq = chose = np.nan
         if o is not None and o["targeted"].any() and o["evx"].max() > 0:
@@ -115,10 +128,40 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
             sc_dq, chose = float(t / o["evx"].max()), bool(t >= o["evx"].max() - 1e-12)
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "v1": float(v1), "v2": v2["dq"], "v2_xt": v2x["dq"],
                      "p_complete": p_chosen, "v1_risk": decision_quality_risk(float(v1), p_chosen), "projected": proj["dq"],
+                     **{f"hex_r{k}": cells.get(f"hex_r{k}", np.nan) for k in RINGS}, "hex_r2_cells": cells.get("cells", np.nan),
                      "p_chosen_projected": proj.get("p_chosen", np.nan), "projected_best_is_chosen": proj.get("best_is_chosen"),
                      "availability": v2["availability_chosen"], "sc_dq": sc_dq, "sc_chose_best": chose, "lead_to_shot": bool(r.lead_to_shot),
                      "lead_to_goal": bool(r.lead_to_goal), "pressure": r.overall_pressure_end if isinstance(r.overall_pressure_end, str) else None})
     return pd.DataFrame(rows)
+
+
+def _hex(ma, idx, model, q_all, r_all) -> dict:
+    """The hex-cell candidates for one pass, from the moment the shipped score reads (rings 0, 1 and 2 at once)."""
+    m = ma._pass_moment(ma.events.loc[idx])
+    if isinstance(m, str):
+        return {}
+    names, mates = [], []
+    for j in m["mates_jerseys"]:
+        d = _build_defender_data(m["own"], m["team"], [j], m["profiles"])
+        if d:
+            names.append(str(j))
+            mates.append(d[0])
+    if m["target"] not in names:
+        return {}
+    h = ma.hex_centers
+    cells, p = option_cells_probabilities(m["ball"], mates, m["defenders"], model, h, q_all, r_all, ma.R, rings=max(RINGS))
+    xt = ma.xt_home if m["team"] == "Home" else ma.xt_away
+    xb = float(ma._xt_at(m["team"], m["ball"])[0])
+    values = [np.array([option_value(m["ball"], h[c], xb, xt[c]) for c in cs]) for cs in cells]
+    centres = [run_cells(projected_target(m["ball"], mate["pos"], mate.get("vel", np.zeros(2)), model.flight), h, q_all, r_all, ma.R, 0)[0]
+               for mate in mates]
+    k = names.index(m["target"])
+    out = {"cells": int(sum(len(c) for c in cells))}
+    for rings in RINGS:
+        keep = [ring_distance(q_all[cs], r_all[cs], q_all[c0], r_all[c0]) <= rings for cs, c0 in zip(cells, centres, strict=True)]
+        out[f"hex_r{rings}"] = decision_quality_cells([pc[w] for pc, w in zip(p, keep, strict=True)],
+                                                      [vc[w] for vc, w in zip(values, keep, strict=True)], k)["dq"]
+    return out
 
 
 def measures(df: pd.DataFrame, s: str) -> dict:

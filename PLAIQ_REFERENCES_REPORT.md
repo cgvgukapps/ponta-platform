@@ -530,3 +530,42 @@ Decision quality version 2 shipped 0 to 1 with no bands. `tools/plaiq_dq_v2_band
 **Recommendation for the founder:** the **top-anchored set (0.45, 0.60, 0.95)**. It is as stable held out as the freely fitted set, keeps optimal as "the best option, within 5%", and puts the lower steps where the shot rate climbs. The meaning set (0.50, 0.75, 0.95) is the simpler one to explain, at the cost of a less reliable step between suboptimal and good.
 
 **Limits:** one provider (SkillCorner's 20 open-data matches) and one outcome (the possession leading to a shot), which credits a pass for what happens after it. The bands describe the score; they do not validate decision quality as a construct. Before display, decide whether version 2's bands reuse version 1's names: with different cut-offs on a different scale, the same names invite merging the two.
+
+## Decision quality version 2 on Plaiq's hex grid: the run-cell candidates (19 November 2026)
+
+**Question:** can version 2 compute on the honeycomb without evaluating every cell? Every cell a team-mate can reach before the ball is not selective: on 150 passes of one match, a median of 1,407 of the pitch's 7,463 cells (1,174 when limited to within 45° of the run). The cells around where each team-mate's run reaches when the ball arrives are: a fixed 7 (one ring) or 19 (two rings) per team-mate. Version 1 offers no hex selection for passes (it scores team-mates where they stand); its kinematic cell selection serves carries only.
+
+**Candidates** (`decision_quality_v2.py`, measured, not adopted; the shipped score stays 1.0.0): each team-mate's option is **the best ball into their run**, the best of the cells within 0, 1 or 2 rings of their run's cell, each worth the completion probability of a pass to the cell's centre times the cell's value (Plaiq's threat at the cell). The chosen option is scored the same way, so placement within the cluster (execution) is not charged to the choice. Ring 0 is the grid alone. `pass_arrays_one_moment` computes the same arrays as `pass_arrays` (a test pins exact equality) with each player's travel times taken once per moment, 4.5 times faster on a match.
+
+**On the same 12,112 SkillCorner passes** (12,095 scored by every version):
+
+| | Version 1 | Shipped (points) | Ring 0 | **Ring 1** | Ring 2 |
+|---|---|---|---|---|---|
+| Option evaluations per pass | | 10 | 10 | **70** | 190 |
+| Rank correlation with the shipped score | | 1 | 0.993 | **0.979** | 0.961 |
+| Optimal share (≥ 0.95): completed / failed | 58% / 89% | 31% / 27% | 31% / 27% | **31% / 30%** | 31% / 31% |
+| Shot, completed passes, AUC | 0.60 | 0.62 | 0.62 | **0.62** | 0.62 |
+| Shot, all passes, AUC | 0.55 | 0.62 | 0.62 | **0.62** | 0.62 |
+| Goal, completed passes, AUC (held-out half) | 0.62 (0.61) | 0.63 (0.57) | 0.64 (0.58) | **0.66 (0.58)** | 0.66 (0.58) |
+| Rank correlation with SkillCorner's analogue | 0.31 | 0.288 | 0.288 | **0.294** | 0.296 |
+| Picks out SkillCorner's best, AUC | 0.60 | 0.577 | 0.578 | **0.581** | 0.582 |
+| Predicts completion, AUC | 0.23 | 0.510 | 0.511 | **0.496** | 0.490 |
+| Passes changing band (0.45 / 0.60 / 0.95) | | | 5% | **9%** | 14% |
+
+**Paired resamples of the 20 matches** (300, difference from the shipped score, 95% interval):
+- **Ring 1:** shot +0.002 [−0.003, +0.009]; goal +0.022 [0.000, +0.054]; SkillCorner analogue +0.006 [+0.002, +0.010]; picks its best +0.004 [+0.002, +0.007]; completion −0.014 [−0.019, −0.009].
+- **Ring 2:** shot +0.002 [−0.007, +0.012]; goal +0.023 [−0.002, +0.049]; analogue +0.008 [+0.002, +0.014]; picks its best +0.006 [+0.001, +0.009]; completion −0.020 [−0.027, −0.013].
+
+**Reading:**
+- **The grid alone changes nothing** (ring 0 against the shipped score: rank correlation 0.993, every measure equal).
+- **The rings are no worse anywhere that matters and slightly closer to the independent reference.** The link to shots is unchanged on both halves. Agreement with SkillCorner's analogue rises a little, outside the resampling noise, though still short of version 1's 0.31. The goal gain sits on the even half (held out: 0.576 against 0.574), so it is not established.
+- **Failed passes gain more than completed ones** (mean +0.017 against +0.007 at ring 1): a hard ball into a run is credited with the best ball into that run, which is the intended split between choice and execution. Failed passes now look like completed ones in the optimal band (30% against 31%), not better, so there is no leniency.
+- **The cost is a small lean towards risk:** completion AUC falls just below 0.5 (0.496 ring 1, 0.490 ring 2), small but outside the noise.
+- **Ring 2 adds little over ring 1** (analogue +0.002) for nearly three times the cells, more lean towards risk and more passes changing band.
+- **The recommended bands hold on ring 1.** Held out, 0.45 / 0.60 / 0.95 gives shots of 2.6%, 4.5%, 7.0%, 9.2% and rises in 99% of match resamples (three seeds: 99.2, 99.5, 99.2%), against 94% on the shipped score. A fit on ring 1's even matches picks 0.45 / 0.75 / 0.95, which holds out less well (79 to 81%). The resample share moves by a few points between seeds.
+
+**Recommendation for the founder:** **ring 1** as decision quality version 2 1.1.0, replacing the point-based 1.0.0 beside version 1, labelled estimated. It puts version 2 on the honeycomb at 7 cells per team-mate, is no worse on any outcome, slightly closer to the reference, and keeps the recommended bands. Passes into space no run is heading for remain outside the option set.
+
+**Note for the AI layer:** a cell on a 1 m² grid is effectively a coordinate. Cells can be stored, aggregated and drawn, but the AI layer should keep receiving zones and player references, never cell indices.
+
+Evidence: `tools/plaiq_dq_v2.py` (columns `hex_r0`, `hex_r1`, `hex_r2`); bands on ring 1 with `tools/plaiq_dq_v2_bands.py` on the same rows.
