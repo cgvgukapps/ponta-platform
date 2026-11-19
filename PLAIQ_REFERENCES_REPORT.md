@@ -495,3 +495,38 @@ Shot rate by band, completed passes, poor → optimal: version 1 1.2%, 1.6%, 5.5
 - **Checked end to end:** `tools/plaiq_dq_v2.py` now reads the shipped property instead of its own copy. On SkillCorner's 20 matches it reproduces the measured run: the same 12,112 passes, the same 12,095 scored, the chosen probabilities identical, scores within 2×10⁻⁷, and every grounding in the output identical to the table above.
 - **Tests:** the synthetic match scores its open-play pass 0 to 1 with the shipped probability; the set piece and the goalkeeper are not scored; the same pass logged as lost scores the same and gets a row; the Data check states per provider and mode.
 - **Not established, unchanged:** the goal link and any bands.
+
+## Candidate bands for decision quality version 2 (19 November 2026)
+
+Decision quality version 2 shipped 0 to 1 with no bands. `tools/plaiq_dq_v2_bands.py` measures candidate cut-off sets on the rows of the run above (12,095 scored SkillCorner passes, 9,909 completed). **Measured, not agreed.**
+
+**Candidates:**
+- **Version 1's cut-offs** (0.55, 0.80, 0.95), as they are: a baseline.
+- **Meaning** (0.50, 0.75, 0.95): under half the best option's expected value is poor, under three-quarters suboptimal, within 5% of the best optimal.
+- **Fitted** (0.45, 0.60, 0.90): a 0.05 grid chosen on the even matches only, maximising the likelihood of the possession leading to a shot (completed passes), every band at least 10% of passes, the rate rising band by band.
+- **Fitted, top anchored** (0.45, 0.60, 0.95): the same with the top cut held at 0.95, so optimal keeps its meaning.
+
+**Held-out half** (the 10 odd matches; nothing was fitted on them). Shot rate per band on completed passes, poor to optimal:
+
+| Candidate | Cut-offs | Shot rate by band | Shares (all passes) | Rises in match resamples | Band AUC, shot |
+|---|---|---|---|---|---|
+| Version 1's cut-offs | 0.55 / 0.80 / 0.95 | 3.2%, 6.3%, 7.6%, 9.3% | 24 / 29 / 17 / 31% | 56% | 0.60 |
+| Meaning | 0.50 / 0.75 / 0.95 | 3.1%, 5.4%, 7.8%, 9.3% | 19 / 27 / 23 / 31% | 80% | 0.60 |
+| Fitted | 0.45 / 0.60 / 0.90 | 2.8%, 4.9%, 6.4%, 9.4% | 16 / 14 / 34 / 36% | 94% | 0.60 |
+| **Fitted, top anchored** | **0.45 / 0.60 / 0.95** | **2.8%, 4.9%, 6.9%, 9.3%** | **16 / 14 / 39 / 31%** | **94%** | **0.60** |
+| *Reference: version 1's bands on version 1* | 0.55 / 0.80 / 0.95 | 1.8%, 1.4%, 5.3%, 8.8% | 6 / 10 / 20 / 64% | 35% | 0.61 |
+
+"Rises in match resamples" is the share of 1,000 resamples of the held-out matches (with replacement) in which the shot rate rises band by band; the Wilson intervals in the output treat passes as independent and overstate precision.
+
+**Reading:**
+- **Every candidate's shot rate rises band by band on both halves.** How reliably differs: the two fitted sets rise in 94% of held-out match resamples, the meaning set in 80%, version 1's cut-offs in 56%. Version 1's own bands on version 1 do not rise on the held-out half (poor 1.8% against suboptimal 1.4%).
+- **The cut-offs barely change the overall ranking** (band AUC 0.60 for all): they differ in where the steps are, not in how much signal there is.
+- **Where the steps are:** the shot rate climbs from about 0 below 0.2 to about 5% at 0.5 to 0.6, then flattens from about 0.7 (7 to 10%). The fitted lower cuts (0.45, 0.60) sit on the climb; above 0.6 the data separates little except the best option itself.
+- **No failed-pass leniency in any candidate:** failed passes fall into the bands much as completed ones do (top anchored, held out: optimal 29% of failed against 31% of completed; version 1 on version 1: 88% against 59%).
+- **The closest held-out steps are poor to suboptimal** (2.8% [1.9, 4.2] against 4.9% [3.5, 6.8] for the top-anchored set).
+- **SkillCorner's analogue agrees weakly with any banding** (quadratic-weighted kappa 0.17 to 0.20 at the same cut-offs; 0.14 for version 1), as the rank correlation of 0.29 led us to expect; the share of passes where SkillCorner rates the chosen option its best rises band by band in every candidate (top anchored, held out: 26%, 35%, 35%, 45%).
+- **Goals do not separate** on the held-out half (2, 6, 9 and 14 goals across the top-anchored bands); goals are not evidence for any set.
+
+**Recommendation for the founder:** the **top-anchored set (0.45, 0.60, 0.95)**. It is as stable held out as the freely fitted set, keeps optimal as "the best option, within 5%", and puts the lower steps where the shot rate climbs. The meaning set (0.50, 0.75, 0.95) is the simpler one to explain, at the cost of a less reliable step between suboptimal and good.
+
+**Limits:** one provider (SkillCorner's 20 open-data matches) and one outcome (the possession leading to a shot), which credits a pass for what happens after it. The bands describe the score; they do not validate decision quality as a construct. Before display, decide whether version 2's bands reuse version 1's names: with different cut-offs on a different scale, the same names invite merging the two.
