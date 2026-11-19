@@ -62,6 +62,7 @@ METRICS: dict[str, tuple[str, str]] = {
     "pass_option_value": ("decisions", "Pass option value"),
     "decision_quality": ("decisions", "Decision quality"),
     "pass_completion": ("decisions", "Pass completion probability"),
+    "decision_quality_v2": ("decisions", "Decision quality v2 (expected value)"),
     "event_delta_v": ("value", "Event value change (ΔV)"),
     "shot_quality": ("value", "Shot quality"),
     "physical_summary": ("physical", "Physical summary (distance, speed)"),
@@ -264,7 +265,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
         why = "Wearable positions cover one team only, with no ball and no opposition."
         for mid in ("pressure_1v1", "pressure_zonal", "control_zones"):
             put(mid, "blocked", why, unlock=add_tracking)
-        for mid in ("movement_value", "pass_option_value", "decision_quality", "pass_completion", "event_delta_v"):
+        for mid in ("movement_value", "pass_option_value", "decision_quality", "pass_completion", "decision_quality_v2", "event_delta_v"):
             put(mid, "blocked", "Needs the ball, both teams and an event feed.", unlock=add_tracking)
         put("shot_quality", "blocked", "No event feed.", unlock="Add an event feed that includes shots.")
         put("physical_summary", "full", "Distance and speed from the wearable positions.",
@@ -285,6 +286,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
             "Event-only estimate: a separate confidence class, shown as a range and never on the same band as tracked scores.",
             unlock=add_tracking)
         put("pass_completion", "blocked", "Needs every player's position and speed at the pass.", unlock=add_tracking)
+        put("decision_quality_v2", "blocked", "Needs every player's position and speed at the pass.", unlock=add_tracking)
         put("event_delta_v", "full" if inputs.has_shot_events else "degraded",
             "Event start and end locations are in the feed." if inputs.has_shot_events else "No shot events, so the value of shots is missing.")
         put("shot_quality", "full" if inputs.has_shot_events else "blocked",
@@ -310,7 +312,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
             put(mid, pos_state, pos_reason, measure=measure, unlock=pos_unlock)
 
         if not inputs.has_events:
-            for mid in ("pass_option_value", "decision_quality", "pass_completion", "event_delta_v"):
+            for mid in ("pass_option_value", "decision_quality", "pass_completion", "decision_quality_v2", "event_delta_v"):
                 put(mid, "blocked", "No event feed, so no passes or carries to score.", unlock="Add the event feed for this match.")
             put("shot_quality", "blocked", "No event feed.", unlock="Add an event feed that includes shots.")
         else:
@@ -331,6 +333,19 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
                     "Fitted on another source's tracking, not this provider's: it ranks passes, but its probabilities may be off by "
                     "several points. Passes without a logged target get no probability.",
                     measure=measure, unlock="Fit the pass completion parameters on this provider's matches.")
+            # Decision quality v2 weighs every option by the pass completion probability, so it inherits that
+            # metric's fit, and like v1 it scores only the passes the event feed covers.
+            if inputs.provider.lower() not in PASS_COMPLETION_FITTED_PROVIDERS:
+                put("decision_quality_v2", "degraded",
+                    "Its risk term, the pass completion probability, is fitted on another source's tracking. Passes without a "
+                    "logged target, including most failed passes, get no score.",
+                    measure=measure, unlock="Fit the pass completion parameters on this provider's matches.")
+            elif inputs.events_derived_from_tracking:
+                put("decision_quality_v2", "degraded",
+                    "Events are derived from tracking, so only the decisions that feed covers are scored.",
+                    unlock="Add a logged event feed for this match.")
+            else:
+                put("decision_quality_v2", pos_state, pos_reason, measure=measure, unlock=pos_unlock)
             put("event_delta_v", "full" if inputs.has_shot_events else "degraded",
                 "Event start and end locations are in the feed." if inputs.has_shot_events else "No shot events, so the value of shots is missing.",
                 unlock=None if inputs.has_shot_events else "Add an event feed that includes shots.")

@@ -44,10 +44,15 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: source, score and red-card difference for the actor's team). Earlier columns are unchanged.
 #: 1.2 (19 November 2026): adds the pass completion probability (``MatchAnalysis.pass_completion``,
 #: adopted by the founder 19 November 2026), its status and its parameter set. Earlier columns are unchanged.
-SCHEMA_VERSION = "1.2"
+#: 1.3 (19 November 2026): adds decision quality v2, projected (``MatchAnalysis.decision_quality_v2``, adopted
+#: beside v1 by the founder 19 November 2026): its score (0 to 1, no bands), status, best option and version.
+#: A failed pass that v2 scores now gets a row even when v1 has no failed-pass score. Earlier columns are unchanged.
+SCHEMA_VERSION = "1.3"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
+#: The label every decision quality v2 score carries (measured against outcomes and a provider's analogue, not analysts).
+DQ_V2_LABEL = "estimated"
 
 #: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types.
 BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "optimal"), (0.80, "good"), (0.55, "suboptimal"))
@@ -68,6 +73,7 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "dq_score", "dq_band", "chosen_option_pov", "best_option_player_ref", "best_option_pov",
     "xt_delta", "movement_value", "opposition_pressure", "pitch_zone", "mode",
     "pass_completion_probability", "pass_completion_status", "pass_completion_parameters",
+    "dq_v2_score", "dq_v2_status", "dq_v2_best_option_ref", "dq_v2_version",
     "not_scored", "not_scored_reason",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
@@ -242,6 +248,8 @@ class SemanticBuilder:
         pov_by_event = {k: g for k, g in pov.groupby("event_idx", sort=False)}
         mv = a.movement_value
         pc = a.pass_completion.set_index("event_idx")
+        dq2 = a.decision_quality_v2.set_index("event_idx")
+        dq2_scored = set(dq2.index[dq2["dq_v2"].notna()])
         set_piece_frames = self._set_piece_frames()
         rows: list[dict] = []
 
@@ -257,7 +265,8 @@ class SemanticBuilder:
                 hit = g.loc[(g["team"].str.lower() == team) & (g["jersey"].astype(str) == actor.split("_", 1)[1])]
                 actor_pov = hit.iloc[0] if len(hit) else None
 
-            if etype in ("PASS", "CARRY") or (etype == "BALL LOST" and actor_pov is not None and pd.notna(actor_pov.get("decision_quality_failed"))):
+            v1_failed = actor_pov is not None and pd.notna(actor_pov.get("decision_quality_failed"))
+            if etype in ("PASS", "CARRY") or (etype == "BALL LOST" and (v1_failed or idx in dq2_scored)):
                 kind = "pass" if etype in ("PASS", "BALL LOST") else "carry"
                 row = self._row_base(idx, e, team, actor, kind)
                 outcome = "lost" if etype == "BALL LOST" else "completed"
@@ -298,6 +307,18 @@ class SemanticBuilder:
                         pcp, pcs = round(float(r["pass_completion_probability"]), 4), PASS_COMPLETION_LABEL
                     else:
                         pcs = r["reason"]
+                d2s, d2st, d2best, d2v = None, None, None, None
+                if kind == "pass" and idx in dq2.index:
+                    r2 = dq2.loc[idx]
+                    d2v = r2["version"]
+                    if actor in self.goalkeepers:
+                        d2st = "goalkeeper: the decision model was not designed for goalkeeper distribution"
+                    elif pd.notna(start) and int(start) in set_piece_frames:
+                        d2st = "set piece: the decision model is built for open play"
+                    elif pd.notna(r2["dq_v2"]):
+                        d2s, d2st, d2best = round(float(r2["dq_v2"]), 4), DQ_V2_LABEL, self._ref(team, r2["best_option"])
+                    else:
+                        d2st = r2["reason"]
                 inferred = actor_pov.get("inferred_receiver") if actor_pov is not None else None
                 conf = actor_pov.get("inference_confidence") if actor_pov is not None else None
                 row.update({
@@ -316,6 +337,7 @@ class SemanticBuilder:
                     "opposition_pressure": self._pressure(e, team, actor),
                     "pitch_zone": pitch_zone(float(e.get("Start X", np.nan)), float(e.get("Start Y", np.nan)), team),
                     "pass_completion_probability": pcp, "pass_completion_status": pcs, "pass_completion_parameters": pcset,
+                    "dq_v2_score": d2s, "dq_v2_status": d2st, "dq_v2_best_option_ref": d2best, "dq_v2_version": d2v,
                     "not_scored": not_scored,
                     "not_scored_reason": reason,
                 })
@@ -446,6 +468,8 @@ def nested_record(row: dict) -> dict:
             "not_scored": row["not_scored"], "not_scored_reason": row["not_scored_reason"],
             "pass_completion": {"probability": row.get("pass_completion_probability"), "status": row.get("pass_completion_status"),
                                 "parameters": row.get("pass_completion_parameters")},
+            "decision_quality_v2": {"score": row.get("dq_v2_score"), "status": row.get("dq_v2_status"),
+                                    "best_option_player_ref": row.get("dq_v2_best_option_ref"), "version": row.get("dq_v2_version")},
         },
         "physiological_context": row["physiological_context"],
         "match_context": {

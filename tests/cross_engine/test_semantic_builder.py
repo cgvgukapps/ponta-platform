@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.2").all()  # 1.1: context columns (P1); 1.2: pass completion probability
+    assert sem["schema_version"].eq("1.3").all()  # 1.1: context (P1); 1.2: pass completion; 1.3: decision quality v2
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -197,3 +197,45 @@ def test_pass_completion_providers_agree_across_engines():
     from matrix_engine.parity import PASS_COMPLETION_FITTED_PROVIDERS
     from plaiq_engine.analytics.pass_probability import PARAMETER_SETS
     assert set(PASS_COMPLETION_FITTED_PROVIDERS) == set(PARAMETER_SETS) - {"default"}
+
+
+def test_decision_quality_v2_beside_v1(built):
+    analysis, _, sem = built
+    passes = sem.loc[sem["action_type"] == "pass"].set_index("event_idx")
+    # The open-play pass is scored, 0 to 1, labelled estimated, with no band; v1's columns are untouched.
+    r = passes.loc[2]
+    assert 0.0 <= r["dq_v2_score"] <= 1.0
+    assert r["dq_v2_status"] == "estimated" and r["dq_v2_version"] == "1.0.0"
+    assert r["dq_v2_best_option_ref"].startswith("home_") and r["dq_v2_best_option_ref"] != "home_4"  # never the passer
+    assert r["dq_band"] == dq_band(r["dq_score"])
+    # Not scored where v1 is not: the set piece and the goalkeeper, each with its reason.
+    assert passes.loc[1, "dq_v2_status"].startswith("set piece") and pd.isna(passes.loc[1, "dq_v2_score"])
+    assert passes.loc[4, "dq_v2_status"].startswith("goalkeeper") and pd.isna(passes.loc[4, "dq_v2_score"])
+    assert sem.loc[sem["action_type"] != "pass", "dq_v2_score"].isna().all()
+    # The engine's numbers: the chosen pass's probability is the shipped pass completion probability.
+    d2 = analysis.decision_quality_v2.set_index("event_idx")
+    pc = analysis.pass_completion.set_index("event_idx")
+    assert r["dq_v2_score"] == pytest.approx(d2.at[2, "dq_v2"], abs=1e-4)
+    assert d2.at[2, "p_chosen"] == pytest.approx(pc.at[2, "pass_completion_probability"], abs=1e-12)
+    assert d2.at[2, "dq_v2"] == pytest.approx(d2.at[2, "ev_chosen"] / d2.at[2, "ev_best"])
+    assert bool(d2.at[2, "best_is_chosen"]) == (d2.at[2, "dq_v2"] >= 1.0 - 1e-12)
+    rec = nested_record(passes.reset_index().loc[lambda d: d["event_idx"] == 2].iloc[0].to_dict())
+    assert set(rec["spatial_intelligence"]["decision_quality_v2"]) == {"score", "status", "best_option_player_ref", "version"}
+
+
+def test_decision_quality_v2_ignores_the_outcome():
+    """One formula for completed and failed passes: the same pass, logged as lost, scores the same and gets a row."""
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    ev.loc[2, "Type"] = "BALL LOST"
+    lost = MatchAnalysis(replace(m, events=ev))
+    done = MatchAnalysis(m)
+    assert lost.decision_quality_v2.at[1, "event_idx"] == 2
+    assert lost.decision_quality_v2.at[1, "dq_v2"] == pytest.approx(done.decision_quality_v2.at[1, "dq_v2"], abs=1e-12)
+    parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
+                                   player_dropout=0.0, has_events=True, has_shot_events=False))
+    sem = SemanticBuilder(lost, parity).semantic_events()
+    row = sem.loc[(sem["event_idx"] == 2) & (sem["action_type"] == "pass")]
+    assert len(row) == 1 and row["action_outcome"].iloc[0] == "lost" and row["dq_v2_status"].iloc[0] == "estimated"

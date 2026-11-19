@@ -38,6 +38,12 @@ targeted pitch control's availability:
   and failed passes, the outcome never an input.
 
 ``decision_quality_v2`` (0.1.0) is unchanged.
+
+**1.0.0 adopted beside v1** (founder decision, 19 November 2026): **projected** ships as decision quality
+v2 (``MatchAnalysis.decision_quality_v2``; semantic events schema 1.3), labelled estimated. Its maths is
+0.2.0's, unchanged. It runs **0 to 1** and has **no bands** yet: v1's bands (cut on v1's 0 to 1.5 scale) are
+not applied to it until bands for v2 are measured and agreed. v1 stays the default decision quality.
+``decision_quality_v2`` (0.1.0) and ``decision_quality_risk`` (0.2.0) stay here as measured, not adopted.
 """
 
 from __future__ import annotations
@@ -57,8 +63,9 @@ from plaiq_engine.analytics.pass_probability import (
 )
 
 #: 0.1.0 (19 November 2026): expected value at the pass, measured, not adopted. 0.2.0 (19 November 2026):
-#: adds the two narrower candidates with the pass completion probability as the risk term.
-DQ_V2_VERSION = "0.2.0"
+#: adds the two narrower candidates with the pass completion probability as the risk term. 1.0.0
+#: (19 November 2026): projected adopted beside v1 by the founder, maths unchanged from 0.2.0.
+DQ_V2_VERSION = "1.0.0"
 
 
 def decision_quality_v2(

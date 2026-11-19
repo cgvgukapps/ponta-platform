@@ -129,3 +129,16 @@ def test_pass_completion_is_full_only_where_its_parameters_were_fitted():
     assert pc.state == "degraded" and "another source" in pc.reason and pc.unlock
     assert classify(ParityInputs(provider="statsbomb", mode="event_only", has_events=True, has_freeze_frames=True)).states()["pass_completion"] == "blocked"
     assert classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"))).states()["pass_completion"] == "blocked"
+
+
+def test_decision_quality_v2_follows_pass_completion_and_the_event_feed():
+    sc = classify(SKILLCORNER_OPEN_DATA).metrics["decision_quality_v2"]
+    assert sc.state == "degraded" and "derived from tracking" in sc.reason  # as v1, events derived from tracking
+    logged = classify(ParityInputs(provider="skillcorner", mode="full_tracking", sample_rate_hz=10.0, teams_tracked=("away", "home"),
+                                   player_dropout=0.0, has_events=True, has_shot_events=True))
+    assert logged.states()["decision_quality_v2"] == "full"
+    metrica = classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"),
+                                    player_dropout=0.0, has_events=True, has_shot_events=True)).metrics["decision_quality_v2"]
+    assert metrica.state == "degraded" and "pass completion probability" in metrica.reason and metrica.unlock
+    assert classify(ParityInputs(provider="statsbomb", mode="event_only", has_events=True, has_freeze_frames=True)).states()["decision_quality_v2"] == "blocked"
+    assert classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"))).states()["decision_quality_v2"] == "blocked"

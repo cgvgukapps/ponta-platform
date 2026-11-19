@@ -25,7 +25,14 @@ import numpy as np
 import pandas as pd
 from matrix_engine.ingestion.metrica_velocities import calc_player_velocities
 from matrix_engine.match import NormalisedMatch, to_wide_frames
+from scipy.spatial import cKDTree
 
+from plaiq_engine.analytics.decision_quality_v2 import (
+    DQ_V2_VERSION,
+    decision_quality_projected,
+    option_probabilities,
+    option_value,
+)
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.analytics.hex_analytics import (
     assign_all_players,
@@ -197,6 +204,40 @@ class MatchAnalysis:
         """The scored alternatives behind each decision."""
         return self._pov[1]
 
+    def _pass_moment(self, e: pd.Series) -> dict | str:
+        """
+        The ball and players at the moment of one pass, as the pass completion probability takes them, or the
+        reason there is none. Shared by ``pass_completion`` and ``decision_quality_v2`` so both read the same moment.
+        """
+        team = str(e.get("Team", "")).capitalize()
+        own, opp = (self.home, self.away) if team == "Home" else (self.away, self.home)
+        jerseys, ojer = (self.home_jerseys, self.away_jerseys) if team == "Home" else (self.away_jerseys, self.home_jerseys)
+        prof, oprof = (self.profiles_home, self.profiles_away) if team == "Home" else (self.profiles_away, self.profiles_home)
+        passer, target = clean_jersey(e.get("From")), clean_jersey(e.get("To"))
+        start = e.get("Start Frame")
+        if not target:
+            return "no logged target for this pass"
+        if pd.isna(start) or int(start) not in own.index:
+            return "no tracking at the pass"
+        f = int(start)
+        # The ball where it is tracked, else at the passer's feet. Never the event's coordinates, which are
+        # not always in the tracking's frame (Metrica CSV second halves, PLAIQ_REFERENCES_REPORT.md).
+        ball = np.array([self.away.at[f, "ball_x"], self.away.at[f, "ball_y"]], float) if "ball_x" in self.away.columns else np.full(2, np.nan)
+        if not np.isfinite(ball).all() and f"{team}_{passer}_x" in own.columns:
+            ball = np.array([own.at[f, f"{team}_{passer}_x"], own.at[f, f"{team}_{passer}_y"]], float)
+        if not np.isfinite(ball).all():
+            return "neither the ball nor the passer is tracked at the pass"
+        col = f"{team}_{target}"
+        rec = np.array([own.at[f, f"{col}_x"], own.at[f, f"{col}_y"]], float) if f"{col}_x" in own.columns else np.full(2, np.nan)
+        if not np.isfinite(rec).all():
+            return "the target is not tracked at the pass"
+        vel = np.array([own.at[f, f"{col}_vx"], own.at[f, f"{col}_vy"]], float) if f"{col}_vx" in own.columns else np.zeros(2)
+        vel = np.where(np.isfinite(vel), vel, 0.0)
+        opp_team = "Away" if team == "Home" else "Home"
+        return {"frame": f, "team": team, "passer": passer, "target": target, "ball": ball, "receiver": rec, "velocity": vel,
+                "own": own.loc[f], "mates_jerseys": [j for j in jerseys if str(j) != passer], "profiles": prof,
+                "defenders": _build_defender_data(opp.loc[f], opp_team, ojer, oprof)}
+
     @cached_property
     def pass_completion(self) -> pd.DataFrame:
         """
@@ -215,42 +256,18 @@ class MatchAnalysis:
         for idx, e in self.events.iterrows():
             if str(e.get("Type", "")).upper() not in ("PASS", "BALL LOST"):
                 continue
-            team = str(e.get("Team", "")).capitalize()
-            if team not in ("Home", "Away"):
+            if str(e.get("Team", "")).capitalize() not in ("Home", "Away"):
                 continue
             row = {"event_idx": idx, "pass_completion_probability": np.nan, "p_survive": np.nan, "share_at_target": np.nan,
                    "parameter_set": params.name, "reason": None}
             rows.append(row)
-            own, opp = (self.home, self.away) if team == "Home" else (self.away, self.home)
-            jerseys, ojer = (self.home_jerseys, self.away_jerseys) if team == "Home" else (self.away_jerseys, self.home_jerseys)
-            prof, oprof = (self.profiles_home, self.profiles_away) if team == "Home" else (self.profiles_away, self.profiles_home)
-            passer, target = clean_jersey(e.get("From")), clean_jersey(e.get("To"))
-            start = e.get("Start Frame")
-            if not target:
-                row["reason"] = "no logged target for this pass"
+            m = self._pass_moment(e)
+            if isinstance(m, str):
+                row["reason"] = m
                 continue
-            if pd.isna(start) or int(start) not in own.index:
-                row["reason"] = "no tracking at the pass"
-                continue
-            f = int(start)
-            # The ball where it is tracked, else at the passer's feet. Never the event's coordinates, which are
-            # not always in the tracking's frame (Metrica CSV second halves, PLAIQ_REFERENCES_REPORT.md).
-            ball = np.array([self.away.at[f, "ball_x"], self.away.at[f, "ball_y"]], float) if "ball_x" in self.away.columns else np.full(2, np.nan)
-            if not np.isfinite(ball).all() and f"{team}_{passer}_x" in own.columns:
-                ball = np.array([own.at[f, f"{team}_{passer}_x"], own.at[f, f"{team}_{passer}_y"]], float)
-            if not np.isfinite(ball).all():
-                row["reason"] = "neither the ball nor the passer is tracked at the pass"
-                continue
-            col = f"{team}_{target}"
-            rec = np.array([own.at[f, f"{col}_x"], own.at[f, f"{col}_y"]], float) if f"{col}_x" in own.columns else np.full(2, np.nan)
-            if not np.isfinite(rec).all():
-                row["reason"] = "the target is not tracked at the pass"
-                continue
-            vel = np.array([own.at[f, f"{col}_vx"], own.at[f, f"{col}_vy"]], float) if f"{col}_vx" in own.columns else np.zeros(2)
-            vel = np.where(np.isfinite(vel), vel, 0.0)
-            batch.append({"ball": ball, "target": projected_target(ball, rec, vel, params.model.flight),
-                          "attackers": _build_defender_data(own.loc[f], team, [j for j in jerseys if str(j) != passer], prof),
-                          "defenders": _build_defender_data(opp.loc[f], "Away" if team == "Home" else "Home", ojer, oprof), "high": False})
+            batch.append({"ball": m["ball"], "target": projected_target(m["ball"], m["receiver"], m["velocity"], params.model.flight),
+                          "attackers": _build_defender_data(m["own"], m["team"], m["mates_jerseys"], m["profiles"]),
+                          "defenders": m["defenders"], "high": False})
             where.append(row)
         if batch:
             n = max(1, max(max(len(p["attackers"]), len(p["defenders"])) for p in batch))
@@ -258,6 +275,62 @@ class MatchAnalysis:
             for i, row in enumerate(where):
                 row["pass_completion_probability"] = float(r["p_complete"][i])
                 row["p_survive"], row["share_at_target"] = float(r["p_survive"][i]), float(r["share_at_target"][i])
+        return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
+
+    @cached_property
+    def _hex_tree(self) -> cKDTree:
+        return cKDTree(self.hex_centers)
+
+    def _xt_at(self, team: str, points) -> np.ndarray:
+        """Plaiq's threat for ``team`` (``Home`` or ``Away``) at each point (nearest hexagon)."""
+        surface = self.xt_home if team == "Home" else self.xt_away
+        return surface[self._hex_tree.query(np.asarray(points, float).reshape(-1, 2))[1]]
+
+    @cached_property
+    def decision_quality_v2(self) -> pd.DataFrame:
+        """
+        Decision quality v2, projected (``analytics/decision_quality_v2.py``, adopted beside v1 19 November 2026).
+
+        One row per ``PASS`` and ``BALL LOST`` event that ``pass_completion`` covers. At the moment of the pass
+        every team-mate (not the passer) is an option: a pass into their run (``projected_target``), worth its
+        completion probability times its value there (``option_value``). The score is the chosen option's
+        expected value over the best one's, **0 to 1** (1.0: the best pass on offer was chosen); it has no bands
+        yet. The chosen option is the logged target, so completed and failed passes take one formula and the
+        outcome is never an input. A pass without a completion probability gets no score and the same reason.
+        v1 (``event_pov``) is unchanged and stays the default. Labelled estimated.
+        """
+        params = parameters_for(self.match.provider)
+        cols = ["event_idx", "dq_v2", "ev_chosen", "ev_best", "p_chosen", "best_option", "best_is_chosen", "options",
+                "version", "parameter_set", "reason"]
+        pc = self.pass_completion.set_index("event_idx")
+        rows = []
+        for idx, r in pc.iterrows():
+            row = {"event_idx": idx, "dq_v2": np.nan, "ev_chosen": np.nan, "ev_best": np.nan, "p_chosen": np.nan, "best_option": None,
+                   "best_is_chosen": None, "options": 0, "version": DQ_V2_VERSION, "parameter_set": r["parameter_set"], "reason": None}
+            rows.append(row)
+            if pd.isna(r["pass_completion_probability"]):
+                row["reason"] = r["reason"]
+                continue
+            m = self._pass_moment(self.events.loc[idx])
+            names, mates = [], []
+            for j in m["mates_jerseys"]:
+                d = _build_defender_data(m["own"], m["team"], [j], m["profiles"])
+                if d:
+                    names.append(str(j))
+                    mates.append(d[0])
+            if m["target"] not in names:
+                row["reason"] = "the target is not tracked at the pass"
+                continue
+            targets, p = option_probabilities(m["ball"], mates, m["defenders"], params.model)
+            xt_ball = float(self._xt_at(m["team"], m["ball"])[0])
+            value = np.array([option_value(m["ball"], t, xt_ball, x) for t, x in zip(targets, self._xt_at(m["team"], targets), strict=True)])
+            k = names.index(m["target"])
+            out = decision_quality_projected(p, value, k)
+            row.update({"ev_chosen": out["ev_chosen"], "ev_best": out["ev_best"], "p_chosen": float(p[k]), "options": out["options"]})
+            if not np.isfinite(out["dq"]):
+                row["reason"] = "no option on offer has any value"
+                continue
+            row.update({"dq_v2": out["dq"], "best_option": names[int(np.argmax(p * value))], "best_is_chosen": out["best_is_chosen"]})
         return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
 
     # -- per-frame surfaces (computed on demand) ------------------------------------------

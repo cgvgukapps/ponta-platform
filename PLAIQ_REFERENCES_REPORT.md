@@ -483,3 +483,15 @@ Shot rate by band, completed passes, poor → optimal: version 1 1.2%, 1.6%, 5.5
   - and it needs a logged target, as pass completion does (Metrica logs none for a failed pass).
 
 **Not adopted; version 1 stays the default** (engine governance). Projected is a candidate for the founder: decision quality version 2 (0.2.0, projected), beside version 1 and labelled estimated. If adopted, failed-pass decision quality could be reported for the first time, from the same formula.
+
+## Decision quality version 2 adopted (19 November 2026)
+
+**Founder decision:** the projected candidate ships as decision quality version 2 (`decision_quality_v2` 1.0.0, the 0.2.0 maths unchanged), beside version 1, labelled estimated. Version 1 stays the default (`dq_score`, `dq_band`).
+
+- **Engine:** `MatchAnalysis.decision_quality_v2`, one row per `PASS` and `BALL LOST` event that `pass_completion` covers: the score, the chosen and best expected values, the chosen pass's probability, the best option, the version and the parameter set, or the reason there is no score. Both properties read one shared moment of the pass (`_pass_moment`), so the chosen pass's probability is the shipped pass completion probability.
+- **Semantic events, schema 1.3:** `dq_v2_score`, `dq_v2_status` (`estimated`, or the reason), `dq_v2_best_option_ref`, `dq_v2_version`; nested under `spatial_intelligence.decision_quality_v2`. Goalkeepers and set pieces are not scored, as in version 1. A failed pass that version 2 scores now gets a row even where version 1 has no failed-pass score.
+- **Scale:** 0 to 1, no bands. Version 1's bands are cut on its 0 to 1.5 scale and are not applied; bands for version 2 wait until they are measured and agreed.
+- **Data check:** a 14th metric, `decision_quality_v2`. It follows pass completion (Degraded on the default parameter set) and, like version 1, is Degraded where the events are derived from tracking; Blocked without tracking or events.
+- **Checked end to end:** `tools/plaiq_dq_v2.py` now reads the shipped property instead of its own copy. On SkillCorner's 20 matches it reproduces the measured run: the same 12,112 passes, the same 12,095 scored, the chosen probabilities identical, scores within 2×10⁻⁷, and every grounding in the output identical to the table above.
+- **Tests:** the synthetic match scores its open-play pass 0 to 1 with the shipped probability; the set piece and the goalkeeper are not scored; the same pass logged as lost scores the same and gets a row; the Data check states per provider and mode.
+- **Not established, unchanged:** the goal link and any bands.
