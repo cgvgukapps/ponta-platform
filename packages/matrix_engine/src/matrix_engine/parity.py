@@ -46,6 +46,11 @@ LOW_RATE_HZ = 10.0
 #: Above this share of missing player observations, position-based metrics are Degraded.
 MAX_PLAYER_DROPOUT = 0.10
 
+#: Providers with a pass completion parameter set fitted on their own data. Mirrors
+#: ``plaiq_engine.analytics.pass_probability.PARAMETER_SETS`` (Matrix does not import Plaiq; a
+#: cross-engine test keeps the two in step). Others use the default set fitted on another source.
+PASS_COMPLETION_FITTED_PROVIDERS: tuple[str, ...] = ("skillcorner",)
+
 #: Metric id -> (family, label). Order is the display order.
 METRICS: dict[str, tuple[str, str]] = {
     "hex_grid": ("spatial", "Hexagonal analysis grid"),
@@ -56,6 +61,7 @@ METRICS: dict[str, tuple[str, str]] = {
     "movement_value": ("movement", "Off-ball movement value"),
     "pass_option_value": ("decisions", "Pass option value"),
     "decision_quality": ("decisions", "Decision quality"),
+    "pass_completion": ("decisions", "Pass completion probability"),
     "event_delta_v": ("value", "Event value change (ΔV)"),
     "shot_quality": ("value", "Shot quality"),
     "physical_summary": ("physical", "Physical summary (distance, speed)"),
@@ -258,7 +264,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
         why = "Wearable positions cover one team only, with no ball and no opposition."
         for mid in ("pressure_1v1", "pressure_zonal", "control_zones"):
             put(mid, "blocked", why, unlock=add_tracking)
-        for mid in ("movement_value", "pass_option_value", "decision_quality", "event_delta_v"):
+        for mid in ("movement_value", "pass_option_value", "decision_quality", "pass_completion", "event_delta_v"):
             put(mid, "blocked", "Needs the ball, both teams and an event feed.", unlock=add_tracking)
         put("shot_quality", "blocked", "No event feed.", unlock="Add an event feed that includes shots.")
         put("physical_summary", "full", "Distance and speed from the wearable positions.",
@@ -278,6 +284,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
         put("decision_quality", "degraded",
             "Event-only estimate: a separate confidence class, shown as a range and never on the same band as tracked scores.",
             unlock=add_tracking)
+        put("pass_completion", "blocked", "Needs every player's position and speed at the pass.", unlock=add_tracking)
         put("event_delta_v", "full" if inputs.has_shot_events else "degraded",
             "Event start and end locations are in the feed." if inputs.has_shot_events else "No shot events, so the value of shots is missing.")
         put("shot_quality", "full" if inputs.has_shot_events else "blocked",
@@ -303,7 +310,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
             put(mid, pos_state, pos_reason, measure=measure, unlock=pos_unlock)
 
         if not inputs.has_events:
-            for mid in ("pass_option_value", "decision_quality", "event_delta_v"):
+            for mid in ("pass_option_value", "decision_quality", "pass_completion", "event_delta_v"):
                 put(mid, "blocked", "No event feed, so no passes or carries to score.", unlock="Add the event feed for this match.")
             put("shot_quality", "blocked", "No event feed.", unlock="Add an event feed that includes shots.")
         else:
@@ -317,6 +324,13 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
                     unlock="Add a logged event feed for this match.")
             else:
                 put("decision_quality", pos_state, pos_reason, measure=measure, unlock=pos_unlock)
+            if inputs.provider.lower() in PASS_COMPLETION_FITTED_PROVIDERS:
+                put("pass_completion", pos_state, pos_reason, measure=measure, unlock=pos_unlock)
+            else:
+                put("pass_completion", "degraded",
+                    "Fitted on another source's tracking, not this provider's: it ranks passes, but its probabilities may be off by "
+                    "several points. Passes without a logged target get no probability.",
+                    measure=measure, unlock="Fit the pass completion parameters on this provider's matches.")
             put("event_delta_v", "full" if inputs.has_shot_events else "degraded",
                 "Event start and end locations are in the feed." if inputs.has_shot_events else "No shot events, so the value of shots is missing.",
                 unlock=None if inputs.has_shot_events else "Add an event feed that includes shots.")

@@ -30,6 +30,11 @@ The receiving team and the defenders have their own reaction times (the receiver
 ball is going). Parameters are fitted by likelihood on tracking (``tools/plaiq_pass_probability.py``);
 ``PassModel()`` holds Spearman's published values with the measured flight, unfitted. A candidate:
 targeted PCZ, POV, decision quality and every persisted score are untouched (engine governance).
+
+**Adopted 19 November 2026** (founder) as the pass completion probability metric, beside v1 and labelled
+estimated. Parameters are fitted per provider (``PARAMETER_SETS``, ``parameters_for``); a provider without
+its own set uses the default set and the Data check marks the metric Degraded. The shipped sets use the
+projected target and no height flag (normalised events carry none yet).
 """
 
 from __future__ import annotations
@@ -41,7 +46,9 @@ import numpy as np
 from plaiq_engine.analytics.ball_flight import FlightModel
 from plaiq_engine.analytics.pitch_control import player_travel_time
 
-PASS_PROBABILITY_VERSION = "0.1.0"
+#: 0.1.0 (19 November 2026): candidate. 1.0.0 (19 November 2026): adopted by the founder as the pass
+#: completion probability metric, beside v1, labelled estimated, with the parameter sets below.
+PASS_PROBABILITY_VERSION = "1.0.0"
 
 #: The ball flight measured on the seven IDSSE matches (step 6, fitted on the even matches).
 MEASURED_FLIGHT = FlightModel(min_speed=8.527, speed_grad=0.1654, waypoints="pass", decel=0.39)
@@ -80,6 +87,36 @@ class PassArrays:
     tau_att: np.ndarray     # (N, A) passing team's kinematic time to the target
     tau_def: np.ndarray     # (N, D) defenders' kinematic time to the target
     high: np.ndarray        # (N,) bool
+
+
+@dataclass(frozen=True)
+class ParameterSet:
+    """A fitted, named parameter set and the evidence behind it (``ponta-platform/PLAIQ_REFERENCES_REPORT.md``)."""
+
+    name: str
+    model: PassModel
+    fitted_on: str
+    held_out: str
+
+
+#: Fitted parameter sets by provider. ``default`` serves every provider without its own set.
+PARAMETER_SETS: dict[str, ParameterSet] = {
+    "default": ParameterSet(
+        name="default-idsse-2026-11-19",
+        model=PassModel(sigma=0.442, lam=30.0, lam_flight=0.231, rt_att=0.0, rt_def=0.585),
+        fitted_on="IDSSE (German league, TRACAB 25 Hz): 1,852 open-play passes of the 4 even matches; projected target, no height",
+        held_out="IDSSE 3 odd matches: log-loss 0.301, AUC 0.773; SkillCorner 20 matches: log-loss 0.373, AUC 0.838 (over-predicts by 5 points)"),
+    "skillcorner": ParameterSet(
+        name="skillcorner-2026-11-19",
+        model=PassModel(sigma=0.541, lam=30.0, lam_flight=0.469, rt_att=0.665, rt_def=0.863),
+        fitted_on="SkillCorner open data: 6,173 passes of the 10 even matches; projected target, no height",
+        held_out="SkillCorner 10 odd matches: log-loss 0.356, AUC 0.838, calibrated within 0.05 by band (SkillCorner's own model 0.283, 0.894)"),
+}
+
+
+def parameters_for(provider: str) -> ParameterSet:
+    """The provider's fitted parameter set, else the default one."""
+    return PARAMETER_SETS.get(str(provider).lower(), PARAMETER_SETS["default"])
 
 
 def _kinematic(players: list, points: np.ndarray, model: PassModel) -> np.ndarray:

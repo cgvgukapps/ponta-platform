@@ -42,7 +42,12 @@ from plaiq_engine.match_analysis import MatchAnalysis
 
 #: 1.1 (17 November 2026): adds the context columns from package P1 (possession chain and
 #: source, score and red-card difference for the actor's team). Earlier columns are unchanged.
-SCHEMA_VERSION = "1.1"
+#: 1.2 (19 November 2026): adds the pass completion probability (``MatchAnalysis.pass_completion``,
+#: adopted by the founder 19 November 2026), its status and its parameter set. Earlier columns are unchanged.
+SCHEMA_VERSION = "1.2"
+
+#: The label every pass completion probability carries (measured against provider references, not analysts).
+PASS_COMPLETION_LABEL = "estimated"
 
 #: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types.
 BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "optimal"), (0.80, "good"), (0.55, "suboptimal"))
@@ -62,6 +67,7 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "action_type", "action_outcome", "target_player_ref", "inferred_intended_ref", "inference_confidence",
     "dq_score", "dq_band", "chosen_option_pov", "best_option_player_ref", "best_option_pov",
     "xt_delta", "movement_value", "opposition_pressure", "pitch_zone", "mode",
+    "pass_completion_probability", "pass_completion_status", "pass_completion_parameters",
     "not_scored", "not_scored_reason",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
@@ -235,6 +241,7 @@ class SemanticBuilder:
         pov = a.event_pov()
         pov_by_event = {k: g for k, g in pov.groupby("event_idx", sort=False)}
         mv = a.movement_value
+        pc = a.pass_completion.set_index("event_idx")
         set_piece_frames = self._set_piece_frames()
         rows: list[dict] = []
 
@@ -281,6 +288,16 @@ class SemanticBuilder:
                 if not_scored:
                     dq = None
 
+                pcp, pcs, pcset = None, None, None
+                if kind == "pass" and idx in pc.index:
+                    r = pc.loc[idx]
+                    pcset = r["parameter_set"]
+                    if pd.notna(start) and int(start) in set_piece_frames:
+                        pcs = "set piece: the model is fitted on open-play passes"
+                    elif pd.notna(r["pass_completion_probability"]):
+                        pcp, pcs = round(float(r["pass_completion_probability"]), 4), PASS_COMPLETION_LABEL
+                    else:
+                        pcs = r["reason"]
                 inferred = actor_pov.get("inferred_receiver") if actor_pov is not None else None
                 conf = actor_pov.get("inference_confidence") if actor_pov is not None else None
                 row.update({
@@ -298,6 +315,7 @@ class SemanticBuilder:
                     "movement_value": None,
                     "opposition_pressure": self._pressure(e, team, actor),
                     "pitch_zone": pitch_zone(float(e.get("Start X", np.nan)), float(e.get("Start Y", np.nan)), team),
+                    "pass_completion_probability": pcp, "pass_completion_status": pcs, "pass_completion_parameters": pcset,
                     "not_scored": not_scored,
                     "not_scored_reason": reason,
                 })
@@ -426,6 +444,8 @@ def nested_record(row: dict) -> dict:
             "movement_value": row["movement_value"], "opposition_pressure": row["opposition_pressure"],
             "pitch_zone": row["pitch_zone"], "mode": row["mode"],
             "not_scored": row["not_scored"], "not_scored_reason": row["not_scored_reason"],
+            "pass_completion": {"probability": row.get("pass_completion_probability"), "status": row.get("pass_completion_status"),
+                                "parameters": row.get("pass_completion_parameters")},
         },
         "physiological_context": row["physiological_context"],
         "match_context": {

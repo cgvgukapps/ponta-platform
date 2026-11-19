@@ -26,6 +26,7 @@ import pandas as pd
 from matrix_engine.ingestion.metrica_velocities import calc_player_velocities
 from matrix_engine.match import NormalisedMatch, to_wide_frames
 
+from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.analytics.hex_analytics import (
     assign_all_players,
     compute_pressure,
@@ -42,8 +43,15 @@ from plaiq_engine.analytics.hex_value import (
     xT_surface,
 )
 from plaiq_engine.analytics.pass_option_value import (
+    _build_defender_data,
     _is_failed_pass_event,
     compute_event_pov,
+)
+from plaiq_engine.analytics.pass_probability import (
+    parameters_for,
+    pass_arrays,
+    probability_from_arrays,
+    projected_target,
 )
 from plaiq_engine.analytics.pitch_control import (
     DEFAULT_PROFILE,
@@ -188,6 +196,69 @@ class MatchAnalysis:
     def event_alternatives(self) -> pd.DataFrame:
         """The scored alternatives behind each decision."""
         return self._pov[1]
+
+    @cached_property
+    def pass_completion(self) -> pd.DataFrame:
+        """
+        Pass completion probability per pass (``analytics/pass_probability.py``, adopted 19 November 2026).
+
+        One row per ``PASS`` and ``BALL LOST`` event: the probability, known at the moment of the pass, that it
+        reaches the logged target, with that target projected along their run to the ball's arrival, from the
+        tracked ball (or the passer, when the ball is not detected) at the event's start frame. Uses the
+        provider's fitted parameter set where one exists, else the default set. A pass without a logged target
+        (most providers log none for a failed pass) or without tracking at the pass gets no probability and a
+        reason; Plaiq's inferred failed-pass receiver is never used (it is not validated). Labelled estimated.
+        """
+        params = parameters_for(self.match.provider)
+        cols = ["event_idx", "pass_completion_probability", "p_survive", "share_at_target", "parameter_set", "reason"]
+        rows, batch, where = [], [], []
+        for idx, e in self.events.iterrows():
+            if str(e.get("Type", "")).upper() not in ("PASS", "BALL LOST"):
+                continue
+            team = str(e.get("Team", "")).capitalize()
+            if team not in ("Home", "Away"):
+                continue
+            row = {"event_idx": idx, "pass_completion_probability": np.nan, "p_survive": np.nan, "share_at_target": np.nan,
+                   "parameter_set": params.name, "reason": None}
+            rows.append(row)
+            own, opp = (self.home, self.away) if team == "Home" else (self.away, self.home)
+            jerseys, ojer = (self.home_jerseys, self.away_jerseys) if team == "Home" else (self.away_jerseys, self.home_jerseys)
+            prof, oprof = (self.profiles_home, self.profiles_away) if team == "Home" else (self.profiles_away, self.profiles_home)
+            passer, target = clean_jersey(e.get("From")), clean_jersey(e.get("To"))
+            start = e.get("Start Frame")
+            if not target:
+                row["reason"] = "no logged target for this pass"
+                continue
+            if pd.isna(start) or int(start) not in own.index:
+                row["reason"] = "no tracking at the pass"
+                continue
+            f = int(start)
+            # The ball where it is tracked, else at the passer's feet. Never the event's coordinates, which are
+            # not always in the tracking's frame (Metrica CSV second halves, PLAIQ_REFERENCES_REPORT.md).
+            ball = np.array([self.away.at[f, "ball_x"], self.away.at[f, "ball_y"]], float) if "ball_x" in self.away.columns else np.full(2, np.nan)
+            if not np.isfinite(ball).all() and f"{team}_{passer}_x" in own.columns:
+                ball = np.array([own.at[f, f"{team}_{passer}_x"], own.at[f, f"{team}_{passer}_y"]], float)
+            if not np.isfinite(ball).all():
+                row["reason"] = "neither the ball nor the passer is tracked at the pass"
+                continue
+            col = f"{team}_{target}"
+            rec = np.array([own.at[f, f"{col}_x"], own.at[f, f"{col}_y"]], float) if f"{col}_x" in own.columns else np.full(2, np.nan)
+            if not np.isfinite(rec).all():
+                row["reason"] = "the target is not tracked at the pass"
+                continue
+            vel = np.array([own.at[f, f"{col}_vx"], own.at[f, f"{col}_vy"]], float) if f"{col}_vx" in own.columns else np.zeros(2)
+            vel = np.where(np.isfinite(vel), vel, 0.0)
+            batch.append({"ball": ball, "target": projected_target(ball, rec, vel, params.model.flight),
+                          "attackers": _build_defender_data(own.loc[f], team, [j for j in jerseys if str(j) != passer], prof),
+                          "defenders": _build_defender_data(opp.loc[f], "Away" if team == "Home" else "Home", ojer, oprof), "high": False})
+            where.append(row)
+        if batch:
+            n = max(1, max(max(len(p["attackers"]), len(p["defenders"])) for p in batch))
+            r = probability_from_arrays(pass_arrays(batch, params.model, max_players=n), params.model)
+            for i, row in enumerate(where):
+                row["pass_completion_probability"] = float(r["p_complete"][i])
+                row["p_survive"], row["share_at_target"] = float(r["p_survive"][i]), float(r["share_at_target"][i])
+        return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
 
     # -- per-frame surfaces (computed on demand) ------------------------------------------
 

@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.1").all()  # 1.1: context columns added (P1)
+    assert sem["schema_version"].eq("1.2").all()  # 1.1: context columns (P1); 1.2: pass completion probability
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -160,3 +160,27 @@ def test_context_columns_from_p1(built):
     assert sem["score_diff"].dropna().eq(0).all()  # no goals in the synthetic match
     rec = nested_record(sem.iloc[0].to_dict())
     assert set(rec["match_context"]) == {"possession_chain_id", "possession_source", "score_diff", "red_card_diff"}
+
+
+def test_pass_completion_probability_on_passes_only(built):
+    analysis, _, sem = built
+    passes = sem.loc[sem["action_type"] == "pass"]
+    scored = passes.loc[passes["pass_completion_probability"].notna()]
+    assert len(scored) == 2  # the open-play passes; the set-piece pass is not scored
+    assert scored["pass_completion_probability"].between(0, 1).all()
+    assert scored["pass_completion_status"].eq("estimated").all()
+    assert passes["pass_completion_parameters"].eq("default-idsse-2026-11-19").all()  # no set fitted for this provider
+    sp = passes.loc[passes["event_idx"] == 1].iloc[0]
+    assert sp["pass_completion_probability"] is None or pd.isna(sp["pass_completion_probability"])
+    assert sp["pass_completion_status"].startswith("set piece")
+    others = sem.loc[sem["action_type"] != "pass", "pass_completion_probability"]
+    assert others.isna().all()
+    pc = analysis.pass_completion.set_index("event_idx")
+    for r in scored.itertuples():
+        assert r.pass_completion_probability == pytest.approx(pc.at[r.event_idx, "pass_completion_probability"], abs=1e-4)
+
+
+def test_pass_completion_providers_agree_across_engines():
+    from matrix_engine.parity import PASS_COMPLETION_FITTED_PROVIDERS
+    from plaiq_engine.analytics.pass_probability import PARAMETER_SETS
+    assert set(PASS_COMPLETION_FITTED_PROVIDERS) == set(PARAMETER_SETS) - {"default"}

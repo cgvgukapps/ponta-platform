@@ -57,3 +57,12 @@ def test_projected_target_leads_a_running_receiver_by_the_ball_flight():
     assert still == pytest.approx(TARGET)
     t = float(MEASURED_FLIGHT.time_to(np.linalg.norm(run - BALL)))
     assert run == pytest.approx(TARGET + np.array([6.0, 0.0]) * t, abs=0.05)
+
+
+def test_parameter_sets_by_provider():
+    from plaiq_engine.analytics.pass_probability import PARAMETER_SETS, parameters_for
+    assert parameters_for("SkillCorner") is PARAMETER_SETS["skillcorner"]
+    assert parameters_for("metrica") is PARAMETER_SETS["default"]
+    for ps in PARAMETER_SETS.values():
+        r = pass_probability(BALL, TARGET, RECEIVER, _p((-20.0, 25.0)), ps.model)
+        assert 0.0 <= r["p_complete"] <= 1.0

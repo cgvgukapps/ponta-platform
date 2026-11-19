@@ -351,3 +351,40 @@ SkillCorner's refit gives arrival spread 0.55 s, rates 4.4 and 7.1 per s, reacti
   - **measured player speeds:** they score the same as v1's;
   - **the parameters as physical quantities:** some sit at their bounds in some variants. One pattern holds in every fit: **defenders effectively start 0.5 to 0.75 s after the passing team**, which reads as the receiver knowing where the ball is going.
 - **Not adopted; v1 stays.** This is a candidate for the founder: a "pass completion probability" metric beside v1, labelled estimated. It would also be the availability half of the option split and the risk term of a narrower decision quality version 2.
+
+## Pass completion probability adopted (19 November 2026)
+
+**Founder decision, 19 November 2026:** the probabilistic pass model is adopted as the **pass completion probability**: a new metric beside v1 (targeted pitch control, POV and decision quality are unchanged), labelled estimated, with parameters fitted per provider.
+
+**What ships.**
+- **The model:** `analytics/pass_probability.py` 1.0.0. The receiver is projected along their run; there is no height flag, since normalised events carry none yet.
+- **Parameter sets** (`PARAMETER_SETS`, `parameters_for`):
+  - `skillcorner-2026-11-19`, fitted on SkillCorner's 10 even matches;
+  - `default-idsse-2026-11-19`, fitted on IDSSE's 4 even matches, for every provider without its own set.
+- **`MatchAnalysis.pass_completion`:** one row per `PASS` and `BALL LOST`.
+  - **Positions:** the tracked ball at the event's start frame, or the passer when the ball is not detected, and never the event's coordinates (see below).
+  - **The target** is the logged target. A pass without one gets no probability and a reason. Plaiq's inferred failed-pass receiver is never used, since it is not validated.
+- **Semantic events, schema 1.2:** `pass_completion_probability`, `pass_completion_status` (`estimated`, or the reason there is none, including set pieces, since the model is fitted on open play) and `pass_completion_parameters`.
+- **Data check:** a new "Pass completion probability" entry, now 13 metrics.
+  - **Full or Degraded with the positions** where the provider has its own set.
+  - **Degraded** where it uses the default set: "fitted on another source's tracking … may be off by several points".
+  - **Blocked** without tracking or events.
+  - A cross-engine test keeps Matrix's list of fitted providers in step with Plaiq's sets.
+
+**The shipped path, end to end** (`tools/plaiq_pass_completion_check.py`). On SkillCorner's 20 matches, 16,041 of 17,547 passes have a logged target and get a probability. On the 10 held-out matches (7,749 passes):
+- **log-loss 0.327, AUC 0.843**, Brier 0.100;
+- mean predicted 0.841 against 0.842 completed;
+- predicted against observed completion by band: 0.35 → 0.39, 0.61 → 0.63, 0.76 → 0.76, 0.86 → 0.85, 0.93 → 0.91, 0.98 → 0.98.
+
+On the demo match (1886347), 881 of 884 pass rows carry a probability, averaging 0.90 on completed passes and 0.64 on lost ones. About 4 s a match.
+
+**Correction to the section above:**
+- The no-height model refitted on SkillCorner scores 0.356 / 0.838 held out, against 0.321 / 0.859 with SkillCorner's `high_pass` flag. **On SkillCorner the height flag helps;** it is on the league's data that it does not.
+- Carrying a provider's height flag through Matrix's normalised events, and refitting with it, is the follow-up.
+
+**Found on the way: Metrica CSV second-half events are not rotated.**
+- **The defect:** Matrix's Metrica CSV loader (Sample Games 1 and 2) rotates the second-half tracking but not the second-half event coordinates. Second-half pass starts lie a median 55 m from the tracked ball and agree (0.35 m) only when mirrored.
+- **Unaffected:** first halves, Metrica's EPTS Game 3 and SkillCorner (under 1.4 m in both halves).
+- **The first symptom:** completed passes averaged 0.91 in first halves and 0.44 to 0.46 in second halves, until the metric switched to tracked positions (now 0.91 to 0.92 in both).
+- **Other readers of event coordinates on those two games are affected,** for example the semantic events' `pitch_zone`.
+- **Not fixed here.** Fixing it changes recorded outputs on those games, so it is reported for a decision.

@@ -119,3 +119,13 @@ def test_measured_inputs_on_the_skillcorner_sample_match(data_dir):
             assert states[mid] == expected, f"{mid}: {states[mid]} != {expected} (inputs {inputs})"
     # Shots derived from tracking still do not support shot quality.
     assert "derived from tracking" in report.metrics["shot_quality"].reason
+
+
+def test_pass_completion_is_full_only_where_its_parameters_were_fitted():
+    assert classify(SKILLCORNER_OPEN_DATA).states()["pass_completion"] == "full"
+    metrica = classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"),
+                                    player_dropout=0.0, has_events=True, has_shot_events=True))
+    pc = metrica.metrics["pass_completion"]
+    assert pc.state == "degraded" and "another source" in pc.reason and pc.unlock
+    assert classify(ParityInputs(provider="statsbomb", mode="event_only", has_events=True, has_freeze_frames=True)).states()["pass_completion"] == "blocked"
+    assert classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"))).states()["pass_completion"] == "blocked"

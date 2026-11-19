@@ -200,10 +200,12 @@ def main() -> None:
 
     # A ceiling for the provider: the same structure refitted on SkillCorner's even matches, tested on its odd ones.
     out["skillcorner_refit"] = {}
-    for name, projected in (("target_at_pass", False), ("projected_target", True)):
-        asc = arrays(sc, "v1", True, "sc", projected)
-        start = models["fitted_height_projected" if projected else "fitted_height"]
-        sc_model = fit(subset(asc, fit_s), y_s[fit_s], start, FREE)
+    for name, projected, height, start_name in (("target_at_pass", False, True, "fitted_height"),
+                                                ("projected_target", True, True, "fitted_height_projected"),
+                                                ("projected_target_no_height", True, False, "fitted_no_height_projected")):
+        asc = arrays(sc, "v1", height, "sc", projected)
+        start = models[start_name]
+        sc_model = fit(subset(asc, fit_s), y_s[fit_s], start, FREE if height else tuple(k for k in FREE if k != "high_reach"))
         p = probability_from_arrays(asc, sc_model)["p_complete"]
         out["skillcorner_refit"][name] = {
             "parameters": {k: round(getattr(sc_model, k), 3) for k in FREE},
