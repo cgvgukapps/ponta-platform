@@ -196,6 +196,93 @@ The even and odd matches agree on every row.
 **Reading.**
 - **Not adopted; version 1 stays.** Version 2 removes the failed-pass leniency but becomes mostly a measure of risk: it predicts completion (0.69) and loses the link to chances (0.51) and to SkillCorner's analogue (0.15).
 - **Why version 1 keeps the signal.** It values the receiver at the end of the pass, which credits playing the ball into a team-mate's run. Version 2 compares the destination with where team-mates stood at the pass, so a through ball into a run looks like a ball into space a defender could reach.
-- **Plaiq's ball-speed model weighs on version 2.** At 5 m/s plus 0.2 m/s per metre, long forward passes look slower, and so riskier, than they are. Calibrating it on the league's 25 Hz tracking (programme step 6) comes before any risk-weighted decision quality.
+- **Plaiq's ball-speed model weighs on version 2.** At 5 m/s plus 0.2 m/s per metre, long forward passes look slower, and so riskier, than they are. *(Corrected 19 November 2026 by step 6: the model is 30% to 40% too slow on passes up to 30 m and close to right beyond 45 m, so the bias falls on short and medium passes.)* Calibrating it on the league's 25 Hz tracking (programme step 6) comes before any risk-weighted decision quality.
 - **Version 1's failed-pass leniency stays a known flaw** (89% optimal). Until it is fixed, failed-pass decision quality should not be reported.
 - **The candidate for the next attempt:** keep version 1's end-of-pass credit and add only the risk at the pass, after the ball-speed calibration.
+
+## Step 6: ball flight, players and reaction time calibrated (19 November 2026)
+
+**The question.** Targeted pitch control (`targeted_pcz`, which feeds availability, POV and decision quality) rests on hand-set physics:
+- a ball speed of 5 m/s plus 0.2 m/s per metre of pass;
+- each point along a pass timed as if it were the end of its own, shorter pass;
+- one defender profile: reaction 0.7 s, top speed 9.0 m/s, acceleration 5.5 m/s².
+
+`plaiq_engine/analytics/ball_flight.py` (0.1.0) makes each of these a parameter. With its defaults it returns exactly what `targeted_pcz` returns (tested). `tools/plaiq_calibration.py` measures them on the seven IDSSE matches (TRACAB at 25 Hz with the ball's height; the league's passes with the intended recipient), fitting on the even matches and testing on the odd ones. It then checks the result on SkillCorner's 20 matches.
+
+**The passes.**
+- 5,239 open-play passes with a logged recipient.
+- **The kick is found on 3,260 (62%):** the ball leaves the passer (within 1.5 m, then beyond 3 m within 0.6 s), nearest the logged time.
+  - The rate is 40% to 86% by match. It is the same for completed and failed passes (62% each), so it does not bias the outcome fit.
+  - The kick lies a median 0.14 s after the logged time (10th to 90th percentile: −1.4 s to +1.2 s).
+- **First touch:** the recipient 2,777, an opponent 260, another team-mate 198, out of play 22.
+
+**1. Ball flight (physics only, 2,685 passes the recipient touched first).**
+
+| Pass length | Passes | Median real speed | v1 model | Measured model |
+|---|---|---|---|---|
+| 3–10 m | 823 | 8.6 m/s | 6.4 | 9.7 |
+| 10–20 m | 1,161 | 11.1 m/s | 7.8 | 10.9 |
+| 20–30 m | 452 | 13.1 m/s | 9.8 | 12.5 |
+| 30–45 m | 185 | 14.2 m/s | 12.1 | 14.4 |
+| 45–80 m | 64 | 15.6 m/s | 15.2 | 17.0 |
+
+- **Fitted on the even matches: 8.5 m/s plus 0.165 m/s per metre** (flat passes 8.6 + 0.178; high passes 6.2 + 0.213).
+- **On the held-out matches it halves the timing error.** v1's ball arrives on average 0.37 s late (median error 0.42 s); the measured model's median error is 0.20 s, with a mean bias of −0.08 s.
+- **Separate models for flat and high balls add little** (0.18 s against 0.18 s on flat balls, 0.33 s against 0.32 s on high balls).
+- **The ball slows along a pass.** It covers 33%, 60% and 81% of its length in a quarter, half and three-quarters of its time (held out). `s / D = (1 + c)τ − cτ²` with **c = 0.39**, fitted on the even matches, predicts 32%, 60% and 82%.
+- **v1's point-by-point timing has the opposite shape:** it makes the early part of a long pass slower than the pass's own average.
+
+**2. Players (physics only, 204 player-matches with at least 10 minutes).**
+- **Top speed** (the fastest half-second): median **8.4 m/s** (10th to 90th percentile 7.3 to 9.1).
+- **Peak acceleration** (speed gained over 0.4 s, 99.9th percentile): median **4.7 m/s²** (4.3 to 5.3).
+- **Plaiq's profile (9.0 m/s, 5.5 m/s²) sits at the fast end** of the league's players.
+
+**3. Reaction time (fitted on outcomes).**
+
+Availability for the pass to the recipient where they stand at the kick, against completion, AUC on the held-out matches:
+
+| Ball flight | Players | Best reaction (fit) | AUC fit | AUC test |
+|---|---|---|---|---|
+| v1 | v1 (reaction 0.7 s) | — | 0.705 | **0.719** |
+| v1 | v1 | 0.4 s | 0.708 | 0.728 |
+| Measured speed | v1 | **0.0 s** | 0.736 | **0.739** |
+| Measured speed | Measured | 0.0 s | 0.730 | 0.720 |
+| Measured speed, slowing along the pass | v1 | 0.0 s | 0.724 | 0.702 |
+| Measured speed, slowing along the pass | Measured | 0.0 s | 0.717 | 0.688 |
+
+- **Measured speed at the v1 reaction time of 0.7 s: 0.715** on the held-out matches, against v1's 0.719.
+- **With the receiver at the end of the pass** (v1's view of a completed pass): 0.798 for v1 against 0.815 for the best candidate.
+- **SkillCorner (12,103 passes, a different league and provider):**
+  - v1 **0.781**;
+  - measured speed with reaction 0 s **0.793** (with slowing along the pass, 0.792);
+  - v1's ball with reaction 0 s, 0.769;
+  - SkillCorner's own model 0.896.
+- **Observed completion by availability, held out.** The best candidate orders passes more cleanly than v1, but neither is a probability: passes rated below 0.1 are still completed about 70% of the time.
+
+| Availability band | v1 | Best candidate |
+|---|---|---|
+| 0–0.1 | 71% | 68% |
+| 0.1–0.3 | 70% | 82% |
+| 0.3–0.5 | 93% | 88% |
+| 0.5–0.7 | 89% | 94% |
+| 0.7–0.9 | 95% | 96% |
+| 0.9–1 | 96% | 97% |
+
+**Reading.**
+- **The ball-speed model is wrong and now measured.** Real passes are 30% to 40% faster than v1 assumes up to 30 m. 8.5 m/s plus 0.165 m/s per metre halves the timing error on held-out matches. This is physics, with no outcome in the fit.
+- **The physical corrections do not, on their own, improve completion ranking:**
+  - the faster ball at the v1 reaction time scores 0.715 against 0.719;
+  - timing along the pass and the measured player speeds both lower the score.
+- **The best fit sets the reaction time at the edge of the grid (0 s).** That is not a human reaction time. The parameter is absorbing errors elsewhere in the availability formula, so **reaction time cannot be calibrated as a physical quantity** with this formula.
+- **The gain from recalibrating is small:** +0.02 AUC on held-out IDSSE matches and +0.01 on SkillCorner. **The gap to SkillCorner's model (0.79 against 0.90) is not in the physics constants. It is in the formula's structure:**
+  - interception counts any waypoint a defender reaches first, with no ball height, reach or time to control;
+  - control at the receiver is a fixed-steepness sigmoid;
+  - neither is a probability.
+- **Not adopted; v1 stays.** The measured ball flight and player figures are recorded as measured physics, to be used when the interception model is rebuilt.
+
+**Proposed next (a candidate, measured the same way):** a probabilistic, height-aware interception and control model. It would integrate each player's chance of controlling the ball along its measured flight, after the published pitch-control method (Spearman 2018). It would use:
+- the measured ball flight;
+- the league's flat or high flag, where present, to say when a ball can be reached;
+- the measured player speeds.
+
+Reaction time and control time would be fitted only as part of that model.

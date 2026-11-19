@@ -14,7 +14,9 @@ packages run unchanged, plus the official references P1 to P4 can be compared wi
 - per frame: the official ball status (in play or dead) and the team in possession;
 - per event: the official possession phase id (``BallPossessionPhase``) and every restart with
   the referee's decision time (the ball went dead) and the time it was taken;
-- per player: the official playing position and each team's line-up.
+- per player: the official playing position and each team's line-up;
+- per pass: the intended recipient (logged for completed and most failed passes) and the height
+  (flat or high), used to calibrate Plaiq's ball flight and reaction times.
 
 **No names are read.** Players are ``home_<shirt>`` / ``away_<shirt>``; persons are looked up by
 the league's id only, and club names are never read. Coordinates: centred metres, the home team
@@ -63,7 +65,7 @@ CARD = {"yellow": "YELLOW", "red": "RED", "yellowRed": "SECOND YELLOW"}
 class Official:
     """The league's own references for one match (comparison data only)."""
 
-    ball: pd.DataFrame                 # frame, period, ball_status (1 in play, 0 dead), ball_team (home/away/None)
+    ball: pd.DataFrame                 # frame, period, ball_status (1 in play, 0 dead), ball_team (home/away/None), ball_z (m)
     events: pd.DataFrame               # every parsed event: frame, period, kind, team, phase_id, decision_frame, details
     roles: pd.DataFrame                # player_id, team, position (league code), starting
     lineups: dict[str, str] = field(default_factory=dict)
@@ -210,7 +212,10 @@ def read_events(path: Path, info: dict, clock: tuple[np.ndarray, np.ndarray], pe
                "card": top.get("CardColor") if kind == "Caution" else None,
                "possession_change": top.get("PossessionChange") if kind == "TacklingGame" else None,
                "counter_attack": top.get("CounterAttack") if kind == "ShotAtGoal" else None,
-               "player": persons.get((play if play is not None else top).get("Player"), {}).get("player_id")}
+               "player": persons.get((play if play is not None else top).get("Player"), {}).get("player_id"),
+               "recipient": persons.get(play.get("Recipient"), {}).get("player_id") if play is not None else None,
+               "height": play.get("Height") if play is not None else None,
+               "open_play": kind == "Play"}
         rows.append(row)
     return pd.DataFrame(rows).sort_values("frame", kind="stable").reset_index(drop=True)
 
@@ -303,11 +308,11 @@ def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[Normal
     team_of_poss = {1: "home", 2: "away"}
     official = Official(
         ball=pd.DataFrame({"frame": ball["frame"], "period": ball["period"], "ball_status": ball["status"],
-                           "ball_team": ball["poss"].map(team_of_poss)}),
+                           "ball_team": ball["poss"].map(team_of_poss), "ball_z": ball["z"]}),
         events=ev,
         roles=pd.DataFrame([{"player_id": p["player_id"], "team": p["team"], "position": p["position"], "starting": p["starting"]}
                             for p in info["persons"].values()]),
         lineups=info["lineups"], result=info["result"])
     with open(pk, "wb") as fh:
         pickle.dump((m, official), fh)
-    return m, official
+    return dataclasses.replace(m, slots=_slots(m.tracking)), official
