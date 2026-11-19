@@ -269,3 +269,18 @@ def decision_quality_cells(p_cells: list[np.ndarray], value_cells: list[np.ndarr
     return {"dq": float(ev[chosen] / best) if best > 0 else np.nan, "ev_chosen": float(ev[chosen]), "ev_best": best,
             "best_is_chosen": bool(ev[chosen] >= best - 1e-12), "options": int(len(ev)), "best_option": int(np.argmax(ev)),
             "best_cell": best_cell}
+
+
+# -- one model, two outputs: Gain from Choice's own parts (a candidate, measured, not adopted) ------------------
+
+def decision_gain(realised_value: float, ev_best: float) -> float:
+    """
+    **Gain** in the one-model candidate: the value the pass realised over the best expected value on offer when
+    it was played (Choice's denominator, ``ev_best``), clipped 0 to 1.5 as version 1 is. The realised value is
+    ``option_value`` at the cell where the ball arrived, and 0 for a failed pass: Gain is the outcome, Choice
+    the decision, from one option set and one value surface. Gain / Choice is what the execution and the run
+    added to the choice. Version 1 stays the default Gain until this is measured and agreed.
+    """
+    if realised_value is None or ev_best is None or not (np.isfinite(realised_value) and np.isfinite(ev_best)) or ev_best <= 0:
+        return np.nan
+    return float(np.clip(realised_value / ev_best, 0.0, 1.5))

@@ -37,7 +37,8 @@ from plaiq_engine.match_analysis import MatchAnalysis
 from plaiq_engine.roster.profiles import roster_profiles
 from plaiq_engine.semantic_builder import SCHEMA_VERSION, SemanticBuilder
 
-PAYLOAD_VERSION = "1.0"
+#: 1.1 (19 November 2026): version 1's descriptive band names (semantic events schema 1.5); group ids follow them.
+PAYLOAD_VERSION = "1.1"
 #: Moments per group on the page.
 PER_GROUP = 4
 #: 1v1 pressure (engine scale 1 to 10) treated as "under pressure" for selection only.
@@ -121,15 +122,15 @@ def build_payload(match: NormalisedMatch, *, notes: list[str] | None = None, sam
 
     s = sem.loc[sem["dq_score"].notna()]
     groups = [
-        {"id": "poor_under_pressure", "title": "Lowest-rated decisions under pressure",
-         "rule": f"Passes and carries rated Poor or Suboptimal with 1v1 pressure of {SELECTION_PRESSURE:g} or more, lowest decision quality first.",
-         "rows": pick(s.loc[(s["opposition_pressure"].fillna(0) >= SELECTION_PRESSURE) & s["dq_band"].isin(["poor", "suboptimal"])], ["dq_score"], [True])},
+        {"id": "low_gain_under_pressure", "title": "Lowest-gain decisions under pressure",
+         "rule": f"Passes and carries with Low gain or Partial gain under 1v1 pressure of {SELECTION_PRESSURE:g} or more, lowest gain first.",
+         "rows": pick(s.loc[(s["opposition_pressure"].fillna(0) >= SELECTION_PRESSURE) & s["dq_band"].isin(["low_gain", "partial_gain"])], ["dq_score"], [True])},
         {"id": "losses", "title": "Passes that lost the ball",
          "rule": "Failed passes the engine scored, highest pressure first.",
          "rows": pick(s.loc[s["action_outcome"] == "lost"], ["opposition_pressure"], [False])},
         {"id": "best_progressive", "title": "Best decisions that moved the ball forward in value",
-         "rule": "Completed passes and carries rated Optimal, largest value gain first.",
-         "rows": pick(s.loc[(s["dq_band"] == "optimal") & (s["action_outcome"] == "completed") & (s["xt_delta"].fillna(0) > 0)], ["xt_delta"], [False])},
+         "rule": "Completed passes and carries with Full gain, largest value change first.",
+         "rows": pick(s.loc[(s["dq_band"] == "full_gain") & (s["action_outcome"] == "completed") & (s["xt_delta"].fillna(0) > 0)], ["xt_delta"], [False])},
         {"id": "off_ball_runs", "title": "Most valuable off-ball runs",
          "rule": "Movements the engine rewarded, highest movement value first.",
          "rows": pick(sem.loc[sem["action_type"] == "off_ball_run"], ["movement_value"], [False])},

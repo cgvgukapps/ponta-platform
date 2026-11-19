@@ -153,3 +153,11 @@ def test_agreed_bands_are_descriptive_and_not_version_1s():
 def test_the_adopted_score_is_ring_one_cells():
     from plaiq_engine.analytics.decision_quality_v2 import DQ_V2_RINGS, DQ_V2_VERSION
     assert DQ_V2_RINGS == 1 and DQ_V2_VERSION == "1.1.0"
+
+
+def test_gain_is_the_realised_value_over_the_best_on_offer():
+    from plaiq_engine.analytics.decision_quality_v2 import decision_gain
+    assert decision_gain(0.03, 0.04) == pytest.approx(0.75)
+    assert decision_gain(0.0, 0.04) == 0.0  # a failed pass realises nothing
+    assert decision_gain(0.2, 0.04) == 1.5  # clipped as version 1 is
+    assert np.isnan(decision_gain(0.03, 0.0)) and np.isnan(decision_gain(np.nan, 0.04))

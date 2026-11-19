@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.4").all()  # 1.1: P1; 1.2: pass completion; 1.3: DQ v2; 1.4: DQ v2 on cells, banded
+    assert sem["schema_version"].eq("1.5").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 on cells; 1.5 v1 band names
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -122,7 +122,8 @@ def test_defensive_action_and_zones(built):
 
 
 def test_bands_are_the_engines():
-    assert [dq_band(v) for v in (0.2, 0.55, 0.79, 0.8, 0.95, 1.3)] == ["poor", "suboptimal", "suboptimal", "good", "optimal", "optimal"]
+    assert [dq_band(v) for v in (0.2, 0.55, 0.79, 0.8, 0.95, 1.3)] == [
+        "low_gain", "partial_gain", "partial_gain", "most_gain", "full_gain", "full_gain"]
     assert dq_band(None) is None
 
 

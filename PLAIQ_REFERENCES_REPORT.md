@@ -580,3 +580,32 @@ Evidence: `tools/plaiq_dq_v2.py` (columns `hex_r0`, `hex_r1`, `hex_r2`); bands o
 - **Re-measured after the fix, through the shipped property:** the shipped score equals the tool's ring 1 exactly (largest difference 2×10⁻¹⁶) on all 12,095 passes. Against the earlier ring 1 figures: shot AUC 0.623 (completed) and 0.620 (all), unchanged; SkillCorner analogue 0.294; picks its best 0.581; completion AUC 0.495; goal AUC 0.648 (held-out half 0.576); optimal share 31% completed against 30% failed.
 - **The agreed bands on the shipped score, held-out half:** shots 2.6% [1.7, 4.0], 4.5% [3.1, 6.4], 7.0% [6.0, 8.2], 9.2% [7.8, 10.7] from well below best to best option; shares 14 / 14 / 41 / 31%; rising in 99% of match resamples (three seeds: 99.2, 99.5, 99.1%). Failed passes 31% best option against 31% for completed. Goals 1, 6, 10, 14: not evidence.
 - **Not established, unchanged:** the goal link; a single provider; the bands describe the score, they do not validate it.
+
+## Gain and Choice: names, version 1's bands, and one model with two outputs (19 November 2026)
+
+**Names (founder decision):** decision quality has two scores. Version 1 (`dq_score`) is shown as **Gain**: how much of the best option's value the action realised, 0 to 1.5. Version 2 (`dq_v2_score`) is shown as **Choice**: how the option chosen compared with the best on offer when the pass was played, 0 to 1. Version 1's bands keep their cut-offs and are renamed: `full_gain` (0.95 and above), `most_gain` (0.80 to 0.94), `partial_gain` (0.55 to 0.79), `low_gain` (below 0.55), replacing optimal, good, suboptimal and poor (semantic events schema 1.5; match page payload 1.1). The Data check labels read "Decision quality: Gain" and "Decision quality: Choice". The UI prototype follows.
+
+**One model, two outputs (candidate, measured, not adopted).** `decision_gain` computes Gain from Choice's own parts: the value realised where the ball arrived (`option_value` at the tracked ball at version 1's arrival frame, else the receiver; 0 for a failed pass) over Choice's best expected value on offer at release, clipped 0 to 1.5. Then Gain = Choice × execution, where execution is the realised value over the chosen option's expected value. Measured on the same 12,112 SkillCorner passes (`tools/plaiq_dq_v2.py`, column `gain`), completed passes:
+
+| | Version 1 (Gain today) | **One-model Gain** | Choice | Arrival threat alone |
+|---|---|---|---|---|
+| Shot, AUC (even / odd halves) | 0.60 (0.61 / 0.60) | **0.73 (0.73 / 0.72)** | 0.62 | 0.89 |
+| Goal, AUC (even / odd) | 0.62 (0.62 / 0.61) | **0.75 (0.77 / 0.72)** | 0.65 | 0.89 |
+| Shot AUC within tenths of arrival threat (mean of 7) | 0.59 | **0.61** | 0.58 | |
+| Rank correlation with SkillCorner's analogue (even / odd) | 0.31 (0.32 / 0.30) | **0.38 (0.38 / 0.39)** | 0.29 | 0.28 |
+| Picks out SkillCorner's best, AUC | 0.60 | **0.63** | 0.58 | 0.56 |
+| Rank correlation with arrival threat | 0.22 | 0.64 | | 1 |
+| Share above 1.0 / clipped at 1.5 | 44% / 6% | 39% / 2% | | |
+| Median, completed / failed passes | 0.98 / 1.24 | 0.90 / 0 | 0.79 / 0.78 | |
+
+Paired resamples of the 20 matches (300), one-model Gain minus version 1: shot +0.12 [+0.10, +0.15], goal +0.13 [+0.07, +0.18], SkillCorner analogue +0.07 [+0.05, +0.10].
+
+**Reading:**
+- **Most of the shot and goal gain is location.** The threat where the ball arrived predicts a shot at 0.89 by itself, and the one-model Gain follows it far more than version 1 does (0.64 against 0.22). For an outcome score that is expected, but it is not evidence about decisions.
+- **Beyond location it is still at least as good:** within tenths of arrival threat it edges version 1 on shots (0.61 against 0.59), and it agrees more with SkillCorner's decision analogue (0.38 against 0.31) than either version 1 or the arrival threat alone (0.28), on both halves.
+- **It is coherent with Choice:** one option set, one value surface, Gain = Choice × execution (median execution 1.09 on completed passes: the ball usually arrives somewhere a little better than the expected value of the choice).
+- **No failed-pass leniency:** a failed pass gains 0 (version 1 gives failed passes a median of 1.24); the decision behind a failed pass is Choice's to score.
+- **It keeps the credit for a run:** 39% of completed passes score above 1.0 (version 1: 44%).
+- **Version 1's cut-offs order it more steeply:** shots 0.4%, 3.4%, 7.1%, 11.2% from Low gain to Full gain (version 1: 1.2%, 1.6%, 5.5%, 9.1%), with 46% of completed passes at Full gain (version 1: 58%).
+
+**Recommendation for the founder:** adopt the one-model Gain in place of version 1's formula as Gain (a new version beside version 1 first, as engine governance requires), labelled estimated. It would also retire version 1's lenient failed-pass score. Not established: anything beyond SkillCorner's 20 matches; the cut-offs were agreed for version 1 and are not re-measured for it.

@@ -49,15 +49,21 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: A failed pass that v2 scores now gets a row even when v1 has no failed-pass score. Earlier columns are unchanged.
 #: 1.4 (19 November 2026): decision quality v2 1.1.0 (hex cells, ring 1) with its agreed band, ``dq_v2_band``
 #: (best_option, near_best, below_best, well_below_best; never version 1's names). Earlier columns are unchanged.
-SCHEMA_VERSION = "1.4"
+#: 1.5 (19 November 2026): version 1's bands get descriptive names (founder decision): full_gain, most_gain,
+#: partial_gain, low_gain replace optimal, good, suboptimal, poor at the same cut-offs. Version 1 is shown as
+#: "Gain" and version 2 as "Choice". Values change; columns do not.
+SCHEMA_VERSION = "1.5"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
 #: The label every decision quality v2 score carries (measured against outcomes and a provider's analogue, not analysts).
 DQ_V2_LABEL = "estimated"
 
-#: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types.
-BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "optimal"), (0.80, "good"), (0.55, "suboptimal"))
+#: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types. Version 1, shown as "Gain":
+#: how much of the best option's value the action realised. Cut-offs unchanged; names descriptive since schema 1.5
+#: (they were optimal, good, suboptimal and poor).
+BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "full_gain"), (0.80, "most_gain"), (0.55, "partial_gain"))
+LOWEST_BAND = "low_gain"
 
 #: An off-ball run is a movement the engine rewarded: run_bonus above this.
 RUN_BONUS_MIN = 0.0
@@ -90,7 +96,7 @@ def dq_band(score: float | None) -> str | None:
     for cut, band in BAND_CUTS:
         if score >= cut:
             return band
-    return "poor"
+    return LOWEST_BAND
 
 
 def _engine_version() -> str:

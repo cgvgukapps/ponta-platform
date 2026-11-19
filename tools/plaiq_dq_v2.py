@@ -14,7 +14,10 @@ founder adopted projected beside v1 (1.0.0, 19 November 2026), ``projected`` is 
 ``hex_r0``, ``hex_r1`` and ``hex_r2``, each team-mate's option the best cell within 0, 1 or 2 rings of where
 their run reaches when the ball arrives (``decision_quality_cells``). Since 1.1.0 (ring 1, adopted the same day)
 ``projected`` reads the shipped ring-1 score, so it equals ``hex_r1``; ``hex_r0`` stands in for the point-based
-1.0.0 (rank correlation 0.993). Plus:
+1.0.0 (rank correlation 0.993). **One model, two outputs** (candidate, 19 November 2026): ``gain``, the value
+realised where the ball arrived (the tracked ball at version 1's arrival frame, else the receiver; 0 for a failed
+pass) over Choice's best expected value on offer (``decision_gain``), beside version 1 as the current Gain, and
+``execution``, the realised value over the chosen option's expected value. Plus:
 
 - **consistency:** the band shares of completed and failed passes (judging the intention, failed passes
   should not look better than completed ones);
@@ -38,6 +41,7 @@ import numpy as np
 import pandas as pd
 from matrix_engine.sample_data import repo_root
 from plaiq_engine.analytics.decision_quality_v2 import (
+    decision_gain,
     decision_quality_cells,
     decision_quality_risk,
     decision_quality_v2,
@@ -45,6 +49,11 @@ from plaiq_engine.analytics.decision_quality_v2 import (
     option_value,
     ring_distance,
     run_cells,
+)
+from plaiq_engine.analytics.event_stitch import (
+    ball_xy_from_tracking,
+    build_pass_receipt_lookup,
+    clean_jersey,
 )
 from plaiq_engine.analytics.hex_analytics import cartesian_to_hex
 from plaiq_engine.analytics.pass_option_value import _build_defender_data
@@ -57,7 +66,7 @@ from context_reference_set import _load
 from plaiq_dq_replay import BANDS, band_of
 from plaiq_references import auc, spearman
 
-SCORES = ("v1", "v1_risk", "projected", "hex_r0", "hex_r1", "hex_r2", "p_complete", "v2", "v2_xt")
+SCORES = ("v1", "gain", "v1_risk", "projected", "hex_r0", "hex_r1", "hex_r2", "p_complete", "v2", "v2_xt")
 RINGS = (0, 1, 2)
 
 
@@ -82,6 +91,7 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
     tree = cKDTree(ma.hex_centers)
     pc = ma.pass_completion.set_index("event_idx")
     d2 = ma.decision_quality_v2.set_index("event_idx")
+    receipts = build_pass_receipt_lookup(ma.events)
     model = parameters_for(m.provider).model
     q_all, r_all = (np.asarray(a, int) for a in cartesian_to_hex(ma.hex_centers[:, 0], ma.hex_centers[:, 1], ma.R))
     meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
@@ -123,6 +133,7 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
         proj = {"dq": d2.at[e.name, "dq_v2"], "p_chosen": d2.at[e.name, "p_chosen"], "best_is_chosen": d2.at[e.name, "best_is_chosen"]} \
             if e.name in d2.index else {"dq": np.nan}
         cells = _hex(ma, e.name, model, q_all, r_all) if np.isfinite(proj["dq"]) else {}
+        gain = _gain(ma, e, d2.loc[e.name], receipts) if np.isfinite(proj["dq"]) else {}
         o = by_pass.get(r.event_id)
         sc_dq = chose = np.nan
         if o is not None and o["targeted"].any() and o["evx"].max() > 0:
@@ -131,10 +142,33 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "v1": float(v1), "v2": v2["dq"], "v2_xt": v2x["dq"],
                      "p_complete": p_chosen, "v1_risk": decision_quality_risk(float(v1), p_chosen), "projected": proj["dq"],
                      **{f"hex_r{k}": cells.get(f"hex_r{k}", np.nan) for k in RINGS}, "hex_r2_cells": cells.get("cells", np.nan),
+                     "gain": gain.get("gain", np.nan), "gain_raw": gain.get("raw", np.nan), "execution": gain.get("execution", np.nan),
                      "p_chosen_projected": proj.get("p_chosen", np.nan), "projected_best_is_chosen": proj.get("best_is_chosen"),
                      "availability": v2["availability_chosen"], "sc_dq": sc_dq, "sc_chose_best": chose, "lead_to_shot": bool(r.lead_to_shot),
                      "lead_to_goal": bool(r.lead_to_goal), "pressure": r.overall_pressure_end if isinstance(r.overall_pressure_end, str) else None})
     return pd.DataFrame(rows)
+
+
+def _gain(ma, e, d2row, receipts) -> dict:
+    """The one-model Gain for one pass: the value realised where the ball arrived over Choice's best on offer."""
+    m = ma._pass_moment(e)
+    if isinstance(m, str):
+        return {}
+    if e["Type"] == "PASS":
+        r = receipts.get(e.name) or {}
+        f = int(r["receipt_start_frame"]) if r.get("stitch_valid") and r.get("receipt_start_frame") is not None else int(e["End Frame"])
+        own = ma.home if m["team"] == "Home" else ma.away
+        col = f"{m['team']}_{clean_jersey(e.get('To'))}"
+        rec = np.array([own.at[f, f"{col}_x"], own.at[f, f"{col}_y"]], float) if f in own.index and f"{col}_x" in own.columns else None
+        arrival = ball_xy_from_tracking(ma.home, ma.away, f, fallback=rec)
+        if arrival is None or not np.isfinite(arrival).all():
+            return {}
+        realised = option_value(m["ball"], arrival, float(ma._xt_at(m["team"], m["ball"])[0]), float(ma._xt_at(m["team"], arrival)[0]))
+    else:
+        realised = 0.0
+    ev_best, ev_chosen = float(d2row["ev_best"]), float(d2row["ev_chosen"])
+    return {"gain": decision_gain(realised, ev_best), "raw": realised / ev_best if ev_best > 0 else np.nan,
+            "execution": realised / ev_chosen if ev_chosen > 0 else np.nan}
 
 
 def _hex(ma, idx, model, q_all, r_all) -> dict:
