@@ -152,6 +152,8 @@ def idsse_passes(data: Path, cache: Path, match_id: str) -> tuple[pd.DataFrame, 
         own, opp = (ma.home, ma.away) if team == "home" else (ma.away, ma.home)
         ojer = ma.away_jerseys if team == "home" else ma.home_jerseys
         oprof = ma.profiles_away if team == "home" else ma.profiles_home
+        mates = [j for j in (ma.home_jerseys if team == "home" else ma.away_jerseys) if j != r.player.split("_", 1)[1]]
+        mprof = ma.profiles_home if team == "home" else ma.profiles_away
         f = g["f0"] + k
         shirt = r.recipient.split("_", 1)[1]
         col = f"{prefix}_{shirt}"
@@ -161,6 +163,7 @@ def idsse_passes(data: Path, cache: Path, match_id: str) -> tuple[pd.DataFrame, 
         row = {"match": match_id, "completed": r.evaluation == "successfullyCompleted", "kick": True, "height": r.height,
                "kick_offset_s": (f - int(r.frame)) / FPS, "ball": (float(g["bx"][k]), float(g["by"][k])), "recipient_at_kick": rec,
                "recipient_at_end": rec_end, "defenders": _build_defender_data(opp.loc[f], oprefix, ojer, oprof) if f in opp.index else [],
+               "attackers": _build_defender_data(own.loc[f], prefix, mates, mprof) if f in own.index else [],
                "touch_by": None if e is None else ("out" if who is None else "recipient" if who == r.recipient
                                                   else "team" if who.startswith(team) else "opponent")}
         if e is not None and who is not None:
@@ -244,7 +247,8 @@ def skillcorner_rows(match_dir: Path, cache: Path) -> pd.DataFrame:
     home = meta["home_team"]["id"]
     number = {p["id"]: str(p["number"]) for p in meta["players"]}
     ref = pd.read_csv(match_dir / f"{match_dir.name}_dynamic_events.csv", low_memory=False,
-                      usecols=["event_type", "end_type", "frame_end", "team_id", "pass_outcome", "player_targeted_id", "player_targeted_xpass_completion"])
+                      usecols=["event_type", "end_type", "frame_end", "team_id", "pass_outcome", "player_targeted_id", "player_targeted_xpass_completion",
+                               "high_pass"])
     ref = ref.loc[(ref["event_type"] == "player_possession") & (ref["end_type"] == "pass") & ref["pass_outcome"].isin(["successful", "unsuccessful"])]
     ev = m.events.loc[m.events["Type"].isin(["PASS", "BALL LOST"])]
     rows = []
@@ -262,9 +266,12 @@ def skillcorner_rows(match_dir: Path, cache: Path) -> pd.DataFrame:
         rec = (own.at[f, f"{team}_{target}_x"], own.at[f, f"{team}_{target}_y"])
         oprefix = "Away" if team == "Home" else "Home"
         ojer, oprof = (ma.away_jerseys, ma.profiles_away) if team == "Home" else (ma.home_jerseys, ma.profiles_home)
+        mates = [j for j in (ma.home_jerseys if team == "Home" else ma.away_jerseys) if str(j) != str(e["From"])]
+        mprof = ma.profiles_home if team == "Home" else ma.profiles_away
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "sc_xpass": r.player_targeted_xpass_completion,
                      "ball": (float(e["Start X"]), float(e["Start Y"])), "recipient_at_kick": rec,
-                     "defenders": _build_defender_data(opp.loc[f], oprefix, ojer, oprof)})
+                     "defenders": _build_defender_data(opp.loc[f], oprefix, ojer, oprof),
+                     "attackers": _build_defender_data(own.loc[f], team, mates, mprof), "high": str(r.high_pass) == "True"})
     return pd.DataFrame(rows)
 
 

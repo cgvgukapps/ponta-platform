@@ -286,3 +286,68 @@ Availability for the pass to the recipient where they stand at the kick, against
 - the measured player speeds.
 
 Reaction time and control time would be fitted only as part of that model.
+
+## A probabilistic pass model (19 November 2026)
+
+**The design.** `plaiq_engine/analytics/pass_probability.py` (0.1.0) is a candidate beside targeted pitch control, which is untouched. It rebuilds the structure step 6 found wanting, after the published pitch-control model (Spearman 2018):
+- **arrival:** each player reaches a point after a reaction time plus Plaiq's kinematic travel time, with uncertainty (a logistic curve of spread `sigma`);
+- **in flight:** the ball travels with the measured flight (step 6). Defenders who have arrived where it passes may take it at rate `lam_flight`; a high ball can be reached only in the first and last `high_reach` of its length;
+- **at the target:** both teams arrive and control the ball at rate `lam`. The passing team's share of control is the chance it keeps the ball;
+- **the result** is a completion probability: flight survival × share at the target;
+- **the target:** where the recipient stands at the pass, or **projected along their run to the ball's arrival** (`projected_target`, from positions and velocities, never the outcome);
+- **separate reaction times** for the passing team and the defenders.
+
+`tools/plaiq_pass_probability.py` fits it by likelihood on the four even IDSSE matches (1,852 passes, 91% completed). It tests it on the three odd matches (1,053 passes, 90%) and on all of SkillCorner's 20 matches (12,103 passes, 82%). As a ceiling for that provider, it also refits on SkillCorner's even matches and tests on its odd ones. The baselines are:
+- the base rate;
+- v1's availability, mapped to a probability on the fit matches so it is judged fairly;
+- SkillCorner's own expected completion.
+
+**Results.** Lower log-loss and Brier are better; AUC is ranking.
+
+| | IDSSE held out: log-loss / AUC | SkillCorner, all 20 (IDSSE-fitted): log-loss / AUC |
+|---|---|---|
+| Base rate | 0.332 / 0.50 | 0.514 / 0.50 |
+| v1 availability (recalibrated) | 0.297 / 0.719 | 0.424 / 0.781 |
+| Published parameters, unfitted | 0.533 / 0.772 | 0.541 / 0.807 |
+| Fitted, target at the pass | 0.305 / 0.755 | 0.403 / 0.812 |
+| **Fitted, projected target, height** | **0.296 / 0.762** | **0.370 / 0.842** |
+| Fitted, projected target, no height | 0.301 / 0.773 | 0.373 / 0.838 |
+| Fitted, projected target, measured player speeds | 0.296 / 0.768 | 0.370 / 0.842 |
+| SkillCorner's own model | — | 0.279 / 0.896 |
+
+Refitted on SkillCorner's even matches and tested on its odd ones (5,930 passes), log-loss / AUC:
+- target at the pass: 0.348 / 0.832;
+- **projected target: 0.321 / 0.859;**
+- the IDSSE-fitted model on the same passes: 0.375 / 0.835;
+- SkillCorner's own model: 0.283 / 0.894.
+
+Observed completion by predicted probability (projected target), predicted → completed:
+
+| Predicted | IDSSE held out (IDSSE fit) | SkillCorner (IDSSE fit) | SkillCorner held out (its own refit) |
+|---|---|---|---|
+| Below 0.5 | 31 passes: 0.36 → 0.77 | 0.37 → 0.31 | 0.23 → 0.22 |
+| 0.5–0.7 | 52: 0.61 → 0.37 | 0.61 → 0.46 | 0.61 → 0.67 |
+| 0.7–0.8 | 47: 0.76 → 0.79 | 0.76 → 0.62 | 0.75 → 0.74 |
+| 0.8–0.9 | 146: 0.86 → 0.87 | 0.86 → 0.76 | 0.86 → 0.84 |
+| 0.9–0.95 | 188: 0.93 → 0.92 | 0.93 → 0.86 | 0.93 → 0.93 |
+| 0.95–1 | 589: 0.98 → 0.96 | 0.98 → 0.97 | 0.98 → 0.98 |
+
+**Fitted parameters** (IDSSE, projected target, height):
+- arrival spread 0.60 s;
+- control rate at the target 13.6 per s, in flight 0.51 per s;
+- **reaction 0.25 s for the passing team and 1.01 s for the defenders;**
+- reachable share of a high ball 0.47.
+
+SkillCorner's refit gives arrival spread 0.55 s, rates 4.4 and 7.1 per s, reactions 0.78 s and 1.28 s, and a reachable share of 0.
+
+**Reading.**
+- **The structure was the gap.** On SkillCorner the model trained on the league's matches cuts v1's log-loss from 0.424 to 0.370 and lifts AUC from 0.781 to 0.842. Refitted on SkillCorner's own matches it reaches 0.321 / 0.859. That closes about half (transfer) to two-thirds (refit) of the AUC gap to SkillCorner's model.
+- **Its output is a probability.** Refitted on the provider, predicted and observed completion agree within about 0.06 in every band.
+- **Projecting the receiver along their run matters most.** It turns a through ball into a pass to where the receiver will be, and uses no outcome.
+- **On IDSSE's held-out matches the gain is smaller:** AUC 0.719 to 0.762, with log-loss level with recalibrated v1. Those matches hold only 108 failed passes, and the lowest bands hold 31 and 52 passes, so the low end there is noisy.
+- **Calibration depends on the data.** Fitted on the league, the model over-predicts SkillCorner's completion by about 6 points (0.875 against 0.819). A probability published to analysts would need fitting per provider, or on pooled data.
+- **Not established:**
+  - **Height:** the fitted reachable share is about 0.5 on the league's data (height makes little difference) and 0 on SkillCorner's (a high ball cannot be cut out in flight), and the two variants score alike;
+  - **measured player speeds:** they score the same as v1's;
+  - **the parameters as physical quantities:** some sit at their bounds in some variants. One pattern holds in every fit: **defenders effectively start 0.5 to 0.75 s after the passing team**, which reads as the receiver knowing where the ball is going.
+- **Not adopted; v1 stays.** This is a candidate for the founder: a "pass completion probability" metric beside v1, labelled estimated. It would also be the availability half of the option split and the risk term of a narrower decision quality version 2.
