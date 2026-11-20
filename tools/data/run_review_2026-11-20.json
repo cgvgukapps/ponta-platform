@@ -1,0 +1,307 @@
+{
+ "reviewer": "founder",
+ "date": "2026-11-20",
+ "method": "blind replay of 50 P6 runs from the German league's matches (IDSSE), five per P6 type, runner ringed, no label shown (tools/context_movement_review.py); the founder chose the run type. One expert's reading: an indication beside SkillCorner's labels, not ground truth.",
+ "cases": [
+  {
+   "id": "J03WMX-18661-away_10",
+   "p6_type_0.1.0": "behind",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-13302-away_14",
+   "p6_type_0.1.0": "cross_receiver",
+   "call": "cross_receiver",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-16023-home_8",
+   "p6_type_0.1.0": "run_ahead_of_the_ball",
+   "call": "support",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-13438-away_25",
+   "p6_type_0.1.0": "dropping_off",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-11686-home_31",
+   "p6_type_0.1.0": "underlap",
+   "call": "not_a_meaningful_run",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-4979-away_27",
+   "p6_type_0.1.0": "behind",
+   "call": "behind",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-11462-home_19",
+   "p6_type_0.1.0": "cross_receiver",
+   "call": null,
+   "note": "this was a carry with the ball"
+  },
+  {
+   "id": "J03WR9-2933-home_29",
+   "p6_type_0.1.0": "cross_receiver",
+   "call": "cross_receiver",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-25660-away_7",
+   "p6_type_0.1.0": "support",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-955-home_37",
+   "p6_type_0.1.0": "overlap",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-8727-home_11",
+   "p6_type_0.1.0": "support",
+   "call": "support",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-14248-away_2",
+   "p6_type_0.1.0": "dropping_off",
+   "call": null,
+   "note": "this run was towards the ball after the pass was already aimed at the ringed player"
+  },
+  {
+   "id": "J03WOH-13078-home_31",
+   "p6_type_0.1.0": "cross_receiver",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-7059-away_38",
+   "p6_type_0.1.0": "pulling_half_space",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-22466-away_7",
+   "p6_type_0.1.0": "behind",
+   "call": "behind",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-2860-home_8",
+   "p6_type_0.1.0": "run_ahead_of_the_ball",
+   "call": "pulling_wide",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-25071-home_25",
+   "p6_type_0.1.0": "overlap",
+   "call": "run_ahead_of_the_ball",
+   "note": "not a run but standard forward movement for a RB"
+  },
+  {
+   "id": "J03WQQ-16154-away_8",
+   "p6_type_0.1.0": "underlap",
+   "call": "dropping_off",
+   "note": "this is a defensive track back"
+  },
+  {
+   "id": "J03WOY-11019-away_6",
+   "p6_type_0.1.0": "dropping_off",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-15524-home_4",
+   "p6_type_0.1.0": "run_ahead_of_the_ball",
+   "call": "support",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-7970-home_34",
+   "p6_type_0.1.0": "coming_short",
+   "call": "dropping_off",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-4421-away_13",
+   "p6_type_0.1.0": "behind",
+   "call": "behind",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-3852-home_8",
+   "p6_type_0.1.0": "pulling_wide",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-15497-away_25",
+   "p6_type_0.1.0": "coming_short",
+   "call": "not_a_meaningful_run",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-26822-away_10",
+   "p6_type_0.1.0": "pulling_half_space",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-4354-home_30",
+   "p6_type_0.1.0": "support",
+   "call": "not_a_meaningful_run",
+   "note": "defensive run towards the ball after clearance"
+  },
+  {
+   "id": "J03WOY-173-home_7",
+   "p6_type_0.1.0": "pulling_wide",
+   "call": "not_a_meaningful_run",
+   "note": "run towards the ball after a clearance"
+  },
+  {
+   "id": "J03WMX-6971-away_11",
+   "p6_type_0.1.0": "underlap",
+   "call": "not_a_meaningful_run",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-17132-away_33",
+   "p6_type_0.1.0": "run_ahead_of_the_ball",
+   "call": "not_a_meaningful_run",
+   "note": "simple carry with the ball"
+  },
+  {
+   "id": "J03WQQ-1809-home_15",
+   "p6_type_0.1.0": "dropping_off",
+   "call": "not_a_meaningful_run",
+   "note": "this is a carry"
+  },
+  {
+   "id": "J03WMX-5512-away_5",
+   "p6_type_0.1.0": "cross_receiver",
+   "call": "behind",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-26825-away_34",
+   "p6_type_0.1.0": "coming_short",
+   "call": "pulling_half_space",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-23603-home_8",
+   "p6_type_0.1.0": "overlap",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-1142-away_20",
+   "p6_type_0.1.0": "pulling_half_space",
+   "call": "pulling_wide",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-3778-home_34",
+   "p6_type_0.1.0": "support",
+   "call": "pulling_half_space",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-7152-home_7",
+   "p6_type_0.1.0": "run_ahead_of_the_ball",
+   "call": "pulling_wide",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-7963-home_11",
+   "p6_type_0.1.0": "pulling_half_space",
+   "call": null,
+   "note": "this is a carry"
+  },
+  {
+   "id": "J03WPY-11290-home_8",
+   "p6_type_0.1.0": "behind",
+   "call": "behind",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-24813-away_7",
+   "p6_type_0.1.0": "underlap",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-2314-home_23",
+   "p6_type_0.1.0": "support",
+   "call": "run_ahead_of_the_ball",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-3968-away_14",
+   "p6_type_0.1.0": "coming_short",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-11149-home_23",
+   "p6_type_0.1.0": "overlap",
+   "call": "overlap",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-27315-away_8",
+   "p6_type_0.1.0": "pulling_wide",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-6191-home_11",
+   "p6_type_0.1.0": "coming_short",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-10864-home_9",
+   "p6_type_0.1.0": "pulling_half_space",
+   "call": "pulling_half_space",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-6247-away_7",
+   "p6_type_0.1.0": "underlap",
+   "call": "dropping_off",
+   "note": "defensive run"
+  },
+  {
+   "id": "J03WOH-2725-away_29",
+   "p6_type_0.1.0": "dropping_off",
+   "call": "coming_short",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-1839-away_40",
+   "p6_type_0.1.0": "pulling_wide",
+   "call": null,
+   "note": "this is a carry"
+  },
+  {
+   "id": "J03WOY-19975-home_4",
+   "p6_type_0.1.0": "overlap",
+   "call": "overlap",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-743-home_11",
+   "p6_type_0.1.0": "pulling_wide",
+   "call": "pulling_wide",
+   "note": ""
+  }
+ ]
+}

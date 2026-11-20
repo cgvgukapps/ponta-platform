@@ -61,8 +61,13 @@ def one(match_dir: Path, cache: Path, overrides: dict | None = None) -> tuple[pd
     pid = {p["id"]: f"{'home' if p['team_id'] == home else 'away'}_{p['number']}" for p in meta["players"]}
     ev = pd.read_csv(match_dir / f"{match_dir.name}_dynamic_events.csv", low_memory=False,
                      usecols=["event_type", "event_subtype", "frame_start", "frame_end", "player_id", "in_to_out", "out_to_in"])
+    # Each player's own possessions (SkillCorner's player_possession): a P6 off-ball run inside one is really a carry.
+    own_poss: dict[str, list[tuple[float, float]]] = {}
+    for r in ev.loc[ev["event_type"] == "player_possession"].itertuples():
+        if r.player_id in pid:
+            own_poss.setdefault(pid[r.player_id], []).append((t_of(r.frame_start), t_of(r.frame_end)))
     sc_runs = ev.loc[ev["event_type"] == "off_ball_run"]
-    att = runs.loc[runs["in_possession"]].copy()
+    att = runs.loc[runs["in_possession"] & ~runs["type"].isin(["carry"])].copy()
     att["matched"] = False
     rows = []
     for r in sc_runs.itertuples():
@@ -84,7 +89,16 @@ def one(match_dir: Path, cache: Path, overrides: dict | None = None) -> tuple[pd
                         "ponta_channel": best["channel_move"]})
         rows.append(row)
     sc = pd.DataFrame(rows)
-    ours = att[["type", "matched"]].assign(match=match_dir.name)
+    def in_own_possession(r) -> bool:
+        spans = own_poss.get(r.player_id, [])
+        mid = (r.start_ts + r.end_ts) / 2
+        return any(s0 - 0.2 <= mid <= s1 + 0.2 for s0, s1 in spans)
+
+    att["in_own_possession"] = [in_own_possession(r) for r in att.itertuples()]
+    carries = runs.loc[runs["type"] == "carry"]
+    carries_in_own = sum(in_own_possession(r) for r in carries.itertuples())
+    ours = att[["type", "matched", "in_own_possession"]].assign(match=match_dir.name)
+    ours.attrs["carries"], ours.attrs["carries_in_own"] = int(len(carries)), int(carries_in_own)
     press = runs.loc[runs["type"] == "pressing"]
     eng = ev.loc[(ev["event_type"] == "on_ball_engagement") & ev["event_subtype"].isin(ENGAGEMENTS)]
     erows, near = [], np.zeros(len(press), bool)
@@ -101,10 +115,11 @@ def one(match_dir: Path, cache: Path, overrides: dict | None = None) -> tuple[pd
     return sc, ours, pe
 
 
-def score(sc: pd.DataFrame, ours: pd.DataFrame, pe: pd.DataFrame, press_counts: tuple[int, int]) -> dict:
+def score(sc: pd.DataFrame, ours: pd.DataFrame, pe: pd.DataFrame, press_counts: tuple[int, int], carries: tuple[int, int] = (0, 0)) -> dict:
     m = sc.loc[sc["found"]]
     out = {"sc_runs": int(len(sc)), "recall": round(float(sc["found"].mean()), 4),
            "ponta_off_ball_runs": int(len(ours)), "precision": round(float(ours["matched"].mean()), 4),
+           "off_ball_runs_inside_the_runners_own_possession": round(float(ours["in_own_possession"].mean()), 4),
            "type": _kappa(m["sc_type"].astype(str).to_numpy(), m["ponta_type"].astype(str).to_numpy()),
            "type_recall_by_sc_type": {t: round(float((g["ponta_type"] == t).mean()), 3) for t, g in m.groupby("sc_type")},
            "in_to_out": _kappa(m["sc_in_to_out"].astype(str).to_numpy(), (m["ponta_shape"] == "in_to_out").astype(str).to_numpy()),
@@ -113,7 +128,8 @@ def score(sc: pd.DataFrame, ours: pd.DataFrame, pe: pd.DataFrame, press_counts: 
            "channel_inward_vs_sc_out_to_in": _kappa(m["sc_out_to_in"].astype(str).to_numpy(), (m["ponta_channel"] == "inward").astype(str).to_numpy()),
            "behind": _kappa((m["sc_type"] == "behind").astype(str).to_numpy(), (m["ponta_area"] == "in_behind").astype(str).to_numpy()),
            "pressing_recall_by_subtype": {s: round(float(g["found"].mean()), 3) for s, g in pe.groupby("subtype")},
-           "pressing_runs_near_an_engagement": round(press_counts[1] / max(press_counts[0], 1), 4)}
+           "pressing_runs_near_an_engagement": round(press_counts[1] / max(press_counts[0], 1), 4),
+           "carries": carries[0], "carries_inside_the_runners_own_possession": round(carries[1] / max(carries[0], 1), 4)}
     out["confusion"] = {r: {c: int(v) for c, v in row.items() if v}
                         for r, row in pd.crosstab(m["sc_type"], m["ponta_type"].fillna("none")).iterrows()}
     return out
@@ -134,7 +150,7 @@ def main() -> None:
     dirs = [d for d in sorted((args.data / "matches").iterdir()) if (d / f"{d.name}_dynamic_events.csv").exists()]
     if args.matches:
         dirs = [d for d in dirs if d.name in args.matches]
-    parts = {"fit": ([], [], [], [0, 0]), "test": ([], [], [], [0, 0])}
+    parts = {"fit": ([], [], [], [0, 0], [0, 0]), "test": ([], [], [], [0, 0], [0, 0])}
     for n, d in enumerate(dirs):
         sc, ours, pe = one(d, args.cache, overrides)
         h = "fit" if n % 2 == 0 else "test"
@@ -143,8 +159,10 @@ def main() -> None:
         parts[h][2].append(pe)
         parts[h][3][0] += pe.attrs["pressing_runs"]
         parts[h][3][1] += pe.attrs["near"]
+        parts[h][4][0] += ours.attrs["carries"]
+        parts[h][4][1] += ours.attrs["carries_in_own"]
         print(d.name, len(sc), "SkillCorner runs", flush=True)
-    out = {h: score(pd.concat(v[0], ignore_index=True), pd.concat(v[1], ignore_index=True), pd.concat(v[2], ignore_index=True), tuple(v[3]))
+    out = {h: score(pd.concat(v[0], ignore_index=True), pd.concat(v[1], ignore_index=True), pd.concat(v[2], ignore_index=True), tuple(v[3]), tuple(v[4]))
            for h, v in parts.items() if v[0]}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1, default=str))

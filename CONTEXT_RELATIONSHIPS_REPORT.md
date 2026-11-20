@@ -135,3 +135,32 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 **For the founder:**
 - **The type agreement (κ 0.40 held out) is moderate.** The next check is a replay review of 50 runs across types, as for phases, before any threshold is agreed.
 - **Pressing:** a measure from distance and closing speed (not a run) would match SkillCorner's engagements better; it belongs with the counter-press in the FIFA view of phases (deliverable 5), where pressing is needed.
+
+### The founder's run review and P6 0.2.0 (20 November 2026)
+
+**The review** (`tools/context_movement_review.py`; calls kept without positions in `tools/data/run_review_2026-11-20.json`): 50 runs from the German league's matches, five per P6 type, judged blind. The founder's calls are one expert's reading, an indication beside SkillCorner's labels.
+- The founder's type agreed with P6 0.1.0's on **13 of the 46** runs given a type (28%; SkillCorner agrees on about 50%).
+- **The notes pointed to definitions, not types:** six runs were the carrier's own movement with the ball, three were defensive (a track-back, runs after a clearance) though labelled as the team in possession, and one was a player moving to meet a pass already played.
+
+**Changes (P6 0.2.0), from the spec's own definition** ("off-ball runs of the carrier's team-mates"):
+- **Possession over the run:** a run belongs to the team that has the ball for more of it (time with nobody on the ball counts for neither), not the team at its first instant.
+- **Carries:** the runner who is the team's nearest player to the ball and within `p6_carry_radius_m` (proposed 3 m) of it for at least half the run is carrying, `carry`, not an off-ball run. Wider than P1's 1.5 m control radius because a dribbler at speed pushes the ball ahead.
+- **Tried and dropped:** labelling a run that ends with the ball `receiving`. It took five runs the founder had typed (coming short three times, behind, support), and SkillCorner keeps such runs too.
+- **Not changed from the review:** the type rules. The confusions the founder's calls show (dropping off against coming short, run ahead against support) need SkillCorner's evidence as well before any rule moves.
+
+**Measured on SkillCorner's 20 matches** (held out; fit in brackets):
+
+| | 0.1.0 | 0.2.0, carry radius 1.5 m | **0.2.0, carry radius 3 m** |
+|---|---|---|---|
+| SkillCorner's runs found | 74.6% (75.4%) | 83.6% (83.6%) | **80.2%** (80.3%) |
+| P6's off-ball runs that SkillCorner labels | 40.3% | 40.2% | **41.1%** |
+| Type, κ | 0.40 (0.42) | 0.40 (0.42) | **0.41** (0.42) |
+| P6 off-ball runs inside the runner's own SkillCorner possession | (not measured) | 5.1% (5.4%) | **1.2%** (1.3%) |
+| P6 carries inside one of the runner's own SkillCorner possessions | | 90% (93%) | 79% (80%) |
+
+- **Possession over the run** finds more of SkillCorner's runs (75% to 80% or more): runs that began as the ball changed hands now count for the right team.
+- **The carry radius is a trade-off:** 3 m leaves almost no carries among off-ball runs (1.2%) but about one carry in five is not a SkillCorner possession; 1.5 m is the reverse (5.1%, one in ten). 3 m is proposed.
+- **On the founder's 50 calls** with 0.2.0: all five noted carries are carries, one typed attacking run is now labelled defensive (eight were with a stricter first rule), and the type agrees on 11 of 31 typed off-ball runs (35%).
+- Thresholds 0.17.0 gain `p6_carry_radius_m` (proposed). P6 0.2.0. Golden outputs recaptured (only P6 changes).
+
+**For the founder:** agree the two definitional changes; choose the carry radius (3 m proposed, or 1.5 m); the type rules stay estimated, with their agreement moderate both with SkillCorner (κ 0.41) and with the founder's calls (35%).

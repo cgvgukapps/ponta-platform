@@ -63,3 +63,23 @@ def test_run_detection_and_the_type_rules():
     assert classify_attacking({**base, "d0": 55.0, "d1": 47.0, "w0": 5.0, "w1": 3.0}, CFG, 105.0) == "coming_short"
     assert classify_attacking({**base, "d0": 30.0, "d1": 38.0, "w0": 6.0, "w1": 6.0}, CFG, 105.0) == "support"
     assert [channel_band(w) for w in (0.0, 9.5, -15.0, 22.0)] == [0, 1, 1, 2]
+
+
+def test_the_carriers_own_run_is_a_carry_not_an_off_ball_run():
+    """P6 0.2.0 (the founder's run review): Home_7 sprints with the ball; that is a carry."""
+    m = eleven_a_side(seconds=30.0)
+    tr, ball = m.tracking.copy(), m.ball.copy()
+    t, tb = tr["timestamp"].to_numpy(), (ball["frame"].to_numpy() - 1) / m.fps
+    x0, y0, x1, y1 = -7.5, 8.8, 12.0, 8.8
+    sel = (tr["player_id"] == "home_7") & (t >= 5.0) & (t <= 8.0)
+    u = (t[sel] - 5.0) / 3.0
+    tr.loc[sel, "x"], tr.loc[sel, "y"] = x0 + u * (x1 - x0), y0
+    tr.loc[(tr["player_id"] == "home_7") & (t > 8.0), "x"] = x1
+    sb = (tb >= 5.0) & (tb <= 8.0)
+    ball.loc[sb, "x"], ball.loc[sb, "y"] = x0 + (tb[sb] - 5.0) / 3.0 * (x1 - x0) + 0.5, y0
+    ball.loc[tb > 8.0, "x"] = x1 + 0.5
+    res = Registry([PossessionPackage(), StructurePackage(), MovementPackage()]).run(dataclasses.replace(m, tracking=tr, ball=ball))
+    runs = res.outputs["p6"].segments["runs"]
+    mine = runs.loc[runs["player_id"] == "home_7"]
+    assert len(mine) == 1 and mine["type"].iloc[0] == "carry" and mine["in_possession"].iloc[0]
+    assert res.outputs["p6"].measurements["carries"] == 1

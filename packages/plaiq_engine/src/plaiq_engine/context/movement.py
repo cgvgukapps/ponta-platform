@@ -15,6 +15,12 @@ runs by the other team are defensive runs. Each run gets, by rules fixed before 
   (SkillCorner's ``in_to_out`` and ``out_to_in`` flags are moves between channels, not the shape; ``channel_move``
   gives that reading: ``outward``, ``inward`` or ``same`` across P3's centre, half-space and wide bands.)
 
+**Not off-ball runs** (version 0.2.0, after the founder's run review): a run counts as in possession when its team
+has the ball for more of the run than the other team (time with nobody on the ball counts for neither; else the state
+at the run's start); the carrier's own movement (the team's nearest player to the ball, within ``p6_carry_radius_m``,
+for at least half the run) is a ``carry``, not typed or counted as an off-ball run. (A run that ends with the
+player receiving the ball stays its type: the founder typed such runs, and SkillCorner labels them too.)
+
 **The type**, in priority order (the names follow SkillCorner's run vocabulary so they can be measured; Ponta's
 rules): ``cross_receiver`` (the ball wide in the attacking third, the run ending in the box), ``behind`` (ending in
 behind and gaining depth), ``overlap`` / ``underlap`` (starting behind the carrier and finishing ahead of them,
@@ -126,7 +132,7 @@ class _Fields:
 
 class MovementPackage(ContextPackage):
     name = "p6"
-    version = "0.1.0"
+    version = "0.2.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -147,11 +153,12 @@ class MovementPackage(ContextPackage):
         # The ball and each team's carrier in each team's own (attacking) frame.
         s_t = {t: np.array([sign.get((int(p), t), 1) for p in per], float) for t in TEAMS}
         ball_own = {t: (s_t[t] * ball[:, 0] + L / 2, s_t[t] * ball[:, 1]) for t in TEAMS}
-        carrier = {}
+        carrier, near_ball = {}, {}
         for t in TEAMS:
             dd = np.hypot(tf[t].depth - ball_own[t][0][:, None], tf[t].width - ball_own[t][1][:, None])
             dd = np.where(np.isfinite(dd), dd, np.inf)
             carrier[t] = np.where(np.isfinite(dd.min(axis=1)), dd.argmin(axis=1), -1)
+            near_ball[t] = dd.min(axis=1)
 
         def gk_col(t, k):
             pid = keepers.get((t, int(per[k]), int(block[k])))
@@ -180,14 +187,24 @@ class MovementPackage(ContextPackage):
                     d0, d1, w0, w1 = f.depth[a, j], f.depth[b, j], f.width[a, j], f.width[b, j]
                     if not np.isfinite([d0, d1, w0, w1]).all():
                         continue
-                    own = attacking[a] == t
+                    span = np.arange(a, b + 1)
+                    # 0.2.0 (the founder's run review): possession over the run, not at its first instant; and the
+                    # carrier's own movement is a carry, not an off-ball run.
+                    n_own, n_their = int((attacking[span] == t).sum()), int((attacking[span] == OTHER[t]).sum())
+                    if n_own == n_their:  # no team has the ball during the run, or as long each: the state at its start
+                        own, theirs = attacking[a] == t, attacking[a] == OTHER[t]
+                    else:
+                        own, theirs = n_own > n_their, n_their > n_own
+                    on_ball = (carrier[t][span] == j) & (near_ball[t][span] <= cfg["p6_carry_radius_m"])
                     run = {"team": t, "player_id": pid, "period": int(per[a]), "start_ts": float(ts[a]), "end_ts": float(ts[b]),
                            "duration_s": round(float(ts[b] - ts[a]), 2), "in_possession": bool(own), "type": None,
                            "area_end": None, "behind_from": None, "shape": None,
                            "channel_move": {1: "outward", -1: "inward", 0: "same"}[int(np.sign(channel_band(w1) - channel_band(w0)))]
                            if np.isfinite([w0, w1]).all() else None,
                            "gain_m": round(float(d1 - d0), 2), "lateral_m": round(float(abs(w1) - abs(w0)), 2)}
-                    if own:
+                    if own and on_ball.mean() >= 0.5:
+                        run["type"] = "carry"
+                    elif own:
                         d = OTHER[t]
                         units = units_at(tf[d].depth[b], tf[d].width[b], L, gk_col(d, b))
                         units0 = units_at(tf[d].depth[a], tf[d].width[a], L, gk_col(d, a))
@@ -215,7 +232,7 @@ class MovementPackage(ContextPackage):
                         run["type"] = classify_attacking(geo, cfg, L)
                         if run["area_end"] == "in_behind":
                             behind_now[a:b + 1] += 1
-                    elif attacking[a] == OTHER[t]:
+                    elif theirs:
                         o = OTHER[t]
                         co = carrier[o][b]
                         if co >= 0:
@@ -232,10 +249,11 @@ class MovementPackage(ContextPackage):
                     rows.append(run)
         runs = pd.DataFrame(rows, columns=list(RUN_COLUMNS)).sort_values(["start_ts", "team", "player_id"], kind="stable").reset_index(drop=True)
         frames = pd.DataFrame({"p6_home_runs": counts["home"], "p6_away_runs": counts["away"], "p6_runs_in_behind": behind_now})
-        att_runs = runs.loc[runs["in_possession"]]
+        att_runs = runs.loc[runs["in_possession"] & ~runs["type"].isin(["carry"])]
         played = sum(float(np.isfinite(tf[t].depth).sum()) for t in TEAMS) * (float(np.nanmedian(np.diff(ts))) if n > 1 else 0.0)
         measurements = {
             "runs": int(len(runs)), "off_ball_runs": int(len(att_runs)),
+            "carries": int((runs["type"] == "carry").sum()),
             "type_share": {k: round(float(v), 4) for k, v in att_runs["type"].value_counts(normalize=True).items()},
             "area_end_share": {k: round(float(v), 4) for k, v in att_runs["area_end"].value_counts(normalize=True).items()},
             "shape_share": {k: round(float(v), 4) for k, v in att_runs["shape"].value_counts(normalize=True).items()},

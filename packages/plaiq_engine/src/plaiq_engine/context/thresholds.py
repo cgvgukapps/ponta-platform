@@ -27,7 +27,7 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
-Version 0.17.0 adds P6 0.1.0's five run thresholds (proposed; a new package).
+Version 0.17.0 adds P6 0.1.0's five run thresholds (proposed; a new package); P6 0.2.0 adds ``p6_carry_radius_m``.
 Version 0.16.0 adds ``p5_lb_option_min_p``, ``p5_open_lane_min_p``, ``p5_free_radius_m``, ``p5_overload_radius_m`` and ``p5_forced_turnover_min_pressure`` for P5 0.2.0's line-breaking options and relationships (all proposed; new fields).
 Version 0.15.0 adds ``p1_loose_max_s`` for P1 0.4.0's ball state (proposed; a new field, so earlier
 outputs are unchanged).
@@ -211,6 +211,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p6_move_min_m", 3.0, "m", "proposed",
               "The distance a run must gain, lose, close or move sideways for its directional types (behind, coming short, dropping off, pulling wide or into a half-space), and the band around the last line for 'from the final unit'.",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
+    Threshold("p6_carry_radius_m", 3.0, "m", "proposed",
+              "A run is the carrier's own (a carry, not an off-ball run) when the runner is the team's nearest player to the ball and within this distance of it for at least half the run. Wider than P1's control radius because a dribbler at speed pushes the ball ahead.",
+              "Stage C, P6 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4): the founder's run review noted carries among off-ball runs; measured against SkillCorner's player possessions"),
     Threshold("p6_press_min_speed_mps", 4.17, "m/s", "proposed",
               "Defensive runs (while the other team has the ball) may be this slow; equal to p6_run_min_speed_mps unless lowered (a press is often a jog).",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
