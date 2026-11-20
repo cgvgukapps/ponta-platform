@@ -52,10 +52,14 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: 1.5 (19 November 2026): version 1's bands get descriptive names (founder decision): full_gain, most_gain,
 #: partial_gain, low_gain replace optimal, good, suboptimal, poor at the same cut-offs. Version 1 is shown as
 #: "Gain" and version 2 as "Choice". Values change; columns do not.
-SCHEMA_VERSION = "1.5"
+#: 1.6 (20 November 2026): Gain version 2 (``MatchAnalysis.gain_v2``, adopted beside version 1): ``gain_v2_score``
+#: (0 to 1.5, version 1's cut-offs and band names), ``gain_v2_band``, ``gain_v2_status``, ``gain_v2_version``. Passes only.
+SCHEMA_VERSION = "1.6"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
+#: The label every Gain version 2 score carries (measured against outcomes and a provider's analogue, not analysts).
+GAIN_V2_LABEL = "estimated"
 #: The label every decision quality v2 score carries (measured against outcomes and a provider's analogue, not analysts).
 DQ_V2_LABEL = "estimated"
 
@@ -82,6 +86,7 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "xt_delta", "movement_value", "opposition_pressure", "pitch_zone", "mode",
     "pass_completion_probability", "pass_completion_status", "pass_completion_parameters",
     "dq_v2_score", "dq_v2_band", "dq_v2_status", "dq_v2_best_option_ref", "dq_v2_version",
+    "gain_v2_score", "gain_v2_band", "gain_v2_status", "gain_v2_version",
     "not_scored", "not_scored_reason",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
@@ -257,6 +262,7 @@ class SemanticBuilder:
         mv = a.movement_value
         pc = a.pass_completion.set_index("event_idx")
         dq2 = a.decision_quality_v2.set_index("event_idx")
+        g2 = a.gain_v2.set_index("event_idx")
         dq2_scored = set(dq2.index[dq2["dq_v2"].notna()])
         set_piece_frames = self._set_piece_frames()
         rows: list[dict] = []
@@ -316,6 +322,7 @@ class SemanticBuilder:
                     else:
                         pcs = r["reason"]
                 d2s, d2b, d2st, d2best, d2v = None, None, None, None, None
+                g2s, g2b, g2st, g2v = None, None, None, None
                 if kind == "pass" and idx in dq2.index:
                     r2 = dq2.loc[idx]
                     d2v = r2["version"]
@@ -328,6 +335,16 @@ class SemanticBuilder:
                         d2b = r2["dq_v2_band"]
                     else:
                         d2st = r2["reason"]
+                if kind == "pass" and idx in g2.index:
+                    rg = g2.loc[idx]
+                    g2v = rg["version"]
+                    if d2st is not None and d2st != DQ_V2_LABEL:
+                        g2st = d2st  # not scored where Choice is not: goalkeeper, set piece, no completion probability
+                    elif pd.notna(rg["gain_v2"]):
+                        g2s, g2st = round(float(rg["gain_v2"]), 4), GAIN_V2_LABEL
+                        g2b = dq_band(g2s)
+                    else:
+                        g2st = rg["reason"]
                 inferred = actor_pov.get("inferred_receiver") if actor_pov is not None else None
                 conf = actor_pov.get("inference_confidence") if actor_pov is not None else None
                 row.update({
@@ -346,6 +363,7 @@ class SemanticBuilder:
                     "opposition_pressure": self._pressure(e, team, actor),
                     "pitch_zone": pitch_zone(float(e.get("Start X", np.nan)), float(e.get("Start Y", np.nan)), team),
                     "pass_completion_probability": pcp, "pass_completion_status": pcs, "pass_completion_parameters": pcset,
+                    "gain_v2_score": g2s, "gain_v2_band": g2b, "gain_v2_status": g2st, "gain_v2_version": g2v,
                     "dq_v2_score": d2s, "dq_v2_band": d2b, "dq_v2_status": d2st, "dq_v2_best_option_ref": d2best, "dq_v2_version": d2v,
                     "not_scored": not_scored,
                     "not_scored_reason": reason,
@@ -477,6 +495,8 @@ def nested_record(row: dict) -> dict:
             "not_scored": row["not_scored"], "not_scored_reason": row["not_scored_reason"],
             "pass_completion": {"probability": row.get("pass_completion_probability"), "status": row.get("pass_completion_status"),
                                 "parameters": row.get("pass_completion_parameters")},
+            "gain_v2": {"score": row.get("gain_v2_score"), "band": row.get("gain_v2_band"), "status": row.get("gain_v2_status"),
+                        "version": row.get("gain_v2_version")},
             "decision_quality_v2": {"score": row.get("dq_v2_score"), "band": row.get("dq_v2_band"), "status": row.get("dq_v2_status"),
                                     "best_option_player_ref": row.get("dq_v2_best_option_ref"), "version": row.get("dq_v2_version")},
         },

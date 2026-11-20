@@ -91,6 +91,10 @@ DQ_V2_VERSION = "1.1.0"
 #: The rings of cells around each run that the adopted score evaluates (7 cells per team-mate).
 DQ_V2_RINGS = 1
 
+#: Gain version 2 (the one-model Gain, ``decision_gain``), adopted beside version 1 by the founder 20 November 2026.
+#: Version 1 (``pass_option_value``) stays the default Gain. Same cut-offs and band names as version 1.
+GAIN_V2_VERSION = "2.0.0"
+
 #: Bands agreed by the founder 19 November 2026 (measured: ``ponta-platform/PLAIQ_REFERENCES_REPORT.md``,
 #: "Candidate bands" and "on Plaiq's hex grid"). Descriptive names, distinct from version 1's.
 DQ_V2_BANDS: tuple[tuple[float, str], ...] = ((0.95, "best_option"), (0.60, "near_best"), (0.45, "below_best"))
@@ -279,7 +283,8 @@ def decision_gain(realised_value: float, ev_best: float) -> float:
     it was played (Choice's denominator, ``ev_best``), clipped 0 to 1.5 as version 1 is. The realised value is
     ``option_value`` at the cell where the ball arrived, and 0 for a failed pass: Gain is the outcome, Choice
     the decision, from one option set and one value surface. Gain / Choice is what the execution and the run
-    added to the choice. Version 1 stays the default Gain until this is measured and agreed.
+    added to the choice. **Adopted beside version 1 as Gain version 2** (2.0.0, 20 November 2026,
+    ``MatchAnalysis.gain_v2``); version 1 stays the default Gain.
     """
     if realised_value is None or ev_best is None or not (np.isfinite(realised_value) and np.isfinite(ev_best)) or ev_best <= 0:
         return np.nan

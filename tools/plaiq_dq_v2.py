@@ -17,7 +17,9 @@ their run reaches when the ball arrives (``decision_quality_cells``). Since 1.1.
 1.0.0 (rank correlation 0.993). **One model, two outputs** (candidate, 19 November 2026): ``gain``, the value
 realised where the ball arrived (the tracked ball at version 1's arrival frame, else the receiver; 0 for a failed
 pass) over Choice's best expected value on offer (``decision_gain``), beside version 1 as the current Gain, and
-``execution``, the realised value over the chosen option's expected value. Plus:
+``execution``, the realised value over the chosen option's expected value. Since Gain version 2 was adopted
+(2.0.0, 20 November 2026) ``gain`` and ``execution`` read the shipped ``MatchAnalysis.gain_v2``, and
+``gain_tool`` keeps the tool's own computation beside it as a check. Plus:
 
 - **consistency:** the band shares of completed and failed passes (judging the intention, failed passes
   should not look better than completed ones);
@@ -92,6 +94,7 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
     pc = ma.pass_completion.set_index("event_idx")
     d2 = ma.decision_quality_v2.set_index("event_idx")
     receipts = build_pass_receipt_lookup(ma.events)
+    g2 = ma.gain_v2.set_index("event_idx")
     model = parameters_for(m.provider).model
     q_all, r_all = (np.asarray(a, int) for a in cartesian_to_hex(ma.hex_centers[:, 0], ma.hex_centers[:, 1], ma.R))
     meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
@@ -142,7 +145,9 @@ def one(match_dir: Path, cache: Path) -> pd.DataFrame:
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "v1": float(v1), "v2": v2["dq"], "v2_xt": v2x["dq"],
                      "p_complete": p_chosen, "v1_risk": decision_quality_risk(float(v1), p_chosen), "projected": proj["dq"],
                      **{f"hex_r{k}": cells.get(f"hex_r{k}", np.nan) for k in RINGS}, "hex_r2_cells": cells.get("cells", np.nan),
-                     "gain": gain.get("gain", np.nan), "gain_raw": gain.get("raw", np.nan), "execution": gain.get("execution", np.nan),
+                     "gain": g2.at[e.name, "gain_v2"] if e.name in g2.index else np.nan, "gain_tool": gain.get("gain", np.nan),
+                     "gain_raw": gain.get("raw", np.nan),
+                     "execution": g2.at[e.name, "execution"] if e.name in g2.index else np.nan,
                      "p_chosen_projected": proj.get("p_chosen", np.nan), "projected_best_is_chosen": proj.get("best_is_chosen"),
                      "availability": v2["availability_chosen"], "sc_dq": sc_dq, "sc_chose_best": chose, "lead_to_shot": bool(r.lead_to_shot),
                      "lead_to_goal": bool(r.lead_to_goal), "pressure": r.overall_pressure_end if isinstance(r.overall_pressure_end, str) else None})

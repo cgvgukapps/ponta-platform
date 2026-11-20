@@ -63,6 +63,7 @@ METRICS: dict[str, tuple[str, str]] = {
     "decision_quality": ("decisions", "Decision quality: Gain"),
     "pass_completion": ("decisions", "Pass completion probability"),
     "decision_quality_v2": ("decisions", "Decision quality: Choice"),
+    "gain_v2": ("decisions", "Decision quality: Gain (version 2)"),
     "event_delta_v": ("value", "Event value change (ΔV)"),
     "shot_quality": ("value", "Shot quality"),
     "physical_summary": ("physical", "Physical summary (distance, speed)"),
@@ -369,6 +370,10 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
     else:
         put("load_and_fatigue", "blocked", "No physiological source (heart rate or IMU) for this match.",
             unlock="Pair a wearable export with this match. Paired-source analysis is in development.")
+
+    # Gain version 2 is computed from Choice's parts (its best expected value on offer), so it has Choice's state.
+    v2 = m["decision_quality_v2"]
+    put("gain_v2", v2.state, v2.reason, measure=v2.measure, unlock=v2.unlock)
 
     ordered = {k: m[k] for k in METRICS}
     coverage = {

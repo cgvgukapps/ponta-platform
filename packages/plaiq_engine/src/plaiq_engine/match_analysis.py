@@ -30,12 +30,18 @@ from scipy.spatial import cKDTree
 from plaiq_engine.analytics.decision_quality_v2 import (
     DQ_V2_RINGS,
     DQ_V2_VERSION,
+    GAIN_V2_VERSION,
+    decision_gain,
     decision_quality_cells,
     dq_v2_band,
     option_cells_probabilities,
     option_value,
 )
-from plaiq_engine.analytics.event_stitch import clean_jersey
+from plaiq_engine.analytics.event_stitch import (
+    ball_xy_from_tracking,
+    build_pass_receipt_lookup,
+    clean_jersey,
+)
 from plaiq_engine.analytics.hex_analytics import (
     assign_all_players,
     cartesian_to_hex,
@@ -349,6 +355,48 @@ class MatchAnalysis:
             b = out["best_option"]
             row.update({"dq_v2": out["dq"], "dq_v2_band": dq_v2_band(out["dq"]), "best_option": names[b],
                         "best_cell": int(cells[b][out["best_cell"][b]]), "best_is_chosen": out["best_is_chosen"]})
+        return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
+
+    @cached_property
+    def gain_v2(self) -> pd.DataFrame:
+        """
+        Gain version 2 (``analytics/decision_quality_v2.decision_gain``, 2.0.0, adopted beside version 1
+        20 November 2026): Gain from Choice's own parts. For every pass Choice scores, the value realised where
+        the ball arrived (``option_value`` at the tracked ball at version 1's arrival frame, the stitched receipt,
+        else the receiver; **0 for a failed pass**) over Choice's best expected value on offer at release, clipped
+        0 to 1.5. ``execution`` is the realised value over the chosen option's expected value, so Gain = Choice x
+        execution. Version 1 (``event_pov``) stays the default Gain. Passes only (version 1 also scores carries).
+        Labelled estimated.
+        """
+        cols = ["event_idx", "gain_v2", "realised_value", "execution", "arrival_frame", "version", "reason"]
+        d2 = self.decision_quality_v2.set_index("event_idx")
+        receipts = build_pass_receipt_lookup(self.events)
+        rows = []
+        for idx, c in d2.iterrows():
+            row = {"event_idx": idx, "gain_v2": np.nan, "realised_value": np.nan, "execution": np.nan, "arrival_frame": None,
+                   "version": GAIN_V2_VERSION, "reason": None}
+            rows.append(row)
+            if pd.isna(c["dq_v2"]):
+                row["reason"] = c["reason"]
+                continue
+            e = self.events.loc[idx]
+            m = self._pass_moment(e)
+            if str(e.get("Type", "")).upper() == "PASS":
+                r = receipts.get(idx) or {}
+                f = int(r["receipt_start_frame"]) if r.get("stitch_valid") and r.get("receipt_start_frame") is not None else int(e["End Frame"])
+                own = self.home if m["team"] == "Home" else self.away
+                col = f"{m['team']}_{m['target']}"
+                rec = np.array([own.at[f, f"{col}_x"], own.at[f, f"{col}_y"]], float) if f in own.index and f"{col}_x" in own.columns else None
+                arrival = ball_xy_from_tracking(self.home, self.away, f, fallback=rec)
+                if arrival is None or not np.isfinite(arrival).all():
+                    row["reason"] = "neither the ball nor the receiver is tracked where the pass arrived"
+                    continue
+                row["arrival_frame"] = f
+                realised = option_value(m["ball"], arrival, float(self._xt_at(m["team"], m["ball"])[0]), float(self._xt_at(m["team"], arrival)[0]))
+            else:
+                realised = 0.0
+            row.update({"gain_v2": decision_gain(realised, float(c["ev_best"])), "realised_value": realised,
+                        "execution": realised / float(c["ev_chosen"]) if c["ev_chosen"] > 0 else np.nan})
         return pd.DataFrame(rows, columns=cols).sort_values("event_idx", kind="stable").reset_index(drop=True)
 
     # -- per-frame surfaces (computed on demand) ------------------------------------------

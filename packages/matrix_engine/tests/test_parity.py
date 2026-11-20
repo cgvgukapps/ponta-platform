@@ -142,3 +142,13 @@ def test_decision_quality_v2_follows_pass_completion_and_the_event_feed():
     assert metrica.state == "degraded" and "pass completion probability" in metrica.reason and metrica.unlock
     assert classify(ParityInputs(provider="statsbomb", mode="event_only", has_events=True, has_freeze_frames=True)).states()["decision_quality_v2"] == "blocked"
     assert classify(ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"))).states()["decision_quality_v2"] == "blocked"
+
+
+def test_gain_v2_has_choices_state_everywhere():
+    for inputs in (SKILLCORNER_OPEN_DATA,
+                   ParityInputs(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"),
+                                player_dropout=0.0, has_events=True, has_shot_events=True),
+                   ParityInputs(provider="statsbomb", mode="event_only", has_events=True, has_freeze_frames=True),
+                   ParityInputs(provider="statsports", mode="gps_only", sample_rate_hz=10.0, teams_tracked=("home",))):
+        r = classify(inputs).metrics
+        assert (r["gain_v2"].state, r["gain_v2"].reason) == (r["decision_quality_v2"].state, r["decision_quality_v2"].reason)

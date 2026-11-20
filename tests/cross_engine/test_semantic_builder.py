@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.5").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 on cells; 1.5 v1 band names
+    assert sem["schema_version"].eq("1.6").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -243,3 +243,30 @@ def test_decision_quality_v2_ignores_the_outcome():
     sem = SemanticBuilder(lost, parity).semantic_events()
     row = sem.loc[(sem["event_idx"] == 2) & (sem["action_type"] == "pass")]
     assert len(row) == 1 and row["action_outcome"].iloc[0] == "lost" and row["dq_v2_status"].iloc[0] == "estimated"
+
+
+def test_gain_v2_beside_version_1(built):
+    analysis, _, sem = built
+    passes = sem.loc[sem["action_type"] == "pass"].set_index("event_idx")
+    r = passes.loc[2]
+    assert 0.0 <= r["gain_v2_score"] <= 1.5 and r["gain_v2_status"] == "estimated" and r["gain_v2_version"] == "2.0.0"
+    assert r["gain_v2_band"] == dq_band(r["gain_v2_score"])  # version 1's cut-offs and names
+    assert passes.loc[1, "gain_v2_status"].startswith("set piece") and pd.isna(passes.loc[1, "gain_v2_score"])
+    assert passes.loc[4, "gain_v2_status"].startswith("goalkeeper") and pd.isna(passes.loc[4, "gain_v2_score"])
+    assert sem.loc[sem["action_type"] != "pass", "gain_v2_score"].isna().all()
+    # Gain = Choice x execution, from one model.
+    g = analysis.gain_v2.set_index("event_idx").loc[2]
+    d = analysis.decision_quality_v2.set_index("event_idx").loc[2]
+    assert g["gain_v2"] == pytest.approx(min(1.5, d["dq_v2"] * g["execution"]))
+    rec = nested_record(passes.reset_index().loc[lambda x: x["event_idx"] == 2].iloc[0].to_dict())
+    assert set(rec["spatial_intelligence"]["gain_v2"]) == {"score", "band", "status", "version"}
+
+
+def test_gain_v2_is_zero_for_a_failed_pass():
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    ev.loc[2, "Type"] = "BALL LOST"
+    g = MatchAnalysis(replace(m, events=ev)).gain_v2.set_index("event_idx")
+    assert g.at[2, "gain_v2"] == 0.0 and g.at[2, "realised_value"] == 0.0

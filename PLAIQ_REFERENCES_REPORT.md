@@ -609,3 +609,14 @@ Paired resamples of the 20 matches (300), one-model Gain minus version 1: shot +
 - **Version 1's cut-offs order it more steeply:** shots 0.4%, 3.4%, 7.1%, 11.2% from Low gain to Full gain (version 1: 1.2%, 1.6%, 5.5%, 9.1%), with 46% of completed passes at Full gain (version 1: 58%).
 
 **Recommendation for the founder:** adopt the one-model Gain in place of version 1's formula as Gain (a new version beside version 1 first, as engine governance requires), labelled estimated. It would also retire version 1's lenient failed-pass score. Not established: anything beyond SkillCorner's 20 matches; the cut-offs were agreed for version 1 and are not re-measured for it.
+
+## Gain version 2 adopted beside version 1 (20 November 2026)
+
+**Founder decision:** the one-model Gain ships as **Gain version 2** (`decision_gain`, `GAIN_V2_VERSION = "2.0.0"`), beside version 1, labelled estimated. Version 1 stays the default Gain.
+
+- **Engine:** `MatchAnalysis.gain_v2`, one row per pass Choice covers. It reads Choice's moment and best expected value and version 1's arrival frame (the stitched receipt, else the event's end), and gives the realised value, `execution` (realised over the chosen option's expected value) and the reason when there is no score. A failed pass gains 0. Passes only.
+- **Semantic events, schema 1.6:** `gain_v2_score`, `gain_v2_band`, `gain_v2_status`, `gain_v2_version`; nested as `spatial_intelligence.gain_v2`. Not scored where Choice is not (goalkeeper, set piece, no completion probability).
+- **Data check:** a 15th metric, `gain_v2` ("Decision quality: Gain (version 2)"), with Choice's state and reason everywhere.
+- **Bands, measured:** version 1's cut-offs and names. On the held-out half the shot rate on completed passes rises 0.2% [0.1, 0.8], 3.3% [2.4, 4.6], 7.0% [5.3, 9.2], 10.9% [9.7, 12.2] from Low gain to Full gain, in 97 to 98% of match resamples (three seeds). A grid fit on the even matches picks 0.55 / 0.75 / 1.15 (rises in 100%, top band 15.5% shots), but its top band would mean beating the best option by 15%; one scale and one set of names is kept for both versions. Shares (all passes, held out): 34 / 17 / 11 / 38%, failed passes in Low gain.
+- **Checked end to end:** the measurement tool now reads the shipped property (`gain`, `execution`) beside its own computation (`gain_tool`). On SkillCorner's 20 matches the two are identical on all 12,095 scored passes (largest difference 0), and every Gain measure in the earlier section is unchanged.
+- **To cite carefully:** most of its link to shots is where the ball arrived; Choice describes the decision.
