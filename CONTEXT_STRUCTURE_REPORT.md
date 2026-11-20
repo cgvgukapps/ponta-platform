@@ -821,3 +821,50 @@ Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.
 - **Semantic events:** `pitch_zone` and every value above, on those halves.
 
 **Not changed:** the frozen prototype carries the same defect and stays frozen. Its records cover Game 3 and SkillCorner, which are unaffected.
+
+## The Gate 2a round: closing the set (20 November 2026)
+
+**Where the set stood** (`tools/context_reference_set.py`, current code, reproduced): formations 20 of 20; phases pooled κ 0.609 and 0.610 by half; roles grouped 19 of 20 and merged 17 of 20; two matches below the founder's 0.50 phase floor (2013725 first half 0.482, 2017461 second half 0.490). 2015213, one of the three earlier failures, now sits at 0.501.
+
+### Roles: 1959846 plays a shape P2 has no template for
+
+- **Out of possession in the first half, the home team's mean positions** (depth from its own goal, width): a flat back four at 34 to 38 m (centre-backs at width 7 and −5 m, full-backs at ±15 m), two central midfielders at 42 to 46 m, two wide players pushed up to 50 to 53 m (width −12 and +18 m), and two strikers at 55 to 59 m. That is a 4-2-2-2, a box midfield. SkillCorner's 4-4-2 line-up is consistent with the tracking; P2's fit is not.
+- **With no template for the shape, P2 fits a 3-4-2-1:** the right-back becomes a centre-back, the wide players wing-backs or attacking midfielders, the strikers attacking midfielders.
+- **Candidate: a 4-2-2-2 template** (`p2_template_4_2_2_2`, proposed and off, thresholds 0.11.0), its coordinates set from the other templates before scoring. Measured on the 20 matches:
+
+| Roles | Without (P2 0.2.0) | With the 4-2-2-2 |
+|---|---|---|
+| 1959846 grouped / merged | 58.7% / 78.4% | 62.4% / 82.9% (still below both bars) |
+| Matches meeting the grouped bar (75%) | 19 | 18 |
+| Matches meeting the merged bar (85%) | 17 | 18 |
+| Grouped median | 92.2% | 86.7% |
+
+  The template catches teams SkillCorner lists as 4-2-3-1 or 4-4-2 and costs four held-out matches 4 to 11 points; phases are unchanged. **Not adopted.** The switch stays off as the record.
+- **2006229 (84.4%) and 2016236 (84.0%)** miss the merged bar by about a point, with misses spread across players (forwards read as central midfielders, a right-back as a centre-back, SkillCorner's "RM" as Ponta's wide midfielder). No single pattern; fixing them one by one would tune to noise.
+- **Pooled over all 583 players:** 84.1% by position group (bar 75%) and 89.0% with central midfield merged (bar 85%).
+- **Proposed set-level reading for roles, as for phases:** pooled over the set, at least 75% grouped and 85% merged (met), with the per-match bars kept as a reading (19 and 17 of 20) and 1959846 recorded as a known limit: P2 has no box-midfield template, and adding one costs more than it gains.
+
+### Phases: the floor failures come from the own-third build-up rule
+
+- **On both failing halves the largest disagreement is SkillCorner "create", Ponta "build_up"** (1,015 grid points on 2013725's first half; 286 on 2017461's second).
+- **The cause is the founder's own-third rule** (build-up whenever the ball is in the own third, adopted from the replay review, P4 0.2.0). With it off, 2013725's first half rises from 0.482 to 0.567 and 2017461's second from 0.490 to 0.508.
+- **Swept the boundary** (`p4_build_up_max_depth_share`) rather than dropping the rule; review scored with Metrica pickles rebuilt after the 19 November second-half fix:
+
+| Build-up whenever the ball is within | Review (of 50) | SkillCorner κ by half (event spans) | Phases-of-play file | Matches with κ ≥ 0.55 on both halves | Lowest half |
+|---|---|---|---|---|---|
+| a third (agreed, 0.333) | 36 | 0.609 / 0.610 | 0.625 | 13 | 0.482 |
+| 0.30 of the pitch | 35 | 0.653 / 0.637 | 0.655 | 16 | 0.510 |
+| **a quarter (0.25)** | **35** | **0.670 / 0.638** | **0.652** | **18** | **0.524** |
+| off (0) | 34 | 0.638 / 0.604 | 0.619 | | |
+
+- **Held out by match** (points-weighted κ over each half of the matches, half 1 / half 2): a third gives 0.612 / 0.638 on the even matches and 0.593 / 0.573 on the odd; a quarter gives 0.672 / 0.659 and **0.656 / 0.609**. The gain holds on the matches it was not chosen on.
+- **The one review case lost:** Metrica 1 grid point 25371, where the ball is between a quarter and a third of the pitch and the founder accepted build-up. The two "recycling backwards" cases (Metrica 2 grid point 5864, Metrica 3 grid point 11497) are not fixed by any boundary.
+- **A quarter beats both a third and no rule:** the founder's rule is right in kind; the boundary was too far out.
+- **Proposed for the founder:** `p4_build_up_max_depth_share` from 0.333 to 0.25 (P4 0.4.0). With it, no match is below the 0.50 floor (lowest 0.524), 18 of 20 meet κ 0.55 on both halves, and the founder's set-level phase bar is met. **The agreed value is unchanged until the founder agrees.**
+
+### What closes Gate 2a across the set
+
+- **Formations:** met (20 of 20).
+- **Phases:** met pooled now; the floor is met with the boundary at a quarter.
+- **Roles:** met on the proposed set-level reading; per match 19 and 17 of 20, 1959846 a recorded limit.
+- **The review items left open** move to Stage C (`ponta-blueprint/context-relationships-task.md`): long balls and losses in flight need "in contest" from logged events (P1 0.3.0); a goal kick credited to the receiving team while the ball is undetected is the same P1 gap; recycling backwards and a short regain stay as review notes for Gate 2b.

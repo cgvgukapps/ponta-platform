@@ -23,6 +23,8 @@ changed, so package output is unchanged.
 Version 0.9.0 adds ``p1_loose_on_opponent_touch`` (the founder's loose-ball rule), proposed and off,
 so package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, possession round).
 Version 0.10.0 adds ``p5_min_unit_players`` for P5's line breaks (proposed, from FIFA's definition).
+Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), proposed and off, so
+package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -36,7 +38,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.10.0"
+THRESHOLDS_VERSION = "0.11.0"
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,9 @@ _ALL: tuple[Threshold, ...] = (
               "A team's shape is measured only with at least this many outfield players observed (allows two red cards or out-of-view players).", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
     Threshold("p2_min_shape_coverage", 0.9, "share of in-play time", "agreed",
               "Team shape is Degraded when fewer than this share of in-play grid points have a shape for both teams.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
+    Threshold("p2_template_4_2_2_2", 0.0, "switch (1 on, 0 off)", "proposed",
+              "Fit a 4-2-2-2 (two holding midfielders, two wide attackers pushed up behind two strikers) beside the ten standard templates. Off: the standard ten only.",
+              "CONTEXT_STRUCTURE_REPORT.md, Gate 2a round: match 1959846's home team defends in this shape, and with no template for it P2 fitted a 3-4-2-1. Measured 20 November 2026 and not adopted: 1959846 still misses both role bars, and the grouped bar is met on 18 matches instead of 19"),
     Threshold("p2_formation_min_margin", 0.1, "relative cost", "agreed",
               "A window's formation is unclear when the best template's fit is less than this much better than the second best ((c2 - c1) / c2).", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
     Threshold("p2_formation_persist_s", 300.0, "s of window data", "agreed",

@@ -49,7 +49,7 @@ def test_lines_are_the_exact_three_means_split():
 @pytest.mark.parametrize("name", sorted(TEMPLATES))
 def test_every_template_recognises_itself(name):
     xy = np.array([(d, w) for _, d, w in TEMPLATES[name]], float)
-    fit = fit_formation(xy)
+    fit = fit_formation(xy, templates=list(TEMPLATES))  # every template, optional ones included
     assert fit["best"] == name
     assert fit["roles"] == [r for r, _, _ in TEMPLATES[name]]
     assert fit["margin"] > CFG["p2_formation_min_margin"]
@@ -113,6 +113,7 @@ def test_corner_rule():
 REVIEW_REFINEMENTS = ("p4_finish_min_depth_share", "p4_build_up_max_depth_share", "p4_break_end_depth_share")
 CORNER_SETUP = ("p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s")
 THROW_IN = ("p4_throw_in_hold_s", "p4_throw_in_out_m", "p4_throw_in_still_mps", "p4_throw_in_ball_m")
+CANDIDATES = ("p2_template_4_2_2_2",)  # proposed and off: Gate 2a round, 19 November 2026
 
 
 def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
@@ -121,7 +122,7 @@ def test_stage_b_thresholds_are_agreed_with_a_reason_and_source():
         assert t.reason and t.status == "agreed" and "restart sweep" in t.source
         assert "agreed by the founder, 18 November 2026" in t.source
     stage_b = [t for name, t in THRESHOLDS.items()
-               if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP + THROW_IN]
+               if name.startswith(("p2_", "p3_", "p4_")) and name not in REVIEW_REFINEMENTS + CORNER_SETUP + THROW_IN + CANDIDATES]
     assert len(stage_b) == 22
     for t in stage_b:
         assert t.reason and t.status == "agreed"
@@ -216,3 +217,12 @@ def test_no_coordinates_in_stage_b_fields(standard):
 def test_deterministic():
     a, b = _run(eleven_a_side(seconds=150.0)), _run(eleven_a_side(seconds=150.0))
     pd.testing.assert_frame_equal(a.frames, b.frames)
+
+
+def test_the_box_midfield_template_is_optional_and_off_by_default():
+    from plaiq_engine.context.structure import OPTIONAL_TEMPLATES, template_names
+    assert "4-2-2-2" in OPTIONAL_TEMPLATES and "4-2-2-2" not in template_names(CFG)
+    assert THRESHOLDS["p2_template_4_2_2_2"].value == 0.0 and THRESHOLDS["p2_template_4_2_2_2"].status == "proposed"
+    assert "4-2-2-2" in template_names(CFG | {"p2_template_4_2_2_2": 1.0})
+    xy = np.array([(d, w) for _, d, w in TEMPLATES["4-2-2-2"]], float)
+    assert fit_formation(xy)["best"] != "4-2-2-2"  # off: the standard ten only

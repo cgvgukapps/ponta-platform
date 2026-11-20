@@ -79,7 +79,14 @@ TEMPLATES: dict[str, tuple[tuple[str, float, float], ...]] = {
     "3-4-2-1": _BACK3 + (("LWB", 46, 28), ("LDM", 44, 8), ("RDM", 44, -8), ("RWB", 46, -28), ("LAM", 58, 12), ("RAM", 58, -12), ("CF", 66, 0)),
     "5-3-2": (("LWB", 34, 27),) + _BACK3 + (("RWB", 34, -27), ("LCM", 46, 13), ("CM", 45, 0), ("RCM", 46, -13), ("LCF", 62, 7), ("RCF", 62, -7)),
     "5-4-1": (("LWB", 34, 27),) + _BACK3 + (("RWB", 34, -27), ("LM", 48, 22), ("LCM", 46, 7), ("RCM", 46, -7), ("RM", 48, -22), ("CF", 62, 0)),
+    # A box midfield: two holding midfielders, two wide attackers pushed up behind two strikers. Coordinates follow
+    # the other templates (the 4-2-3-1's pair, the 4-4-2's strikers). Optional: used only when
+    # ``p2_template_4_2_2_2`` is on (19 November 2026 candidate, found on match 1959846).
+    "4-2-2-2": _BACK4 + (("LDM", 43, 8), ("RDM", 43, -8), ("LW", 58, 20), ("RW", 58, -20), ("LCF", 64, 7), ("RCF", 64, -7)),
 }
+
+#: Templates used only when their switch is on (threshold name per template).
+OPTIONAL_TEMPLATES: dict[str, str] = {"4-2-2-2": "p2_template_4_2_2_2"}
 
 
 def _scale(xy: np.ndarray) -> np.ndarray:
@@ -108,14 +115,19 @@ def roles_for(xy: np.ndarray, name: str) -> list[str]:
     return _assign(_scale(np.asarray(xy, float)), name)[1]
 
 
-def fit_formation(xy: np.ndarray) -> dict:
+def template_names(cfg: dict | None = None) -> list[str]:
+    """The templates in use: every standard one, plus each optional one whose switch is on in ``cfg``."""
+    return [n for n in TEMPLATES if n not in OPTIONAL_TEMPLATES or (cfg or {}).get(OPTIONAL_TEMPLATES[n], 0.0) > 0]
+
+
+def fit_formation(xy: np.ndarray, templates: list[str] | None = None) -> dict:
     """
     Best and second-best templates for players' mean positions (depth, width), by the
     Hungarian assignment's mean squared distance after scaling. Returns the roles in the
-    order of ``xy``'s rows.
+    order of ``xy``'s rows. ``templates`` defaults to the standard ones (optional templates off).
     """
     p = _scale(np.asarray(xy, float))
-    scores = [(*_assign(p, name), name) for name in _TEMPLATE_XY]
+    scores = [(*_assign(p, name), name) for name in (templates or template_names())]
     scores = [(c, name, roles) for c, roles, name in scores]
     scores.sort(key=lambda s: s[0])  # stable: ties keep the template order
     (c1, best, roles), (c2, second, _) = scores[0], scores[1]
@@ -312,7 +324,7 @@ def analyse_windows(grid: pd.DataFrame, tf: dict[str, TeamFrames], states: dict[
                         continue
                     xy = np.column_stack([np.nanmean(f.depth[m][:, players], axis=0), np.nanmean(f.width[m][:, players], axis=0)])
                     lines = assign_lines(xy[:, 0])
-                    fit = fit_formation(xy)
+                    fit = fit_formation(xy, templates=template_names(cfg))
                     label = fit["best"] if fit["margin"] >= cfg["p2_formation_min_margin"] else "unclear"
                     start, end = float(ts[m_block].min()), float(ts[m_block].max())
                     frows.append({"team": team, "period": int(p), "block": int(b), "state": state, "start_ts": start, "end_ts": end,
