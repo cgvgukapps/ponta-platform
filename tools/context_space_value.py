@@ -12,6 +12,7 @@ shared ``MatchAnalysis`` (so Choice is computed once):
 - **Does the game-state weight point the right way?** SkillCorner's own game state and phases (comparison only): the
   share of a team's possessions that are ``direct``, by winning / drawing / losing and before or after minute 75.
 - **Space sanity:** the open share of the team in possession's high-value space by SkillCorner's phase of play.
+- With ``--cost-weights``, the adjusted score again with the cost term scaled by each weight (0 removes it).
 - Every measure on the even (fit) and odd (held-out) matches. Runtime of P7 per match.
 
 Reads the data outside the repository and writes JSON outside it; no names are read.
@@ -33,7 +34,7 @@ import pandas as pd
 from matrix_engine.sample_data import repo_root
 from plaiq_engine.context.possession import PossessionPackage
 from plaiq_engine.context.registry import Registry
-from plaiq_engine.context.space_value import SpaceValuePackage
+from plaiq_engine.context.space_value import SpaceValuePackage, adjusted_choice
 from plaiq_engine.context.structure import StructurePackage
 from plaiq_engine.match_analysis import MatchAnalysis
 
@@ -47,7 +48,7 @@ def _outside(path: Path) -> bool:
     return not (path.resolve() == root or root in path.resolve().parents)
 
 
-def one(match_dir: Path, cache: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
+def one(match_dir: Path, cache: Path, weights: tuple[float, ...] = ()) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
     m = _load(match_dir, cache)
     ma = MatchAnalysis(m)
     _ = ma.decision_quality_v2  # Choice first, as the semantic builder would; P7 then reuses its options
@@ -67,6 +68,14 @@ def one(match_dir: Path, cache: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
     passes = ev.loc[(ev["event_type"] == "player_possession") & (ev["end_type"] == "pass") & ev["pass_outcome"].isin(["successful", "unsuccessful"])]
     starts = m.events.loc[seg["event_idx"], "Start Frame"].to_numpy() if len(seg) else np.array([])
     seg = seg.assign(start_frame=starts)
+    # Cost-weight variants (the cost term scaled by w; lambda is 1 on SkillCorner): the same options, rescored.
+    xt = {"home": ma.xt_home, "away": ma.xt_away}
+    for w in weights:
+        col = []
+        for idx, t in zip(seg["event_idx"], seg["team"], strict=True):
+            a = adjusted_choice(ma.choice_options[int(idx)], xt["away" if t == "home" else "home"], w)["adjusted"]
+            col.append(a if np.isfinite(a) else None)
+        seg[f"adjusted_w{w:g}"] = col
     rows = []
     for r in passes.itertuples():
         team = "home" if r.team_id == home else "away"
@@ -79,7 +88,8 @@ def one(match_dir: Path, cache: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
         if o is not None and o["targeted"].any() and o["evx"].max() > 0:
             sc_dq = float(o.loc[o["targeted"], "evx"].max() / o["evx"].max())
         rows.append({"match": match_dir.name, "completed": r.pass_outcome == "successful", "shot": bool(r.lead_to_shot),
-                     "choice": x["choice"], "adjusted": x["adjusted"], "sc_dq": sc_dq})
+                     "choice": x["choice"], "adjusted": x["adjusted"], "sc_dq": sc_dq,
+                     **{f"adjusted_w{w:g}": x[f"adjusted_w{w:g}"] for w in weights}})
     # Game state and direct play (SkillCorner's labels).
     pp = ev.loc[ev["event_type"] == "player_possession"].assign(late=lambda d: d["minute_start"] >= 75,
                                                                direct=lambda d: d["team_in_possession_phase_type"] == "direct")
@@ -98,12 +108,13 @@ def one(match_dir: Path, cache: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
 def score(d: pd.DataFrame) -> dict:
     out = {"passes": int(len(d))}
     c = d.loc[d["completed"]]
-    for s in ("choice", "adjusted"):
+    for s in ["choice", "adjusted"] + [k for k in d.columns if k.startswith("adjusted_w")]:
         k = c.dropna(subset=[s, "sc_dq"])
         out[s] = {"shot_auc_completed": auc(c[s].astype(float), c["shot"]),
                   "spearman_sc_analogue": spearman(k[s].astype(float), k["sc_dq"]),
                   "completion_auc": auc(d[s].astype(float), d["completed"]),
-                  "median": round(float(d[s].astype(float).median()), 3)}
+                  "median": round(float(d[s].astype(float).median()), 3),
+                 "scored_share": round(float(d[s].notna().mean()), 3)}
     both = d.dropna(subset=["choice", "adjusted"])
     out["rank_correlation_adjusted_vs_choice"] = spearman(both["adjusted"].astype(float), both["choice"].astype(float))
     return out
@@ -115,6 +126,8 @@ def main() -> None:
     ap.add_argument("--cache", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--matches", nargs="*")
+    ap.add_argument("--cost-weights", type=float, nargs="*", default=[],
+                    help="also score the adjusted Choice with the cost term scaled by each weight (e.g. 0 0.25 0.5)")
     args = ap.parse_args()
     for p in (args.data, args.cache, args.out):
         if not _outside(p):
@@ -125,7 +138,7 @@ def main() -> None:
     parts: dict = {"fit": [], "test": []}
     gss, sps, runtimes = [], [], []
     for n, d in enumerate(dirs):
-        p, gs, sp, rt = one(d, args.cache)
+        p, gs, sp, rt = one(d, args.cache, tuple(args.cost_weights))
         parts["fit" if n % 2 == 0 else "test"].append(p)
         gss.append(gs)
         sps.append(sp)

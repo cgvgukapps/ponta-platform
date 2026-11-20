@@ -219,3 +219,21 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 - **Context-adjusted Choice:** keep it as built (a safety-leaning score, analysts only, "estimated, not yet validated"), or reweight the cost term (for example half weight, measured on the same groundings before any value is agreed). The expert study (Gate 3b) decides whether it is ever shown first.
 - **λ values:** stay a proposed judgement; SkillCorner's direct-play share gives them no support either way.
 - **The P7 thresholds** (sample rate, high-value share, late minute, four λ values): agree, or keep proposed.
+
+### The cost term at lower weights (20 November 2026)
+
+At the founder's request, the adjusted score again with the cost term scaled by a weight (`tools/context_space_value.py --cost-weights 0 0.25 0.5`; λ is 1 on SkillCorner). Held-out matches, fit in brackets:
+
+| Cost weight | Shot AUC (completed) | SkillCorner analogue, Spearman | Completion AUC | Median |
+|---|---|---|---|---|
+| 0 (no cost) | 0.609 (0.633) | 0.292 (0.295) | 0.490 (0.500) | 0.79 |
+| 0.25 | 0.593 (0.615) | 0.217 (0.231) | 0.581 (0.588) | 0.77 |
+| **0.5** | **0.580** (0.600) | **0.161** (0.174) | **0.627** (0.639) | 0.76 |
+| 1 (as built) | 0.558 (0.580) | 0.066 (0.087) | 0.669 (0.680) | 0.72 |
+| Choice | 0.609 (0.633) | 0.292 (0.295) | 0.490 (0.500) | 0.79 |
+
+- **Weight 0 reproduces Choice** (to the third decimal), so the adjusted score is Choice plus the cost term and nothing else.
+- **The trade-off is smooth, with no sweet spot.** Each step of weight buys a lean to safe passes with a loss on the shot measure: half weight keeps about four fifths of the full weight's lean to safety (completion AUC 0.63 against 0.67) for under three fifths of its shot loss (0.029 against 0.051).
+- **These references cannot choose the weight.** The shot outcome and SkillCorner's analogue reward value only; neither rewards avoiding a costly loss, so any cost term scores worse on them by construction. The weight is a judgement until a risk-side check (do losses where the cost is high lead to the opponent's shots more often?) or the expert study (Gate 3b) measures it.
+
+**For the founder:** keep the weight at 1, or make it a versioned threshold `p7_cost_weight` (proposed 0.5, labelled estimated) on P7 0.2.0. Recommended: the threshold at 0.5, and the risk-side check on SkillCorner's and the German league's matches before any value is agreed.
