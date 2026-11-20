@@ -1,0 +1,307 @@
+{
+ "reviewer": "founder",
+ "date": "2026-11-20",
+ "method": "blind replay of 50 moments from the German league's matches (IDSSE) drawn by P1 0.4.0's ball state (15 loose, 15 in flight, 10 controlled, 10 contested), none within 10 s of a moment judged before (tools/context_possession_replay.py --ball-state); the founder said who has the ball: home, away or nobody yet. One expert's reading: an indication beside the league's possession, not ground truth.",
+ "cases": [
+  {
+   "id": "J03WPY-17598",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-13671",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-6226",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-22629",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-19183",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-11247",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-22716",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-3680",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-14150",
+   "p1_ball_state_0.4.0": "controlled_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-12065",
+   "p1_ball_state_0.4.0": "controlled_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-27186",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-23563",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-3207",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-8853",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-18119",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-16109",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-16575",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-16024",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-12696",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-23679",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-26794",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-20256",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-16581",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-22032",
+   "p1_ball_state_0.4.0": "controlled_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-6367",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-25676",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-26325",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-12756",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-23439",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-13362",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-4032",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-11325",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-25482",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-4353",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-9188",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-360",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-17832",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-24710",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-2805",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WQQ-24111",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-9292",
+   "p1_ball_state_0.4.0": "in_flight_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-14712",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-15940",
+   "p1_ball_state_0.4.0": "contested",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WN1-27152",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WR9-23241",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOY-14075",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "nobody",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-10478",
+   "p1_ball_state_0.4.0": "controlled_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WMX-6088",
+   "p1_ball_state_0.4.0": "controlled_away",
+   "call": "away",
+   "note": ""
+  },
+  {
+   "id": "J03WOH-12203",
+   "p1_ball_state_0.4.0": "in_flight_home",
+   "call": "home",
+   "note": ""
+  },
+  {
+   "id": "J03WPY-9559",
+   "p1_ball_state_0.4.0": "loose",
+   "call": "away",
+   "note": ""
+  }
+ ]
+}

@@ -39,7 +39,8 @@ out of play, whether the same team restarts.
 
 **Ball state (version 0.4.0, 20 November 2026):** ``p1_ball_state`` says what the ball is doing, the
 founder's "who has it, or nobody yet": ``controlled_home`` / ``controlled_away`` (P1's control call on
-that grid point), ``contested``, ``in_flight_home`` / ``in_flight_away`` (nobody controls it, and the same
+that grid point), ``contested`` (both teams at the ball and the ball changing hands across it; a duel the same team controls the ball
+before and after is that team's, since 0.5.0), ``in_flight_home`` / ``in_flight_away`` (nobody controls it, and the same
 team controls it before and after: a pass travelling within one team's possession), ``loose`` (nobody
 controls it and the next team to control it is not the last, or a team is missing; a clearance, a
 misplaced pass, a deflection), ``out_of_play`` or ``unknown`` (the ball undetected, or uncontrolled for
@@ -388,7 +389,13 @@ def ball_state(control: np.ndarray, dead: np.ndarray | None, det: np.ndarray, gr
             st[k:j + 1] = "loose"
         k = j + 1
     st[team_ctl == "home"], st[team_ctl == "away"] = "controlled_home", "controlled_away"
-    st[(control == "contested") & ~is_dead] = "contested"
+    # Both teams at the ball: a duel. Since 0.5.0 a duel the same team controls the ball before and after is that
+    # team's (the league names that team at 78% of such moments, the founder at 7 of 10); "contested" only where the
+    # ball changes hands across it.
+    duel = (control == "contested") & ~is_dead
+    kept = duel & (last != None) & (last == nxt)
+    st[kept & (last == "home")], st[kept & (last == "away")] = "controlled_home", "controlled_away"
+    st[duel & ~kept] = "contested"
     st[is_dead] = "out_of_play"
     return st
 
@@ -607,7 +614,7 @@ class _Fields:
 
 class PossessionPackage(ContextPackage):
     name = "p1"
-    version = "0.4.0"
+    version = "0.5.0"
     fields = _Fields().items
 
     def compute(self, ctx: ContextInput) -> PackageOutput:

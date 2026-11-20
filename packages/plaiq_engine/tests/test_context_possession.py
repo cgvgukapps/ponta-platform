@@ -276,3 +276,10 @@ def test_contested_dead_undetected_and_long_spells():
 def test_ball_state_is_a_new_field_and_possession_is_unchanged():
     f = Registry([PossessionPackage()]).run(tiny_match([event("PASS", "Home", 1, end_frame=30)], seconds=6.0)).frames
     assert "p1_ball_state" in f.columns and f["p1_ball_state"].notna().all()
+
+
+def test_a_duel_the_same_team_keeps_is_its_control():
+    """P1 0.5.0: both teams at the ball, the same team in control before and after: that team's ball."""
+    h, a = "home", "away"
+    assert list(_bs([h, "contested", "contested", h])) == ["controlled_home"] * 4
+    assert list(_bs([h, "contested", a])) == ["controlled_home", "contested", "controlled_away"]  # changes hands

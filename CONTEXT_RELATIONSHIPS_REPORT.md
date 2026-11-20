@@ -73,6 +73,29 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 
 **For the founder:** judge the fresh check; then agree `p1_loose_max_s` (5 s) and whether `p1_ball_state` is the "who has it" field the AI layer reads beside possession.
 
+### The fresh check and P1 0.5.0 (20 November 2026)
+
+**The founder's calls on the 50 fresh moments** (kept without positions in `tools/data/ball_state_review_2026-11-20.json`; an indication, not ground truth) agreed with P1 0.4.0's ball state on **27 of 50**, the honest figure beside the optimistic 32 on the reused set:
+
+| P1 0.4.0's state | Agrees with the founder's call | The founder's calls |
+|---|---|---|
+| Controlled | 10 of 10 | the controlling team every time |
+| In flight within a team's possession | 11 of 15 | that team 11, nobody 3, the other team 1 |
+| Loose | 5 of 15 | home 5, away 5, nobody 5 |
+| Contested (both teams at the ball) | 1 of 10 | a team 9 times |
+
+- **Contested:** at 7 of the 10, the founder named the team that controlled the ball both before and after (a duel it kept); at 2 more, the team before.
+- **Loose:** no pattern: nobody 5, the team about to get it 5, the team that had it 3, one each other way.
+
+**Checked against the league's possession** on all seven matches, independently of the founder's calls:
+- a duel the same team controls the ball before and after: the league names that team at **78%** of 3,188 moments;
+- a duel across which the ball changes hands: the league names the team before at 66%, the team after at 34%;
+- in flight within a team's possession: the league names that team at **90%** of 33,826 moments.
+
+**P1 0.5.0:** a duel the same team controls the ball before and after is that team's (`controlled_home` / `controlled_away`); `contested` remains only where the ball changes hands across it (about 2% of in-play time). Loose is unchanged. With it the fresh calls agree on **33 of 50** (partly fitted to these calls; the league's 78% is the independent support) and the earlier set stays at 32. P5's relationships and P6's runs read the ball state, so their outputs move with it; P2 to P4 do not. Golden outputs recaptured.
+
+**For the founder:** agree the duel rule and `p1_loose_max_s` (5 s); whether `p1_ball_state` is the AI's "who has the ball" field beside possession.
+
 ## 3. P5 relationships, completed (P5 0.2.0, 20 November 2026)
 
 **Built** (`plaiq_engine/context/line_breaks.py`, `relationships.py`; P5 now depends on P1, P2 and P3):
