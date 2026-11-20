@@ -868,3 +868,8 @@ Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.
 - **Phases:** met pooled now; the floor is met with the boundary at a quarter.
 - **Roles:** met on the proposed set-level reading; per match 19 and 17 of 20, 1959846 a recorded limit.
 - **The review items left open** move to Stage C (`ponta-blueprint/context-relationships-task.md`): long balls and losses in flight need "in contest" from logged events (P1 0.3.0); a goal kick credited to the receiving team while the ball is undetected is the same P1 gap; recycling backwards and a short regain stay as review notes for Gate 2b.
+
+**Decided by the founder on 20 November 2026:** both proposals agreed.
+- **Build-up within a quarter of the pitch** (`p4_build_up_max_depth_share` 0.25; thresholds 0.12.0, P4 0.4.0). Golden outputs recaptured: on the four regression matches only P4's phase fields and the version stamps change.
+- **Roles are judged on the set,** as phases are: pooled over every player at least 75% grouped and 85% with central midfield merged, with the per-match bars kept as a reading. 1959846's box midfield is a recorded limit of P2's templates.
+- **Gate 2a across the 20 matches, on the agreed settings** (`tools/context_reference_set.py`, which now reports the set-level reading as `gate_2a_set`): phases pooled κ 0.670 and 0.638 by half, no match below 0.50 (lowest 0.524), 18 of 20 at κ 0.55 on both halves; roles pooled 84.1% grouped and 89.0% merged (per match 19 and 17 of 20); formations 20 of 20. **Gate 2a is met across the set.** Gate 2b (analysts) still comes before player-facing use.

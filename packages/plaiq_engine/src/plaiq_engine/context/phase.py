@@ -30,7 +30,8 @@ Within each P1 possession chain, in priority order:
    them a medium block (``create``). Since version 0.2.0 (the founder's replay review) where
    the ball is refines the block: ``finish`` needs the ball past ``p4_finish_min_depth_share``
    of the pitch (else ``create``), and with the ball inside ``p4_build_up_max_depth_share`` of
-   it the team is building up whatever the block. A quick break or transition that began
+   it the team is building up whatever the block (a quarter of the pitch since 0.4.0, 20 November 2026; a
+   third before). A quick break or transition that began
    further back ends when the ball reaches ``p4_break_end_depth_share`` of the pitch.
 
 Runs shorter than ``p4_min_phase_s`` merge into the run before them in the same chain. The
@@ -162,7 +163,7 @@ class _Fields:
 
 class PhasePackage(ContextPackage):
     name = "p4"
-    version = "0.3.0"
+    version = "0.4.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 

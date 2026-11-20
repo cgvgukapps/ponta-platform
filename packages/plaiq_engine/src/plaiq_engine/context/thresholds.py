@@ -25,6 +25,8 @@ so package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, possession roun
 Version 0.10.0 adds ``p5_min_unit_players`` for P5's line breaks (proposed, from FIFA's definition).
 Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), proposed and off, so
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
+Version 0.12.0 moves ``p4_build_up_max_depth_share`` from a third to a quarter of the pitch, agreed by
+the founder on 20 November 2026 (P4 0.4.0; ``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 
 Nothing threshold-like is hard-coded elsewhere in the context packages. Changing a value
 changes package output: bump ``THRESHOLDS_VERSION`` and the version of every package that
@@ -38,7 +40,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.11.0"
+THRESHOLDS_VERSION = "0.12.0"
 
 
 @dataclass(frozen=True)
@@ -140,9 +142,10 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p4_finish_min_depth_share", 0.5, "share of pitch length", "agreed",
               "Against a low block, finish needs the ball in the attacking half; otherwise it is create. Requiring the final third instead lost agreement with SkillCorner (kappa 0.55 against 0.61). 0 turns the check off.",
               "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
-    Threshold("p4_build_up_max_depth_share", 0.333, "share of pitch length", "agreed",
-              "With the ball in the team's own third, the team is building up whatever the block (the reviewer: playing from the back is build-up). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+    Threshold("p4_build_up_max_depth_share", 0.25, "share of pitch length", "agreed",
+              "With the ball within this share of the pitch from the team's own goal line, the team is building up whatever the block (the reviewer: playing from the back is build-up). 0 turns the check off. A quarter since 0.12.0 (a third before).",
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; the rule agreed by the founder, 18 November 2026 (a third); "
+              "a quarter measured in the Gate 2a round (pooled kappa 0.670 / 0.638 from 0.609 / 0.610, held out by match, no match below 0.50) and agreed by the founder, 20 November 2026"),
     Threshold("p4_break_end_depth_share", 0.667, "share of pitch length", "agreed",
               "A quick break or transition that began further back ends when the ball reaches the final third; the attack is then labelled by the block (usually finish). 0 turns the check off.",
               "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),

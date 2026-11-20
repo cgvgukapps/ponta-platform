@@ -44,8 +44,13 @@ from context_phase_sweep import agreement
 from context_references import sc_phase_file, sc_phase_spans
 from context_structure_measure import formations_by_half, role_agreement
 
-#: The Gate 2a bars (agreed by the founder on 17 November 2026).
+#: The Gate 2a bars (agreed by the founder on 17 November 2026), read per match.
 BARS = {"roles_grouped_tw": 0.75, "roles_cm_merged_tw": 0.85, "formation_changes_max": 2, "phase_kappa_each_half": 0.55}
+#: Gate 2a for a set of matches (the founder, 18 November 2026 for phases and 20 November 2026 for roles): phases pooled
+#: kappa at least 0.55 on each half and no match below 0.50 on either half; roles pooled over every player at least 75%
+#: grouped and 85% with central midfield merged; formations at most 2 changes on every match.
+SET_BARS = {"phase_pooled_kappa_each_half": 0.55, "phase_floor_per_match": 0.50, "roles_pooled_grouped": 0.75,
+            "roles_pooled_cm_merged": 0.85, "formation_changes_max": 2}
 
 
 def _inside(path: Path) -> bool:
@@ -155,6 +160,19 @@ def summarise(report: dict, raw: dict) -> dict:
             "confusion": {r: {c: int(v) for c, v in row.items() if v}
                           for r, row in pd.crosstab(pd.Series(a, name="skillcorner"), pd.Series(b, name="ponta")).iterrows()},
         }
+    players = sum(report[k]["roles"]["players"] for k in ms)
+    pooled = {key: round(sum(report[k]["roles"][key] * report[k]["roles"]["players"] for k in ms) / players, 4)
+              for key in ("grouped", "central_mid_merged")}
+    spans = out["phases_event_spans"]
+    out["roles_pooled"] = {"players": players, **pooled}
+    out["gate_2a_set"] = {
+        "phase_pooled_kappa_each_half": min(spans["pooled_half_1"]["kappa"], spans["pooled_half_2"]["kappa"]) >= SET_BARS["phase_pooled_kappa_each_half"],
+        "phase_floor_per_match": spans["kappa_lower_half_per_match"]["min"] >= SET_BARS["phase_floor_per_match"],
+        "roles_pooled_grouped": pooled["grouped"] >= SET_BARS["roles_pooled_grouped"],
+        "roles_pooled_cm_merged": pooled["central_mid_merged"] >= SET_BARS["roles_pooled_cm_merged"],
+        "formation_changes_max": out["formation_changes_max"]["max"] <= SET_BARS["formation_changes_max"],
+    }
+    out["gate_2a_set"]["met"] = all(out["gate_2a_set"].values())
     return out
 
 
