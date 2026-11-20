@@ -2,6 +2,8 @@
 
 Stage C of `ponta-blueprint/context-packages.md`, built to `ponta-blueprint/context-relationships-task.md`. Written deliverable by deliverable; each section records what was built, how it was measured and what the founder decides.
 
+**On the founder's judged moments** (the founder, 20 November 2026): they are one expert's reading, an indication to weigh beside the provider references, never ground truth. Scores against them are written as agreement with the founder's call, and no rule is tuned to them alone.
+
 ## 1. In contest from logged events (P1 0.3.0, 20 November 2026)
 
 **Built** (`plaiq_engine/context/possession.py`):
@@ -19,7 +21,7 @@ Stage C of `ponta-blueprint/context-packages.md`, built to `ponta-blueprint/cont
 | "Nobody" moments called in contest | 0 of 14 | 2 | 3 |
 | Team moments kept | 11 of 26 | 10 | 10 |
 | Controls kept | 10 of 10 | 9 | 9 |
-| Right in total | 21 of 50 | 21 | 22 |
+| Agrees with the founder's call, in total | 21 of 50 | 21 | 22 |
 
 **In-play time in contest** (cap 4 s): 11% to 16% on the seven IDSSE matches (8.5% to 11.4% from logged events), 9% to 11% on Metrica Games 1 to 3 (5% to 8% from events), 2.7% on SkillCorner 1886347 (no logged feed: both teams at the ball only).
 
@@ -54,18 +56,18 @@ So FIFA's "in contest" (from the event log) and the founder's "nobody has it yet
 
 It reads who controls the ball next, so it describes a finished match (batch), never a live one. `p1_possession` and `p1_state` are unchanged; thresholds 0.15.0; P1 0.4.0; golden outputs recaptured (only the new field, the version and the Data check entry change).
 
-**Measured** against the founder's 50 calls (`tools/context_contest.py`; "nobody" right on `loose` or `contested`, a team call on that team's controlled or in-flight state):
+**Measured** against the founder's 50 calls (`tools/context_contest.py`; a "nobody" call agrees with `loose` or `contested`, a team call with that team's controlled or in-flight state):
 
 | | `p1_possession` | `p1_state` (section 1) | **`p1_ball_state`**, cap 5 s (3 s / 8 s) |
 |---|---|---|---|
 | "Nobody" moments | 0 of 14 | 2 | **7** (6 / 7) |
 | Team moments | 11 of 26 | 10 | **15** |
 | Controls | 10 of 10 | 9 | **10** |
-| Right in total | 21 of 50 | 21 | **32** (31 / 32) |
+| Agrees with the founder's call, in total | 21 of 50 | 21 | **32** (31 / 32) |
 
 **Share of in-play time** (cap 5 s): controlled 37% to 45%, in flight 28% to 31%, loose 14% to 21%, contested 4% to 6%, unknown 3% to 12% on the league's matches; loose 9% to 12% on Metrica; on SkillCorner 1886347 loose 8% and unknown 31% (broadcast tracking loses the ball).
 
-**How the rule was chosen, and why 32 is optimistic.** Four versions were scored on these same 50 calls: "control" meaning any grid point of control (32 right), or control held for 0.2, 0.4 or 0.6 s (21, 23, 24 right). Held control fails because P1's 1.5 m control call flickers during a dribble, which leaves long false loose spells (about 30% of in-play time). The best of four on the same calls is an optimistic figure.
+**How the rule was chosen, and why 32 is optimistic.** Four versions were scored on these same 50 calls: "control" meaning any grid point of control (32 agreeing), or control held for 0.2, 0.4 or 0.6 s (21, 23, 24 agreeing). Held control fails because P1's 1.5 m control call flickers during a dribble, which leaves long false loose spells (about 30% of in-play time). The best of four on the same calls is an optimistic figure.
 
 **A fresh blind check for the founder** (`tools/context_possession_replay.py --ball-state`): 50 new moments from the league's matches, drawn by state (15 loose, 15 in flight, 10 controlled, 10 contested), none within 10 s of a moment already judged. Same page and question (home, away or nobody yet); the key stays apart from the page. `--score` reads the calls. Kept outside the repository (it holds the league's positions).
 
