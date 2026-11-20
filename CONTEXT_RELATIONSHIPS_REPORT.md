@@ -70,3 +70,32 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 **A fresh blind check for the founder** (`tools/context_possession_replay.py --ball-state`): 50 new moments from the league's matches, drawn by state (15 loose, 15 in flight, 10 controlled, 10 contested), none within 10 s of a moment already judged. Same page and question (home, away or nobody yet); the key stays apart from the page. `--score` reads the calls. Kept outside the repository (it holds the league's positions).
 
 **For the founder:** judge the fresh check; then agree `p1_loose_max_s` (5 s) and whether `p1_ball_state` is the "who has it" field the AI layer reads beside possession.
+
+## 3. P5 relationships, completed (P5 0.2.0, 20 November 2026)
+
+**Built** (`plaiq_engine/context/line_breaks.py`, `relationships.py`; P5 now depends on P1, P2 and P3):
+- **Line breaks 0.2.0:** a failed pass is judged at the logged target's point at the ball's arrival (the target's run projected from the moment of the pass, as Choice does); without a logged target it stays unknown. Each pass also records whether it was received inside the defending team's shape (convex hull of its outfield players at the moment of the pass).
+- **Line-breaking options and open lanes at each pass:** team-mates whose projected run lands beyond a unit with a completion probability of at least `p5_lb_option_min_p` (proposed 0.85), and team-mates with at least `p5_open_lane_min_p` (proposed 0.7). The moment of the pass is `MatchAnalysis`'s, the probabilities the adopted pass completion model's (batched: `option_probabilities` now uses `pass_arrays_one_moment`, identical arrays, which halved P5's runtime).
+- **On every grid point where a team has the ball** (P1's ball state: controlled or in flight within its possession): the carrier's pressure (Plaiq's 1v1 pressure, the same formula on the same hex grid, so it equals Plaiq's value, which a test pins), goal-side defenders, the offside line (second-last defender), free attackers (no defender within `p5_free_radius_m`, proposed 5 m), the overload at the ball (within `p5_overload_radius_m`, proposed 10 m) and the mean marking distance.
+- **FIFA EFI aggregates per team and half** (segment `efi`): receptions behind the midfield and defensive lines, final third entries by channel, defensive line height and team length by possession and ball third, ball recovery time, forced turnovers (pressure at least `p5_forced_turnover_min_pressure`, proposed 8, the measured high-pressure candidate).
+- **Data check:** a `relationships` entry beside `line_breaks`. Thresholds 0.16.0 (five proposed). Golden outputs recaptured (only P5 changes).
+
+**Measured on SkillCorner's 20 matches** (`tools/context_line_breaks.py --package`, `tools/context_relationships.py`; fit = even matches, held out = odd):
+
+| | Fit | Held out |
+|---|---|---|
+| Line breaks, furthest line, κ (completed and failed passes) | 0.55 | 0.56 |
+| Line breaks, any line, κ | 0.67 | 0.66 |
+| Carrier pressure against SkillCorner's five levels, weighted κ (cut at 3, 6, 8, 10) | **0.76** (7,517 possessions) | **0.76** (6,987) |
+| Goal-side of the engaging defender, agreement (κ) | 81.8% (0.55) | 81.4% (0.54) |
+
+- **Failed passes** (759 with a SkillCorner label): any line broken 80% (κ 0.47), furthest line κ 0.44. Completed passes are unchanged from 0.1.0 (any line κ 0.64, furthest κ 0.54).
+- **Line-breaking options do not agree with SkillCorner's count.** At 0.7, 0.85 and 0.95 the agreement on whether a pass has any line-breaking option is κ 0.13, 0.15 and 0.07 (held out 0.13, 0.16, 0.08). 0.85 brings the mean count nearest SkillCorner's (0.73 against 0.5). SkillCorner's passing options are its own notion of who made themselves available, not only who could be reached; the field is kept, proposed and unvalidated, and should not reach anyone until an analyst check.
+- **Distributions with no reference** (median of match medians, 10th and 90th percentiles): free attackers 6 (4 to 8) with the 5 m radius, which is too generous for "free" to mean much; overload at the ball 0 (−1 to 2); marking distance 5.9 m (4.2 to 7.5); offside line 33.6 m from goal (10.9 to 52.4); goal-side defenders 9 (3 to 10). Relationships cover 57% of grid points (where a team has the ball).
+- **Runtime:** P1, P2 and P5 together 25.5 s per match (median, at most 41 s) on the 20 matches, before P3's few seconds. P5 alone is about 16 s; the Gate 3 budget is 60 s for P5 to P7.
+
+**For the founder:**
+- **Agree** the line-break extension to failed passes, inside or outside the shape, carrier pressure, goal-side and the offside line, which agree with references or follow FIFA's definitions.
+- **The free-player radius:** 5 m makes about six of ten attackers free at a typical moment. A larger radius, or a definition that also weighs the angle to the ball, needs a judged sample, as for possession.
+- **Line-breaking options and open lanes** stay unvalidated (no reference agrees); an analyst check, or the founder's replay check, should decide them.
+- **The forced-turnover pressure (8)** follows the open high-pressure decision.

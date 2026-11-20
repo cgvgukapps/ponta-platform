@@ -27,6 +27,7 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.16.0 adds ``p5_lb_option_min_p``, ``p5_open_lane_min_p``, ``p5_free_radius_m``, ``p5_overload_radius_m`` and ``p5_forced_turnover_min_pressure`` for P5 0.2.0's line-breaking options and relationships (all proposed; new fields).
 Version 0.15.0 adds ``p1_loose_max_s`` for P1 0.4.0's ball state (proposed; a new field, so earlier
 outputs are unchanged).
 Version 0.14.0 records the founder's agreement of ``p1_contest_max_s`` (4 s) on 20 November 2026; no value
@@ -46,7 +47,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.15.0"
+THRESHOLDS_VERSION = "0.16.0"
 
 
 @dataclass(frozen=True)
@@ -185,6 +186,21 @@ _ALL: tuple[Threshold, ...] = (
               "The ball is within this distance of the thrower at some point in the set-up's last 2 s. Without a ball test, about half of all detections are wrong (wide players on the line in open play).",
               "CONTEXT_STRUCTURE_REPORT.md, restart sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged throw-ins; agreed by the founder, 18 November 2026"),
     # -- P5 line breaks (18 November 2026; proposed, from FIFA's definition) --
+    Threshold("p5_lb_option_min_p", 0.85, "probability", "proposed",
+              "A team-mate counts as a line-breaking option when the pass completion probability to their projected run is at least this (and the run lands beyond at least one unit).",
+              "Stage C, P5 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 3): swept at 0.7, 0.85 and 0.95 against SkillCorner's count of line-breaking passing options; 0.85 brings the mean nearest SkillCorner's, but which passes have an option agrees poorly at every value (kappa at most 0.16)"),
+    Threshold("p5_open_lane_min_p", 0.7, "probability", "proposed",
+              "A team-mate counts as an open passing lane when the pass completion probability to their projected run is at least this.",
+              "Stage C, P5 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 3); no published value"),
+    Threshold("p5_free_radius_m", 5.0, "m", "proposed",
+              "An attacking outfield player is free when no defending player is within this distance. Commonly 3 to 5 m in the literature; no single published value.",
+              "Stage C, P5 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 3)"),
+    Threshold("p5_overload_radius_m", 10.0, "m", "proposed",
+              "The overload at the ball counts attacking and defending outfield players within this distance of the ball.",
+              "Stage C, P5 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 3); no published value"),
+    Threshold("p5_forced_turnover_min_pressure", 8.0, "1 to 10 (Plaiq 1v1 pressure)", "proposed",
+              "A possession lost with its carrier's pressure at least this at the last moment a team had the ball counts as a forced turnover (FIFA EFI). 8 is the measured, not yet agreed, high-pressure candidate.",
+              "Stage C, P5 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 3); the high-pressure candidate in plaiq-review.md"),
     Threshold("p5_min_unit_players", 2.0, "players", "proposed",
               "A defending line (unit) counts for line breaks only with at least this many players, as FIFA's Football Language defines a unit line.",
               "FIFA Football Language, penetrative action; ponta-blueprint/fifa-alignment.md; CONTEXT_STRUCTURE_REPORT.md, line breaks"),

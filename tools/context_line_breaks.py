@@ -48,6 +48,7 @@ from plaiq_engine.context.structure import (
     windows_from_segments,
 )
 from plaiq_engine.context.thresholds import values
+from plaiq_engine.context.zones import ZonesPackage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from context_reference_set import _kappa, _load
@@ -90,13 +91,25 @@ def intents(pov: pd.DataFrame) -> dict[int, tuple[float, float]]:
     return {int(r.event_idx): (float(r.intent_x), float(r.intent_y)) for r in rows.itertuples()}
 
 
-def one_package(match_dir: Path, cache: Path) -> pd.DataFrame:
-    """P5's own output (``context.line_breaks``) joined to SkillCorner's passes: completed passes only."""
+def one_package(match_dir: Path, cache: Path, thetas: tuple[float, ...] = ()) -> pd.DataFrame:
+    """
+    P5's own output (``context.line_breaks``) joined to SkillCorner's passes: completed and failed (0.2.0: a failed
+    pass by its logged target's projected point), with the count of line-breaking options at each ``theta`` (one
+    run of the package per value; the first run's labels are kept) and the package's runtime.
+    """
+    import time
+
     from plaiq_engine.context.line_breaks import LineBreakPackage
     m = _load(match_dir, cache)
-    res = Registry([PossessionPackage(), StructurePackage(), LineBreakPackage()]).run(m)
-    seg = res.outputs["p5"].segments["line_breaks"]
-    seg = seg.loc[seg["outcome"] == "completed"].assign(start_frame=lambda d: m.events.loc[d["event_row"], "Start Frame"].to_numpy())
+    seg, counts, runtime = None, {}, None
+    for th in thetas or (values()["p5_lb_option_min_p"],):
+        t0 = time.perf_counter()
+        res = Registry([PossessionPackage(), StructurePackage(), ZonesPackage(), LineBreakPackage()]).run(m, config=values({"p5_lb_option_min_p": th}))
+        runtime = runtime or round(time.perf_counter() - t0, 1)
+        s_ = res.outputs["p5"].segments["line_breaks"]
+        seg = s_ if seg is None else seg
+        counts[th] = s_.set_index("event_row")["line_breaking_options"]
+    seg = seg.assign(start_frame=lambda d: m.events.loc[d["event_row"], "Start Frame"].to_numpy())
     meta = json.loads((match_dir / f"{match_dir.name}_match.json").read_text())
     ref = sc_passes(match_dir, meta["home_team"]["id"])
     rows = []
@@ -105,7 +118,10 @@ def one_package(match_dir: Path, cache: Path) -> pd.DataFrame:
         if c.empty:
             continue
         x = c.iloc[0]
-        rows.append({"match": match_dir.name, "outcome": "completed", "sc_lines": r.n_defensive_lines,
+        rows.append({"match": match_dir.name, "outcome": x["outcome"], "target": x["target"], "runtime_s": runtime,
+                     "sc_lb_options": r.n_passing_options_line_break,
+                     **{f"lb_options_{th:g}": counts[th].get(x["event_row"]) for th in counts},
+                     "sc_lines": r.n_defensive_lines,
                      "sc_furthest": r.furthest_line_break if isinstance(r.furthest_line_break, str) else "none", "sc_type": r.furthest_line_break_type,
                      "sc_first": r.first_line_break, "sc_second_last": r.second_last_line_break, "sc_last": r.last_line_break,
                      "ponta_furthest": x["furthest"] if isinstance(x["furthest"], str) else "none", "ponta_type": x["type"],
@@ -200,6 +216,21 @@ def score_options(df: pd.DataFrame) -> dict:
     return out
 
 
+def score_package_options(df: pd.DataFrame) -> dict:
+    """P5's count of line-breaking options at each theta against SkillCorner's count, per pass."""
+    k = df.loc[df["sc_lb_options"].notna()]
+    ref = k["sc_lb_options"].astype(int).to_numpy()
+    out = {"passes": int(len(k)), "sc_mean": round(float(ref.mean()), 2) if len(k) else None}
+    for col in [c for c in df.columns if c.startswith("lb_options_")]:
+        v = k[col]
+        ok = v.notna().to_numpy()
+        n, r = v[ok].astype(int).to_numpy(), ref[ok]
+        out[col] = {"passes": int(ok.sum()), "any_option": _kappa((r > 0).astype(str), (n > 0).astype(str)),
+                    "exact": round(float((n == r).mean()), 4), "within_1": round(float((abs(n - r) <= 1).mean()), 4),
+                    "ponta_mean": round(float(n.mean()), 2), "spearman": round(float(pd.Series(n).corr(pd.Series(r), method="spearman")), 4)}
+    return out
+
+
 def score(df: pd.DataFrame) -> dict:
     known = df.loc[df["sc_lines"].notna()]
     a, b = known["sc_furthest"].to_numpy(str), known["ponta_furthest"].to_numpy(str)
@@ -224,7 +255,8 @@ def main() -> None:
                     help="window: P2's per-window lines; moment: lines grouped at the pass moment (FIFA)")
     ap.add_argument("--intent", action="store_true", help="judge a failed pass by Plaiq's intended meeting point")
     ap.add_argument("--options", action="store_true", help="count line-breaking passing options (Plaiq option values)")
-    ap.add_argument("--package", action="store_true", help="score P5's own output (completed passes) instead of the prototype")
+    ap.add_argument("--package", action="store_true", help="score P5's own output (completed and failed passes) instead of the prototype")
+    ap.add_argument("--thetas", nargs="*", type=float, default=[], help="with --package: line-breaking option thresholds to sweep")
     args = ap.parse_args()
     for p in (args.data, args.cache, args.out):
         if not _outside(p):
@@ -234,7 +266,7 @@ def main() -> None:
         dirs = [d for d in dirs if d.name in args.matches]
     parts = []
     for n, d in enumerate(dirs):
-        df = one_package(d, args.cache) if args.package else one(d, args.cache, args.units, args.intent, args.options)
+        df = one_package(d, args.cache, tuple(args.thetas)) if args.package else one(d, args.cache, args.units, args.intent, args.options)
         df.to_pickle(args.out.parent / f"line_breaks_{d.name}.pkl")
         df["set"] = "fit" if n % 2 == 0 else "test"
         parts.append(df)
@@ -244,6 +276,10 @@ def main() -> None:
            "by_outcome": {o: score(allp.loc[allp["outcome"] == o]) for o in ("completed", "failed") if (allp["outcome"] == o).any()}}
     if args.options:
         out["options"] = {s_: score_options(allp.loc[allp["set"] == s_]) for s_ in ("fit", "test")}
+    if args.package:
+        out["options"] = {s_: score_package_options(allp.loc[allp["set"] == s_]) for s_ in ("fit", "test")}
+        rt = allp.drop_duplicates("match")["runtime_s"]
+        out["runtime_s"] = {"median": float(rt.median()), "max": float(rt.max())}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps({k: out["all"][k] for k in ("passes_matched", "passes_with_sc_lines", "furthest_line_broken", "any_break", "first_line", "second_last_line", "last_line", "type_where_both_agree_on_the_line")}, indent=1))

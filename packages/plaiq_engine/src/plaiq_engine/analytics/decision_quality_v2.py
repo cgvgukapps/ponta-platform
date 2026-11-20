@@ -77,7 +77,6 @@ from plaiq_engine.analytics.pass_probability import (
     PassArrays,
     PassModel,
     _kinematic,
-    pass_arrays,
     probability_from_arrays,
     projected_target,
 )
@@ -162,9 +161,8 @@ def option_probabilities(ball_xy, mates: list[dict], defenders: list[dict], mode
     if not mates:
         return np.zeros((0, 2)), np.zeros(0)
     targets = np.array([projected_target(ball, m["pos"], m.get("vel", np.zeros(2)), model.flight) for m in mates])
-    batch = [{"ball": ball, "target": t, "attackers": mates, "defenders": defenders, "high": False} for t in targets]
-    n = max(1, len(mates), len(defenders))
-    return targets, probability_from_arrays(pass_arrays(batch, model, max_players=n), model)["p_complete"]
+    # One moment, the same players: identical arrays to pass_arrays, each player's travel times computed once.
+    return targets, probability_from_arrays(pass_arrays_one_moment(ball, targets, mates, defenders, model), model)["p_complete"]
 
 
 def decision_quality_projected(p_complete: np.ndarray, value: np.ndarray, chosen: int) -> dict:
