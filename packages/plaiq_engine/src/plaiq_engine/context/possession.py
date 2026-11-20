@@ -27,6 +27,15 @@ unknown. Possession chains (segments) record how each possession began and ended
 
 Possession is a label the engine assigns from distances (estimated); distances, detection
 and the event-derived fields are observed. Nothing here reaches the AI as coordinates.
+
+**FIFA's possession states (version 0.3.0, 20 November 2026):** ``p1_state`` gives one of
+``in_possession_home``, ``in_possession_away``, ``in_contest``, ``out_of_play`` or ``unknown`` beside
+``p1_possession``, which is unchanged. The ball is in contest (FIFA: neither team has controlled
+possession) where both teams are at the ball (``contested``), and, with a logged feed, from a logged
+duel, clearance, block or deflection until a team has held control for ``p1_min_switch_s`` (at most
+``p1_contest_max_s``). Interceptions are not contests: they win the ball. Chains count the other team's
+logged contest touches that did not end them (FIFA's "interrupted") and, when one ends with the ball
+out of play, whether the same team restarts.
 """
 
 from __future__ import annotations
@@ -119,6 +128,13 @@ def _tokens(subtype) -> list[str]:
     if subtype is None or (isinstance(subtype, float) and np.isnan(subtype)):
         return []
     return [t.strip() for t in re.split(r"[-,]", str(subtype).upper()) if t.strip()]
+
+
+#: Logged events that put the ball in contest (FIFA: neither team has control). Interceptions win the ball, so they
+#: are not contests. Types are Metrica's vocabulary, which every loader maps to (a duel is a CHALLENGE).
+CONTEST_TYPES = frozenset({"CHALLENGE", "CLEARANCE", "BLOCK", "DEFLECTION"})
+#: Subtype tokens that make a ball loss a contest rather than a turnover (a clearance or a block).
+CONTEST_TOKENS = frozenset({"CLEARANCE", "BLOCK", "BLOCKED", "DEFLECTION", "DEFLECTED"})
 
 
 def logged_events(match: NormalisedMatch) -> bool:
@@ -264,6 +280,65 @@ def game_state_on_grid(match: NormalisedMatch, grid: pd.DataFrame, cfg: dict, up
     return cols, "unknown", {}
 
 
+def contest_events_on_grid(match: NormalisedMatch, grid: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Grid points where a logged contest event happens (a duel, clearance, block or deflection), and the team
+    that made each touch (``home``/``away``, else None). All False without a logged feed.
+    """
+    n = len(grid)
+    at, team = np.zeros(n, dtype=bool), np.full(n, None, dtype=object)
+    if not logged_events(match) or "Start Frame" not in match.events.columns:
+        return at, team
+    ev = match.events
+    typ = ev["Type"].astype(str).str.upper()
+    tok = ev["Subtype"].map(lambda s: bool(set(_tokens(s)) & CONTEST_TOKENS))
+    hit = ev.loc[typ.isin(CONTEST_TYPES) | ((typ == "BALL LOST") & tok)]
+    if hit.empty:
+        return at, team
+    f0 = int(match.frames["frame"].min())
+    ts = grid["frame_ts"].to_numpy(float)
+    t = (hit["Start Frame"].to_numpy(float) - f0) / match.fps
+    ok = np.isfinite(t)
+    idx = np.clip(np.searchsorted(ts, t[ok]), 0, n - 1)
+    at[idx] = True
+    team[idx] = hit["Team"].astype(str).str.lower().to_numpy()[ok]
+    team[idx] = np.where(np.isin(team[idx], TEAMS), team[idx], None)
+    return at, team
+
+
+def possession_state(lab: np.ndarray, src: np.ndarray, control: np.ndarray, contest: np.ndarray, grid: pd.DataFrame,
+                     cfg: dict) -> tuple[np.ndarray, np.ndarray]:
+    """
+    FIFA's possession states beside ``p1_possession`` (which this does not change): in possession per team,
+    in contest, out of play, unknown, with the source of each.
+    """
+    n = len(lab)
+    state, source = np.full(n, "unknown", dtype=object), np.full(n, "unknown", dtype=object)
+    for k, v in (("home", "in_possession_home"), ("away", "in_possession_away")):
+        state[lab == k], source[lab == k] = v, src[lab == k]
+    state[lab == "dead_ball"], source[lab == "dead_ball"] = "out_of_play", "events"
+    both = np.isin(lab, ["contested", "loose"])
+    state[both], source[both] = "in_contest", src[both]
+    ts, per = grid["frame_ts"].to_numpy(float), grid["period"].to_numpy()
+    min_switch, cap = cfg["p1_min_switch_s"], cfg["p1_contest_max_s"]
+    for i in np.flatnonzero(contest):
+        k, held, held_at, end = i, None, None, None
+        while k < n and per[k] == per[i] and lab[k] != "dead_ball" and ts[k] - ts[i] <= cap:
+            c = control[k]
+            if c in TEAMS:
+                if held != c:
+                    held, held_at = c, k
+                if ts[k] - ts[held_at] + 1e-9 >= min_switch:
+                    end = held_at  # a team has gained control: the contest ended when it took the ball
+                    break
+            else:
+                held = None
+            k += 1
+        end = k if end is None else end
+        state[i:end], source[i:end] = "in_contest", "events"
+    return state, source
+
+
 def label_possession(grid: pd.DataFrame, ball: pd.DataFrame, near: pd.DataFrame, event_poss: np.ndarray,
                      dead: np.ndarray | None, cfg: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -329,7 +404,8 @@ def label_possession(grid: pd.DataFrame, ball: pd.DataFrame, near: pd.DataFrame,
 
 
 def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.ndarray, match: NormalisedMatch,
-                 cfg: dict, goals: list[dict], setp_team: np.ndarray | None = None) -> tuple[np.ndarray, pd.DataFrame]:
+                 cfg: dict, goals: list[dict], setp_team: np.ndarray | None = None,
+                 contest_team: np.ndarray | None = None) -> tuple[np.ndarray, pd.DataFrame]:
     """
     Possession chains: maximal stretches held by one team. Contested and unknown points do not
     break a chain; the other team taking the ball, a dead ball or the end of a period do.
@@ -337,6 +413,10 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
     A chain after a dead ball starts with the set piece only when its team took the set piece
     (``setp_team``); when the other team wins the first touch (a corner headed clear), its chain
     starts ``won``. Before P1 0.2.0 the set piece went to whichever team had the ball first.
+
+    Since 0.3.0 each chain also records ``interruptions``, the other team's logged contest touches inside it
+    (``contest_team``; FIFA's "interrupted": touched by the opponent, no turnover), and ``out_of_play``, for a
+    chain ending in a dead ball, ``retained`` or ``lost`` by which team takes the restart (null when unknown).
     """
     n = len(grid)
     ts, per, minute = grid["frame_ts"].to_numpy(float), grid["period"].to_numpy(), grid["minute"].to_numpy()
@@ -358,9 +438,13 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
     cur = None  # [team, start_i, start_type]
     last_break, pending_sp, pending_team = "period_start", None, None
 
-    def close(end_i: int, end_type: str):
+    def close(end_i: int, end_type: str, restart_team: str | None = None):
         nonlocal cur, cid
         team, s_i, s_type = cur
+        oop = None
+        if end_type == "dead_ball" and restart_team in TEAMS:
+            oop = "retained" if restart_team == team else "lost"
+        inter = int(sum(1 for k in range(s_i, end_i + 1) if contest_team is not None and contest_team[k] == OTHER.get(team)))
         if end_type in ("lost", "dead_ball", "period_end"):
             shots = near_event(team, ts[end_i], {"SHOT"}, cfg["p1_chain_shot_window_s"], before_only=True)
             if not shots.empty:
@@ -371,7 +455,8 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
         obs = float(np.mean(src[seg] == "observed"))
         rows.append({"chain_id": cid, "period": int(per[s_i]), "team": team, "start_ts": float(ts[s_i]), "end_ts": float(ts[end_i]),
                      "duration_s": round(float(ts[end_i] - ts[s_i]), 3), "start_minute": int(minute[s_i]),
-                     "start_type": s_type, "end_type": end_type, "observed_share": round(obs, 4)})
+                     "start_type": s_type, "end_type": end_type, "observed_share": round(obs, 4),
+                     "interruptions": inter, "out_of_play": oop})
         cid += 1
         cur = None
 
@@ -383,7 +468,7 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
         lab_i = lab[i]
         if lab_i == "dead_ball":
             if cur is not None:
-                close(i - 1, "dead_ball")
+                close(i - 1, "dead_ball", setp_team[i] if setp_team is not None else None)
             last_break, pending_sp = "dead_ball", setp[i]
             pending_team = setp_team[i] if setp_team is not None else None
             continue
@@ -410,7 +495,7 @@ def build_chains(grid: pd.DataFrame, lab: np.ndarray, src: np.ndarray, setp: np.
     if cur is not None:
         close(n - 1, "period_end")
     segs = pd.DataFrame(rows, columns=["chain_id", "period", "team", "start_ts", "end_ts", "duration_s", "start_minute",
-                                       "start_type", "end_type", "observed_share"])
+                                       "start_type", "end_type", "observed_share", "interruptions", "out_of_play"])
     return chain, segs
 
 
@@ -452,6 +537,10 @@ class _Fields:
         ContextField("p1_chain_id", "id", "estimated", "Possession chain this grid point belongs to; null outside a chain (dead ball, before the first possession)."),
         ContextField("p1_dead_ball", "bool", "observed", "Between the last action and a logged set-piece restart; null when the feed has no set pieces."),
         ContextField("p1_set_piece", "label", "observed", "The restart a dead ball is waiting for (throw_in, corner_kick, free_kick_indirect …); null otherwise."),
+        ContextField("p1_state", "label", "estimated",
+                     "FIFA's possession state: in_possession_home, in_possession_away, in_contest (neither team has control: both at the ball, or after a logged duel, clearance, block or deflection until a team holds the ball), out_of_play or unknown. Since P1 0.3.0; p1_possession is unchanged."),
+        ContextField("p1_state_source", "label", "observed",
+                     "Where the state came from: events (a logged contest or dead ball), observed, inferred or unknown."),
         ContextField("p1_score_home", "goals", "observed", "Home goals so far; null when the score at this moment is unknown."),
         ContextField("p1_score_away", "goals", "observed", "Away goals so far; null when the score at this moment is unknown."),
         ContextField("p1_red_home", "cards", "observed", "Home red cards so far; null when unknown."),
@@ -462,7 +551,7 @@ class _Fields:
 
 class PossessionPackage(ContextPackage):
     name = "p1"
-    version = "0.2.0"
+    version = "0.3.0"
     fields = _Fields().items
 
     def compute(self, ctx: ContextInput) -> PackageOutput:
@@ -473,8 +562,11 @@ class PossessionPackage(ContextPackage):
         event_poss = event_possession_on_grid(m, g)
         dead, setp, setp_team = dead_ball_on_grid(m, g, cfg, teams=True)
         lab, src, control = label_possession(g, ball, near, event_poss, dead, cfg)
+        contest, contest_team = contest_events_on_grid(m, g)
+        st, st_src = possession_state(lab, src, control, contest, g, cfg)
         gs, gs_source, gs_info = game_state_on_grid(m, g, cfg, upload)
-        chain, chains = build_chains(g, lab, src, setp, m, cfg, gs_info.get("goals", []) if gs_source == "events" else [], setp_team)
+        chain, chains = build_chains(g, lab, src, setp, m, cfg, gs_info.get("goals", []) if gs_source == "events" else [], setp_team,
+                                     contest_team)
 
         frames = pd.DataFrame({
             "p1_possession": lab,
@@ -486,6 +578,8 @@ class PossessionPackage(ContextPackage):
             "p1_chain_id": pd.array([int(c) if c >= 0 else None for c in chain], dtype="Int64"),
             "p1_dead_ball": pd.array(dead if dead is not None else [None] * len(g), dtype="boolean"),
             "p1_set_piece": setp,
+            "p1_state": st,
+            "p1_state_source": st_src,
             "p1_score_home": pd.array(gs["score_home"], dtype="Float64").astype("Int64"),
             "p1_score_away": pd.array(gs["score_away"], dtype="Float64").astype("Int64"),
             "p1_red_home": pd.array(gs["red_home"], dtype="Float64").astype("Int64"),
@@ -519,6 +613,10 @@ class PossessionPackage(ContextPackage):
             "control_share_detected": {k: round(float((control == k).sum() / max(int(ball["ball_detected"].sum()), 1)), 4)
                                        for k in ("home", "away", "contested")},
             "dead_ball_known": dead is not None,
+            "state_share_in_play": {k: round(float(((st == k) & in_play).sum() / n_play), 4)
+                                    for k in ("in_possession_home", "in_possession_away", "in_contest", "unknown")},
+            "contest_events": int(contest.sum()),
+            "in_contest_from_events_share_in_play": round(float(((st_src == "events") & (st == "in_contest") & in_play).sum() / n_play), 4),
             "chains": {"count": int(len(chains)),
                        "known_start_share": round(float((~chains["start_type"].isin(["unknown"])).mean()), 4) if len(chains) else None,
                        "known_end_share": round(float((~chains["end_type"].isin(["unknown"])).mean()), 4) if len(chains) else None,
@@ -537,6 +635,17 @@ class PossessionPackage(ContextPackage):
             measure=f"{_pct(shares['observed'])} observed, {_pct(shares['inferred'])} inferred, {_pct(shares['events'])} from events, {_pct(shares['unknown'])} unknown",
             unlock=None if poss_state == "full" else "A tracking export with better ball detection.",
             coverage=f"{_pct(labelled)} of match time labelled")]
+        if contest.any():
+            entries.append(self.entry("possession_state", "Possession state (in contest)", "full",
+                                      "In contest comes from the logged duels, clearances, blocks and deflections, and from both teams at the ball.",
+                                      measure=f"{int(contest.sum())} logged contest events; {_pct(measurements['state_share_in_play']['in_contest'])} of in-play time in contest",
+                                      coverage=f"{_pct(labelled)} of match time labelled"))
+        else:
+            entries.append(self.entry("possession_state", "Possession state (in contest)", "degraded",
+                                      "No logged duels or clearances, so the ball is in contest only where both teams are at it; a loose ball after a touch is still credited to a team.",
+                                      measure=f"{_pct(measurements['state_share_in_play']['in_contest'])} of in-play time in contest",
+                                      unlock="Add a logged event feed with duels and clearances.",
+                                      coverage=f"{_pct(labelled)} of match time labelled"))
         if gs_source == "events":
             unconfirmed = gs_info.get("unconfirmed_goals", 0)
             gs_state = "full" if dead is not None and not unconfirmed else "degraded"

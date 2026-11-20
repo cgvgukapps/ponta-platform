@@ -40,7 +40,7 @@ def test_data_check_entries_attach(result):
     report = res.attach_to(parity_for_match(m))
     assert set(report.packages) == {"p1", "p2", "p3", "p4", "p5", "probe"}
     assert {e.metric for e in report.packages["p5"]} == {"line_breaks"}
-    assert {e.metric for e in report.packages["p1"]} == {"possession", "game_state"}
+    assert {e.metric for e in report.packages["p1"]} == {"possession", "game_state", "possession_state"}
     assert {e.metric for e in report.packages["p2"]} == {"team_shape", "formation"}
     assert report.summary == parity_for_match(m).summary  # base metrics unchanged
 

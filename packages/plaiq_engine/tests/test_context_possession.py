@@ -183,3 +183,62 @@ def test_package_output_has_every_field_and_no_names():
     entries = {e.metric: e for e in res.entries}
     assert entries["possession"].coverage.endswith("of match time labelled")
     pd.testing.assert_frame_equal(f, Registry([PossessionPackage()]).run(m).frames)  # deterministic
+
+
+# -- P1 0.3.0: FIFA's possession states ------------------------------------------------------------------------
+
+def test_a_logged_contest_puts_the_ball_in_contest_until_a_team_holds_it():
+    from plaiq_engine.context.possession import possession_state
+    grid, ball, near, ev = _arrays(14)
+    near.loc[0:3, "near_home"] = 0.5
+    near.loc[9:13, "near_away"] = 0.5          # away takes the ball 1.8 s after the clearance
+    lab, src, control = label_possession(grid, ball, near, ev, None, CFG)
+    contest = np.zeros(14, bool)
+    contest[4] = True                           # a logged clearance at 0.8 s
+    st, st_src = possession_state(lab, src, control, contest, grid, CFG)
+    assert list(st[:4]) == ["in_possession_home"] * 4
+    assert list(st[4:9]) == ["in_contest"] * 5 and set(st_src[4:9]) == {"events"}
+    assert list(st[9:]) == ["in_possession_away"] * 5
+    assert list(lab) == list(label_possession(grid, ball, near, ev, None, CFG)[0])  # possession itself unchanged
+
+
+def test_a_contest_is_capped_and_both_teams_at_the_ball_is_in_contest():
+    from plaiq_engine.context.possession import possession_state
+    grid, ball, near, ev = _arrays(40)
+    near.loc[0:3, "near_home"] = 0.5
+    near.loc[3, "near_away"] = 0.5              # both at the ball: contested
+    lab, src, control = label_possession(grid, ball, near, ev, None, CFG)
+    contest = np.zeros(40, bool)
+    contest[5] = True                           # nobody controls afterwards: capped at p1_contest_max_s
+    st, _ = possession_state(lab, src, control, contest, grid, CFG)
+    assert st[3] == "in_contest"
+    n = int(round(CFG["p1_contest_max_s"] * 5.0)) + 1
+    assert (st[5:5 + n] == "in_contest").all() and st[5 + n] == "in_possession_home"
+
+
+def test_contest_events_come_from_a_logged_feed_and_skip_interceptions():
+    from plaiq_engine.context.possession import contest_events_on_grid
+    evs = [event("PASS", "Home", 1, end_frame=30), event("CHALLENGE", "Away", 40, "GROUND-WON"),
+           event("BALL LOST", "Home", 60, "CLEARANCE"), event("BALL LOST", "Home", 80, "INTERCEPTION"),
+           event("RECOVERY", "Away", 80, "INTERCEPTION")]
+    m = tiny_match(evs, seconds=10.0)
+    grid = Registry([PossessionPackage()]).run(m).frames
+    at, team = contest_events_on_grid(m, grid)
+    assert at.sum() == 2 and sorted(t for t in team[at]) == ["away", "home"]
+    sc = tiny_match(evs, seconds=10.0, provider="skillcorner")
+    assert not contest_events_on_grid(sc, Registry([PossessionPackage()]).run(sc).frames)[0].any()  # derived feed
+
+
+def test_chains_count_interruptions_and_who_restarts():
+    m = tiny_match([], seconds=6.0)
+    grid = pd.DataFrame({"frame_ts": np.round(np.arange(30) / 5.0, 3), "period": 1, "minute": 1})
+    lab = np.array(["home"] * 10 + ["dead_ball"] * 5 + ["away"] * 15, dtype=object)
+    src = np.full(30, "observed", dtype=object)
+    setp = np.array([None] * 10 + ["throw_in"] * 5 + [None] * 15, dtype=object)
+    setp_team = np.array([None] * 10 + ["away"] * 5 + [None] * 15, dtype=object)
+    contest_team = np.full(30, None, dtype=object)
+    contest_team[[3, 6]] = "away"               # two away touches inside home's chain
+    contest_team[20] = "away"                   # away's own duel does not interrupt away's chain
+    _, segs = build_chains(grid, lab, src, setp, m, CFG, [], setp_team, contest_team)
+    assert list(segs["interruptions"]) == [2, 0]
+    assert segs["out_of_play"].iloc[0] == "lost" and pd.isna(segs["out_of_play"].iloc[1])

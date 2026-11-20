@@ -211,6 +211,7 @@ def read_events(path: Path, info: dict, clock: tuple[np.ndarray, np.ndarray], pe
                "result": next((c.tag for c in top if c.tag in SHOT_RESULT), None) if kind == "ShotAtGoal" else None,
                "card": top.get("CardColor") if kind == "Caution" else None,
                "possession_change": top.get("PossessionChange") if kind == "TacklingGame" else None,
+               "clearance": top.get("DefensiveClearance") == "true" if kind == "OtherBallAction" else False,
                "counter_attack": top.get("CounterAttack") if kind == "ShotAtGoal" else None,
                "player": persons.get((play if play is not None else top).get("Player"), {}).get("player_id"),
                "recipient": persons.get(play.get("Recipient"), {}).get("player_id") if play is not None else None,
@@ -246,6 +247,8 @@ def to_p1_events(ev: pd.DataFrame) -> pd.DataFrame:
             add("CHALLENGE", None, r.team, r.frame, x=r.x, y=r.y)
             if r.possession_change == "true":
                 add("RECOVERY", None, r.team, r.frame, x=r.x, y=r.y)
+        elif r.kind == "OtherBallAction" and r.clearance:
+            add("CLEARANCE", None, r.team, r.frame, x=r.x, y=r.y)  # P1 0.3.0 reads it as a contest touch
         elif r.kind == "BallClaiming":
             add("RECOVERY", None, r.team, r.frame, x=r.x, y=r.y)
         elif r.kind == "Caution" and r.card in CARD:
