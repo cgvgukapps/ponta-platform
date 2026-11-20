@@ -30,6 +30,7 @@ import pandas as pd
 from matrix_engine.parity import parity_for_match
 from matrix_engine.sample_data import repo_root, sample_data_dir
 from plaiq_engine.context.line_breaks import LineBreakPackage
+from plaiq_engine.context.movement import MovementPackage
 from plaiq_engine.context.phase import PhasePackage
 from plaiq_engine.context.possession import GameStateInput, PossessionPackage
 from plaiq_engine.context.probe import ProbePackage
@@ -46,7 +47,8 @@ GOLDEN = repo_root() / "tests" / "golden" / "context"
 
 
 def registry() -> Registry:
-    return Registry([ProbePackage(), PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage(), LineBreakPackage()])
+    return Registry([ProbePackage(), PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage(), LineBreakPackage(),
+                     MovementPackage()])
 
 
 def extras_for(key: str) -> dict:

@@ -99,3 +99,37 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 - **The free-player radius:** 5 m makes about six of ten attackers free at a typical moment. A larger radius, or a definition that also weighs the angle to the ball, needs a judged sample, as for possession.
 - **Line-breaking options and open lanes** stay unvalidated (no reference agrees); an analyst check, or the founder's replay check, should decide them.
 - **The forced-turnover pressure (8)** follows the open high-pressure decision.
+
+**Decided by the founder on 20 November 2026:** the line-break extension to failed passes, inside or outside the shape, carrier pressure, goal-side and the offside line agreed. Free attackers, line-breaking options and open lanes stay unvalidated (their definitions say so) and are kept from player-facing views; their thresholds stay proposed.
+
+## 4. P6 movement types (P6 0.1.0, 20 November 2026)
+
+**Built** (`plaiq_engine/context/movement.py`; depends on P1 and P2):
+- **Runs:** every outfield player's spells at `p6_run_min_speed_mps` (15 km/h, a common running band and the slowest average among SkillCorner's labelled runs) for at least `p6_run_min_s` (0.7 s, its shortest). Runs by the team in possession (P1's ball state at the start) are off-ball runs; the other team's are defensive runs.
+- **FIFA's categories** for each off-ball run, against P2's units and the defending shape: `area_end` (in front of the first unit, in between, in behind; an in-behind run from the final unit or from in front of it) and `shape` (in to out, out to in, inside, outside the defending hull). Also `channel_move` (outward, inward, same across P3's centre, half-space and wide bands).
+- **The type**, by rules fixed in priority order, named after SkillCorner's run vocabulary so it can be measured: cross receiver, behind, overlap, underlap, coming short, dropping off, pulling wide, pulling into the half-space, support, run ahead of the ball. Defensive runs: pressing, recovery, other.
+- **Per grid point:** players in a run per team, and runs in behind by the team in possession. The `runs` segment lists every run (player, times, type, area, shape, channel move, depth gained, sideways movement). Data check entry `movement`.
+- **Thresholds 0.17.0** (five, proposed). Golden outputs recaptured (only P6's outputs added). Runtime about 1.5 s per match.
+
+**Rules refined once, before the held-out reading.** On a fit match three type rules over-fired; each was tightened by its definition: a pulling run must be mainly sideways (sideways movement at least the depth change), coming short must not gain depth, and a cross receiver may see the ball wide at the run's start or end. Type agreement rose from κ 0.31 to 0.42 on the fit matches and held at 0.40 on the held-out ones.
+
+**Measured against SkillCorner's off-ball runs on its 20 matches** (`tools/context_movement.py`; a SkillCorner run is found when a P6 run of the same player overlaps at least half of the shorter of the two):
+
+| | Fit | Held out |
+|---|---|---|
+| SkillCorner's runs found (recall) | 75.4% | 74.6% |
+| P6's off-ball runs that SkillCorner labels (precision) | 39.4% | 40.3% |
+| Type on found runs, κ (agreement) | **0.42** (50.8%) | **0.40** (49.5%) |
+| In behind against SkillCorner's `behind`, κ | 0.31 | 0.37 |
+| Channel move against SkillCorner's `in_to_out` / `out_to_in`, κ | 0.66 / 0.60 | 0.69 / 0.59 |
+| Shape move (FIFA, the defending hull) against those flags, κ | 0.07 | 0.09 |
+| SkillCorner's pressing engagements found by a P6 pressing run | 5% to 14% by subtype | 5% to 13% |
+
+- **SkillCorner labels fewer runs than P6 finds** (P6 finds about 2.5 times as many): it evidently labels the runs it judges relevant to the play.
+- **Type recall by SkillCorner type** (held out): run ahead of the ball 62%, support 56%, dropping off 56%, half-space 45%, coming short 45%, pulling wide 41%, cross receiver 36%, behind 34%, overlap 23%, underlap 22%. The main confusions: SkillCorner's `behind` runs that do not end beyond the last line (P6: run ahead of the ball), cross receivers that end level with the carrier (P6: support), and coming short against dropping off in both directions.
+- **SkillCorner's in-to-out and out-to-in flags are channel moves, not the shape:** 750 of its 758 in-to-out runs move to a wider channel, 254 of its 262 out-to-in runs to a more central one. P6's `shape` follows FIFA (the defending team's shape) and is not comparable; `channel_move` reproduces SkillCorner's flags (κ about 0.6 to 0.7).
+- **Pressing as a run does not match SkillCorner's engagements.** Its engagements are defenders closing on the carrier, mostly below running pace: letting defensive runs go down to 2.5 m/s (`p6_press_min_speed_mps`) lifts the share found only to about 14%. The default stays at 15 km/h; pressing and recovery are unvalidated.
+
+**For the founder:**
+- **The type agreement (κ 0.40 held out) is moderate.** The next check is a replay review of 50 runs across types, as for phases, before any threshold is agreed.
+- **Pressing:** a measure from distance and closing speed (not a run) would match SkillCorner's engagements better; it belongs with the counter-press in the FIFA view of phases (deliverable 5), where pressing is needed.
