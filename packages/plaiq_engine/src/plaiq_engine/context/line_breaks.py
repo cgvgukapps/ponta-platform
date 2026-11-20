@@ -225,7 +225,7 @@ class LineBreakPackage(ContextPackage):
             from plaiq_engine.match_analysis import (
                 MatchAnalysis,  # the moment of the pass, as for Choice
             )
-            ma = MatchAnalysis(m)
+            ma = ctx.extras.get("analysis") or MatchAnalysis(m)  # shared with P7 and the semantic builder when given
 
         def frame_point(xy, s):
             return (s * float(xy[0]) + L / 2, s * float(xy[1]))

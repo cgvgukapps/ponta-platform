@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.19.0 adds P7 0.1.0's seven thresholds (proposed; a new package; the five game-state weights are a
+judgement).
 Version 0.18.0 records the founder's agreement of ``p1_loose_max_s`` (5 s) and ``p6_carry_radius_m`` (3 m) on
 20 November 2026; no value changed, so package output is unchanged.
 Version 0.17.0 adds P6 0.1.0's five run thresholds (proposed; a new package); P6 0.2.0 adds ``p6_carry_radius_m``.
@@ -50,7 +52,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.18.0"
+THRESHOLDS_VERSION = "0.19.0"
 
 
 @dataclass(frozen=True)
@@ -222,6 +224,27 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p6_press_end_m", 5.0, "m", "proposed",
               "A defensive run is a pressing run when it ends within this distance of the ball carrier, having closed on them.",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
+    Threshold("p7_space_every_s", 5.0, "s", "proposed",
+              "Space (control of high-value space, the open danger zone) is computed every this many seconds: Plaiq's pitch control costs about 25 ms per frame over the whole grid, and the runtime budget for P5 to P7 is 60 s per match.",
+              "Stage C, P7 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 5)"),
+    Threshold("p7_high_value_share", 0.2, "share of cells", "proposed",
+              "A team's high-value space is the top this share of cells of its threat surface.",
+              "Stage C, P7 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 5)"),
+    Threshold("p7_late_minute", 75.0, "minute", "proposed",
+              "From this minute the game-state weight uses its late values.",
+              "Stage C, P7 0.1.0: a judgement (the last quarter of the match), not yet measured"),
+    Threshold("p7_lambda_leading", 1.25, "weight", "proposed",
+              "Game-state weight on the cost of losing the ball for a leading team before p7_late_minute (level is 1).",
+              "Stage C, P7 0.1.0: a judgement, labelled estimated until the expert study (Gate 3b) measures it"),
+    Threshold("p7_lambda_leading_late", 1.5, "weight", "proposed",
+              "The same, for a leading team from p7_late_minute.",
+              "Stage C, P7 0.1.0: a judgement, labelled estimated until the expert study (Gate 3b) measures it"),
+    Threshold("p7_lambda_trailing", 0.75, "weight", "proposed",
+              "Game-state weight for a trailing team before p7_late_minute.",
+              "Stage C, P7 0.1.0: a judgement, labelled estimated until the expert study (Gate 3b) measures it"),
+    Threshold("p7_lambda_trailing_late", 0.5, "weight", "proposed",
+              "The same, for a trailing team from p7_late_minute.",
+              "Stage C, P7 0.1.0: a judgement, labelled estimated until the expert study (Gate 3b) measures it"),
     Threshold("p5_min_unit_players", 2.0, "players", "proposed",
               "A defending line (unit) counts for line breaks only with at least this many players, as FIFA's Football Language defines a unit line.",
               "FIFA Football Language, penetrative action; ponta-blueprint/fifa-alignment.md; CONTEXT_STRUCTURE_REPORT.md, line breaks"),

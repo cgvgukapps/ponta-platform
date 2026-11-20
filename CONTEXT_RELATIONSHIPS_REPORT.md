@@ -189,3 +189,33 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 **For the founder:** agree the two definitional changes; choose the carry radius (3 m proposed, or 1.5 m); the type rules stay estimated, with their agreement moderate both with SkillCorner (κ 0.41) and with the founder's calls (35%).
 
 **Decided by the founder on 20 November 2026 (sections 2 and 4):** the duel rule (P1 0.5.0) and `p1_loose_max_s` (5 s) agreed; `p1_ball_state` is the AI layer's "who has the ball" field beside possession; P6 0.2.0's possession over the run and the carry rule agreed, with `p6_carry_radius_m` at 3 m. Thresholds 0.18.0 (no value changed). P6's type rules stay estimated.
+
+## 5. P7 space, value and game state (P7 0.1.0, 20 November 2026)
+
+**Built** (`plaiq_engine/context/space_value.py`; depends on P1 and P2; all fields estimated, not yet validated):
+- **Open high-value space:** every `p7_space_every_s` (5 s; Plaiq's pitch control costs about 25 ms a frame over the whole grid), with the ball detected, the share of each team's high-value space (the top `p7_high_value_share`, 20%, of its threat surface) that the other team does not control, weighted by threat, from Plaiq's per-frame control on the honeycomb. A team rarely controls its own high-value space outright (it lies near the opponent's goal, where the defenders control a median 57% and nobody 38%), so the open share is the informative measure, not control.
+- **`p7_open_danger_zone`:** for the team with the ball, the lane and third (its own frame) of the most threatening cell the defence does not control. Never a cell index.
+- **The game-state weight λ** for the team with the ball: a versioned lookup by goal difference (P1's score) and time. Level 1; leading 1.25 (from minute 75, 1.5); trailing 0.75 (late 0.5). A judgement, labelled estimated. With the score unknown λ is 1 and the Data check says so.
+- **Context-adjusted Choice**, a new score beside Choice (Choice stays the default): from Choice's own options at each pass (their ring-1 cells, completion probability `p` and value, now kept by `MatchAnalysis.choice_options`), each cell is worth `U = p × value − λ × (1 − p) × cost`, where `cost` is the other team's threat at the cell (what losing the ball there gives away). An option is its best cell; the score is the chosen option's `U` over the best option's, and null with a reason when no option is worth more than its risk. Segment `adjusted_choice` names the weight, goal difference and minute on every row.
+- **One shared analysis:** P5 and P7 reuse the semantic builder's `MatchAnalysis` (`extras["analysis"]`), so Choice is computed once per match.
+- **Not in 0.1.0, against the spec:** per-cell control is not stored for the replay (the replay can recompute Plaiq's control for the frame it shows, so storing it waits for the replay's design); the danger zone uses P3's lane and a third rather than a P3 zone; P7 reads P1 and P2, not P4. The shot measure uses SkillCorner's `lead_to_shot` (as Choice was adopted on), not its `dangerous` flag.
+- Thresholds 0.19.0 (seven, proposed). Golden outputs recaptured (P7 added). P7 takes a median 21 s a match (max 45 s) with Choice already computed; P5 to P7 together about 48 s with the shared analysis, inside the spec's 60 s budget (Choice's own 22 s is spent by the semantic builder either way).
+
+**Measured on SkillCorner's 20 matches** (`tools/context_space_value.py`; comparison only; Choice's own groundings from `tools/plaiq_dq_v2.py`). SkillCorner's matches have no logged score, so λ is 1 here and the comparison isolates the cost-of-losing-the-ball term.
+
+| 6,173 fit / 5,931 held-out passes | Choice, fit | Choice, held out | Adjusted, fit | Adjusted, held out |
+|---|---|---|---|---|
+| Possession leads to a shot, AUC (completed passes) | 0.633 | 0.609 | 0.580 | 0.558 |
+| SkillCorner's decision analogue, Spearman | 0.295 | 0.292 | 0.087 | 0.066 |
+| Completion, AUC (above 0.5 leans to safety) | 0.500 | 0.490 | **0.680** | **0.669** |
+| Median | 0.78 | 0.79 | 0.71 | 0.72 |
+
+- **The adjusted score leans to safety.** It ranks completed passes higher (AUC 0.67) and possessions that lead to shots lower than Choice does; its rank agreement with Choice is 0.66 held out. Choice itself is neutral on completion (0.49), as designed.
+- **The cost term dominates at full weight.** SkillCorner's analogue (`xpass_completion × xthreat`) has no cost of losing the ball, so a lower agreement with it is expected; the drop in the shot AUC is the material finding.
+- **λ's direction finds no support in SkillCorner's own labels.** The share of a team's possessions that SkillCorner calls `direct` barely moves with the game state: drawing 2.8% before minute 75 and 3.5% after, losing 3.0% and 3.0%, winning 2.5% and 2.9% (18,710 player possessions in all). Chasing teams do not play measurably more directly here. This tests one proxy, not the idea; λ stays a judgement.
+- **Open high-value space by SkillCorner's phase** (median share at possession starts) orders sensibly: build-up 0.24, direct 0.24, create 0.28, chaotic 0.39, transition 0.39, disruption 0.43, finish 0.43, quick break 0.51, set play 0.71 (set plays start with the defence not yet set around the high-value cells).
+
+**For the founder:**
+- **Context-adjusted Choice:** keep it as built (a safety-leaning score, analysts only, "estimated, not yet validated"), or reweight the cost term (for example half weight, measured on the same groundings before any value is agreed). The expert study (Gate 3b) decides whether it is ever shown first.
+- **λ values:** stay a proposed judgement; SkillCorner's direct-play share gives them no support either way.
+- **The P7 thresholds** (sample rate, high-value share, late minute, four λ values): agree, or keep proposed.

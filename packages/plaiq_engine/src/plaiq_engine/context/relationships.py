@@ -41,11 +41,13 @@ def pressure_score(hex_distance: np.ndarray) -> np.ndarray:
 
 def hex_distance(a_xy: np.ndarray, b_xy: np.ndarray) -> np.ndarray:
     """Ring distance on Plaiq's hex grid between points ``a`` (n, 2) and ``b`` (n, m, 2); NaN where either is missing."""
-    qa, ra = cartesian_to_hex(a_xy[..., 0], a_xy[..., 1], HEX_R)
-    qb, rb = cartesian_to_hex(b_xy[..., 0], b_xy[..., 1], HEX_R)
+    a_ok, b_ok = np.isfinite(a_xy).all(axis=-1), np.isfinite(b_xy).all(axis=-1)
+    a0, b0 = np.where(a_ok[..., None], a_xy, 0.0), np.where(b_ok[..., None], b_xy, 0.0)  # masked below; avoids casting NaN
+    qa, ra = cartesian_to_hex(a0[..., 0], a0[..., 1], HEX_R)
+    qb, rb = cartesian_to_hex(b0[..., 0], b0[..., 1], HEX_R)
     dq, dr = np.asarray(qb, float) - np.asarray(qa, float)[:, None], np.asarray(rb, float) - np.asarray(ra, float)[:, None]
     d = (np.abs(dq) + np.abs(dr) + np.abs(dq + dr)) / 2
-    bad = ~np.isfinite(a_xy).all(axis=-1)[:, None] | ~np.isfinite(b_xy).all(axis=-1)
+    bad = ~a_ok[:, None] | ~b_ok
     return np.where(bad, np.nan, d)
 
 

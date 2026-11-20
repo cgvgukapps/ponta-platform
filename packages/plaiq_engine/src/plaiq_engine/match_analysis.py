@@ -136,6 +136,8 @@ class MatchAnalysis:
         self.profiles_home = profiles_home or default_profiles(self.home_jerseys)
         self.profiles_away = profiles_away or default_profiles(self.away_jerseys)
         self.R = HEX_RADIUS
+        #: Filled by ``decision_quality_v2``: per pass event, its options (cells, probabilities, values, the chosen one).
+        self.choice_options: dict = {}
 
     # -- geometry and static surfaces ------------------------------------------
 
@@ -346,6 +348,8 @@ class MatchAnalysis:
             values = [np.array([option_value(m["ball"], h[c], xt_ball, xt[c]) for c in cs]) for cs in cells]
             k = names.index(m["target"])
             out = decision_quality_cells(p, values, k)
+            # Each pass's options, kept for scores built on Choice's parts (P7's context-adjusted Choice).
+            self.choice_options[idx] = {"team": m["team"], "names": names, "cells": cells, "p": p, "values": values, "chosen": k}
             kc = out["best_cell"][k]
             row.update({"ev_chosen": out["ev_chosen"], "ev_best": out["ev_best"], "p_chosen": float(p[k][kc]), "chosen_cell": int(cells[k][kc]),
                         "options": out["options"], "cells": int(sum(len(c) for c in cells))})
