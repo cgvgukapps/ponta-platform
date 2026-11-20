@@ -187,3 +187,5 @@ It reads who controls the ball next, so it describes a finished match (batch), n
 - Thresholds 0.17.0 gain `p6_carry_radius_m` (proposed). P6 0.2.0. Golden outputs recaptured (only P6 changes).
 
 **For the founder:** agree the two definitional changes; choose the carry radius (3 m proposed, or 1.5 m); the type rules stay estimated, with their agreement moderate both with SkillCorner (κ 0.41) and with the founder's calls (35%).
+
+**Decided by the founder on 20 November 2026 (sections 2 and 4):** the duel rule (P1 0.5.0) and `p1_loose_max_s` (5 s) agreed; `p1_ball_state` is the AI layer's "who has the ball" field beside possession; P6 0.2.0's possession over the run and the carry rule agreed, with `p6_carry_radius_m` at 3 m. Thresholds 0.18.0 (no value changed). P6's type rules stay estimated.

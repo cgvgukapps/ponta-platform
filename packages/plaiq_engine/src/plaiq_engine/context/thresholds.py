@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.18.0 records the founder's agreement of ``p1_loose_max_s`` (5 s) and ``p6_carry_radius_m`` (3 m) on
+20 November 2026; no value changed, so package output is unchanged.
 Version 0.17.0 adds P6 0.1.0's five run thresholds (proposed; a new package); P6 0.2.0 adds ``p6_carry_radius_m``.
 Version 0.16.0 adds ``p5_lb_option_min_p``, ``p5_open_lane_min_p``, ``p5_free_radius_m``, ``p5_overload_radius_m`` and ``p5_forced_turnover_min_pressure`` for P5 0.2.0's line-breaking options and relationships (all proposed; new fields).
 Version 0.15.0 adds ``p1_loose_max_s`` for P1 0.4.0's ball state (proposed; a new field, so earlier
@@ -48,7 +50,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.17.0"
+THRESHOLDS_VERSION = "0.18.0"
 
 
 @dataclass(frozen=True)
@@ -82,9 +84,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p1_contest_max_s", 4.0, "s", "agreed",
               "After a logged duel, clearance, block or deflection, the ball is in contest until a team has held control for p1_min_switch_s, for at most this long (a ball undetected or travelling without anyone controlling it).",
               "Stage C (context-relationships-task.md), deliverable 1; measured against the founder's possession replay calls (CONTEXT_RELATIONSHIPS_REPORT.md, section 1); agreed by the founder, 20 November 2026"),
-    Threshold("p1_loose_max_s", 5.0, "s", "proposed",
+    Threshold("p1_loose_max_s", 5.0, "s", "agreed",
               "A spell with nobody controlling a detected ball, when the next team to control it is not the last, is loose for at most this long; a longer spell is unknown (nobody near the ball says nothing about who has it).",
-              "Stage C, ball state (CONTEXT_RELATIONSHIPS_REPORT.md, section 2): loose spells have a median of about 1 s, but spells over 5 s held half or more of the loose time on the league's matches"),
+              "Stage C, ball state (CONTEXT_RELATIONSHIPS_REPORT.md, section 2): loose spells have a median of about 1 s, but spells over 5 s held half or more of the loose time on the league's matches; agreed by the founder, 20 November 2026 (with the duel rule, P1 0.5.0)"),
     Threshold("p1_degraded_inferred_share", 0.25, "share of in-play time", "agreed",
               "Possession is Degraded when more than this share of in-play time is not observed (inferred, from events or unknown). The Metrica matches sit at 11 to 18%; SkillCorner at 26%, partly because its dead-ball time is unknown and so counted as in play.",
               "CONTEXT_FOUNDATIONS_REPORT.md, possession sources; agreed by the founder, 17 November 2026"),
@@ -211,9 +213,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p6_move_min_m", 3.0, "m", "proposed",
               "The distance a run must gain, lose, close or move sideways for its directional types (behind, coming short, dropping off, pulling wide or into a half-space), and the band around the last line for 'from the final unit'.",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
-    Threshold("p6_carry_radius_m", 3.0, "m", "proposed",
+    Threshold("p6_carry_radius_m", 3.0, "m", "agreed",
               "A run is the carrier's own (a carry, not an off-ball run) when the runner is the team's nearest player to the ball and within this distance of it for at least half the run. Wider than P1's control radius because a dribbler at speed pushes the ball ahead.",
-              "Stage C, P6 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4): the founder's run review noted carries among off-ball runs; measured against SkillCorner's player possessions"),
+              "Stage C, P6 0.2.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4): the founder's run review noted carries among off-ball runs; measured against SkillCorner's player possessions; agreed by the founder at 3 m, 20 November 2026 (with P6 0.2.0's possession over the run)"),
     Threshold("p6_press_min_speed_mps", 4.17, "m/s", "proposed",
               "Defensive runs (while the other team has the ball) may be this slow; equal to p6_run_min_speed_mps unless lowered (a press is often a jog).",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
