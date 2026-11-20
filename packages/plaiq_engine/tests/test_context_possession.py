@@ -242,3 +242,37 @@ def test_chains_count_interruptions_and_who_restarts():
     _, segs = build_chains(grid, lab, src, setp, m, CFG, [], setp_team, contest_team)
     assert list(segs["interruptions"]) == [2, 0]
     assert segs["out_of_play"].iloc[0] == "lost" and pd.isna(segs["out_of_play"].iloc[1])
+
+
+# -- P1 0.4.0: ball state ------------------------------------------------------------------------------------
+
+def _bs(control, dead=None, det=None):
+    from plaiq_engine.context.possession import ball_state
+    n = len(control)
+    grid = pd.DataFrame({"frame_ts": np.round(np.arange(n) / 5.0, 3), "period": 1})
+    return ball_state(np.array(control, dtype=object), dead, np.ones(n, bool) if det is None else np.array(det), grid, CFG)
+
+
+def test_a_pass_to_a_team_mate_is_in_flight_and_a_ball_to_the_other_team_is_loose():
+    h, a, N = "home", "away", None
+    st = _bs([h, h, N, N, N, h, h, N, N, a, a])
+    assert list(st[:2]) == ["controlled_home"] * 2
+    assert list(st[2:5]) == ["in_flight_home"] * 3     # home to home: the pass travels within home's possession
+    assert list(st[7:9]) == ["loose"] * 2              # home to away: nobody has it until away does
+    assert list(st[9:]) == ["controlled_away"] * 2
+
+
+def test_contested_dead_undetected_and_long_spells():
+    h, N = "home", None
+    st = _bs([h, "contested", N, N], dead=np.array([False, False, False, True]))
+    assert list(st) == ["controlled_home", "contested", "loose", "out_of_play"]
+    st = _bs([h, N, h], det=[True, False, True])
+    assert st[1] == "unknown"                           # undetected
+    n = int(CFG["p1_loose_max_s"] * 5) + 3
+    st = _bs([h] + [N] * n + ["away"])
+    assert set(st[1:-1]) == {"unknown"}                 # nobody near the ball for too long: unknown, not loose
+
+
+def test_ball_state_is_a_new_field_and_possession_is_unchanged():
+    f = Registry([PossessionPackage()]).run(tiny_match([event("PASS", "Home", 1, end_frame=30)], seconds=6.0)).frames
+    assert "p1_ball_state" in f.columns and f["p1_ball_state"].notna().all()

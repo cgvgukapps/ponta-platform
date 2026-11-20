@@ -16,6 +16,12 @@ at the marked moment, who has the ball (home, away, or nobody yet: the ball in f
 Both files hold sample-data positions, so they are written outside the repository.
 ``--score`` reads the founder's results and the key and prints how often each source agrees.
 
+**Ball-state mode** (``--ball-state``, P1 0.4.0, 20 November 2026): a fresh blind check of ``p1_ball_state``.
+Moments are drawn by state (``--per-state``: loose, in flight, controlled, contested), none within 10 s of a
+moment the founder already judged, with the same page and question. The key records the state and its team;
+``--score`` then says a "nobody" call is right on ``loose`` or ``contested`` and a team call on that team's
+``controlled_`` or ``in_flight_`` state.
+
     python tools/context_possession_replay.py --idsse ~/ponta-reference-data/idsse --cache /tmp/ponta-context/idsse-cache \
         --out /tmp/ponta-context/possession_replay.html --key /tmp/ponta-context/possession_replay_key.json
     python tools/context_possession_replay.py --score results.json --key /tmp/ponta-context/possession_replay_key.json
@@ -118,9 +124,67 @@ def build(args) -> None:
     print(f"wrote {len(chosen)} cases to {args.out}; key to {args.key}")
 
 
+STATE_GROUPS = {"loose": ("loose",), "in_flight": ("in_flight_home", "in_flight_away"),
+                "controlled": ("controlled_home", "controlled_away"), "contested": ("contested",)}
+JUDGED = Path(__file__).resolve().parent / "data" / "possession_review_2026-11-18.json"
+
+
+def build_ball_state(args) -> None:
+    rng = np.random.default_rng(20261120)
+    judged = [c["id"] for c in json.loads(JUDGED.read_text())["cases"]]
+    want = dict(zip(STATE_GROUPS, (int(x) for x in args.per_state.split(",")), strict=True))
+    pools: dict[str, list] = {g: [] for g in STATE_GROUPS}
+    loaded = {}
+    for mid in MATCH_IDS:
+        m, _ = load_idsse_match(args.idsse, mid, args.cache)
+        g = Registry([PossessionPackage()]).run(m).frames
+        loaded[mid] = (m, g)
+        bs, ts = g["p1_ball_state"].astype(object).to_numpy(), g["frame_ts"].to_numpy(float)
+        near = [ts[int(j.split("-")[1])] for j in judged if j.startswith(mid + "-")]
+        for grp, states in STATE_GROUPS.items():
+            idx = np.flatnonzero(np.isin(bs, states))
+            idx = [int(i) for i in idx if all(abs(ts[i] - t) > 10.0 for t in near)]
+            pools[grp] += [(mid, i, bs[i]) for i in rng.permutation(idx)[:200].tolist()]
+    cases, key = [], {}
+    for grp, n in want.items():
+        pool = [pools[grp][k] for k in rng.permutation(len(pools[grp]))]
+        taken: list = []
+        for mid, i, st in pool:
+            if len(taken) >= n:
+                break
+            if any(mid == m2 and abs(i - i2) < 50 for m2, i2, _ in taken):
+                continue
+            taken.append((mid, i, st))
+            m, g = loaded[mid]
+            c = case(mid, m, g, i, args.before_s, args.after_s)
+            cases.append(c)
+            key[c["id"]] = {"kind": "ball_state", "state": st}
+    cases = [cases[k] for k in rng.permutation(len(cases))]
+    page = PAGE.replace("__BEFORE__", f"{args.before_s:g}").replace("__AFTER__", f"{args.after_s:g}") \
+               .replace("__DATA__", json.dumps(cases, separators=(",", ":")).replace("</", "<\\/"))
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(page)
+    args.key.write_text(json.dumps(key, indent=1))
+    print(f"wrote {len(cases)} cases to {args.out}; key to {args.key}")
+
+
 def score(args) -> None:
     calls = {r["id"]: r for r in json.loads(Path(args.score).read_text())}
     key = json.loads(args.key.read_text())
+    if any(k.get("kind") == "ball_state" for k in key.values()):
+        out: dict = {}
+        for cid, k in key.items():
+            c = calls.get(cid, {}).get("call")
+            if not c:
+                continue
+            grp = next(g for g, sts in STATE_GROUPS.items() if k["state"] in sts)
+            o = out.setdefault(grp, {"n": 0, "right": 0, "calls": {}})
+            o["n"] += 1
+            o["calls"][c] = o["calls"].get(c, 0) + 1
+            o["right"] += (k["state"] in ("loose", "contested")) if c == "nobody" else k["state"] in (f"controlled_{c}", f"in_flight_{c}")
+        out["total"] = {"n": sum(v["n"] for v in out.values()), "right": sum(v["right"] for v in out.values())}
+        print(json.dumps(out, indent=1))
+        return
     out = {"disagree": {"p1": 0, "league": 0, "nobody": 0, "n": 0}, "agree": {"both": 0, "nobody": 0, "n": 0}}
     for cid, k in key.items():
         c = calls.get(cid, {}).get("call")
@@ -219,12 +283,16 @@ def main() -> None:
     ap.add_argument("--before-s", type=float, default=5.0)
     ap.add_argument("--after-s", type=float, default=2.0)
     ap.add_argument("--score", type=Path, help="the founder's copied results (JSON); prints agreement per source")
+    ap.add_argument("--ball-state", action="store_true", help="build a blind check of p1_ball_state instead (P1 0.4.0)")
+    ap.add_argument("--per-state", default="15,15,10,10", help="moments per state: loose, in flight, controlled, contested")
     args = ap.parse_args()
     for p in [args.key] + [x for x in (args.out, args.cache) if x]:
         if not _outside(p):
             sys.exit(f"refusing to write sample-data positions inside the repository: {p}")
     if args.score:
         score(args)
+    elif args.ball_state:
+        build_ball_state(args)
     else:
         build(args)
 

@@ -38,3 +38,35 @@ So FIFA's "in contest" (from the event log) and the founder's "nobody has it yet
 - **Recommended next, separately:** an observed **ball-state** field (controlled by home, controlled by away, in flight, loose) from ball speed and the nearest player's distance, measured against the founder's calls with a larger judged sample. That is the reading behind "nobody has it yet", and the possession round already proposed it.
 
 **Decided by the founder on 20 November 2026:** `p1_state` kept as FIFA's vocabulary (estimated), and `p1_contest_max_s` agreed at 4 s (thresholds 0.14.0, no value changed). The ball-state field is built next (section 2), before P5.
+
+## 2. Ball state (P1 0.4.0, 20 November 2026)
+
+**Why.** Section 1 showed that FIFA's "in contest" (from the event log) does not place the founder's "nobody has it yet". The founder asked for the separate ball-state field the possession round proposed, before P5.
+
+**What the founder's calls mean.** At the 50 judged moments, ball speed and the nearest player's distance do not separate "nobody" from team calls: moments given to a team include passes in flight at 14 to 18 m/s, 3 to 8 m from anyone, and so do three of the ten controls. A pass travelling to a team-mate stays the passing team's; "nobody" is a ball travelling with no team about to keep it (a clearance, a misplaced pass, a deflection).
+
+**Built** (`plaiq_engine/context/possession.py`, `ball_state`): `p1_ball_state` on every grid point:
+- `controlled_home` / `controlled_away`: P1's control call (nearest player within `p1_control_radius_m`, ball slower than `p1_max_control_ball_speed_mps`);
+- `contested`: both teams at the ball;
+- `in_flight_home` / `in_flight_away`: nobody controls it and the same team controls it before and after;
+- `loose`: nobody controls it and the next team to control it is not the last, for at most `p1_loose_max_s` (proposed 5 s);
+- `out_of_play`, or `unknown` (the ball undetected, or a longer spell with nobody near it).
+
+It reads who controls the ball next, so it describes a finished match (batch), never a live one. `p1_possession` and `p1_state` are unchanged; thresholds 0.15.0; P1 0.4.0; golden outputs recaptured (only the new field, the version and the Data check entry change).
+
+**Measured** against the founder's 50 calls (`tools/context_contest.py`; "nobody" right on `loose` or `contested`, a team call on that team's controlled or in-flight state):
+
+| | `p1_possession` | `p1_state` (section 1) | **`p1_ball_state`**, cap 5 s (3 s / 8 s) |
+|---|---|---|---|
+| "Nobody" moments | 0 of 14 | 2 | **7** (6 / 7) |
+| Team moments | 11 of 26 | 10 | **15** |
+| Controls | 10 of 10 | 9 | **10** |
+| Right in total | 21 of 50 | 21 | **32** (31 / 32) |
+
+**Share of in-play time** (cap 5 s): controlled 37% to 45%, in flight 28% to 31%, loose 14% to 21%, contested 4% to 6%, unknown 3% to 12% on the league's matches; loose 9% to 12% on Metrica; on SkillCorner 1886347 loose 8% and unknown 31% (broadcast tracking loses the ball).
+
+**How the rule was chosen, and why 32 is optimistic.** Four versions were scored on these same 50 calls: "control" meaning any grid point of control (32 right), or control held for 0.2, 0.4 or 0.6 s (21, 23, 24 right). Held control fails because P1's 1.5 m control call flickers during a dribble, which leaves long false loose spells (about 30% of in-play time). The best of four on the same calls is an optimistic figure.
+
+**A fresh blind check for the founder** (`tools/context_possession_replay.py --ball-state`): 50 new moments from the league's matches, drawn by state (15 loose, 15 in flight, 10 controlled, 10 contested), none within 10 s of a moment already judged. Same page and question (home, away or nobody yet); the key stays apart from the page. `--score` reads the calls. Kept outside the repository (it holds the league's positions).
+
+**For the founder:** judge the fresh check; then agree `p1_loose_max_s` (5 s) and whether `p1_ball_state` is the "who has it" field the AI layer reads beside possession.

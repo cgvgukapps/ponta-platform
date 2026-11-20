@@ -36,6 +36,15 @@ duel, clearance, block or deflection until a team has held control for ``p1_min_
 ``p1_contest_max_s``). Interceptions are not contests: they win the ball. Chains count the other team's
 logged contest touches that did not end them (FIFA's "interrupted") and, when one ends with the ball
 out of play, whether the same team restarts.
+
+**Ball state (version 0.4.0, 20 November 2026):** ``p1_ball_state`` says what the ball is doing, the
+founder's "who has it, or nobody yet": ``controlled_home`` / ``controlled_away`` (P1's control call on
+that grid point), ``contested``, ``in_flight_home`` / ``in_flight_away`` (nobody controls it, and the same
+team controls it before and after: a pass travelling within one team's possession), ``loose`` (nobody
+controls it and the next team to control it is not the last, or a team is missing; a clearance, a
+misplaced pass, a deflection), ``out_of_play`` or ``unknown`` (the ball undetected, or uncontrolled for
+longer than ``p1_loose_max_s``). It reads who controls the ball next, so it describes a finished match
+(batch), never a live one. ``p1_possession`` is unchanged.
 """
 
 from __future__ import annotations
@@ -339,6 +348,51 @@ def possession_state(lab: np.ndarray, src: np.ndarray, control: np.ndarray, cont
     return state, source
 
 
+def ball_state(control: np.ndarray, dead: np.ndarray | None, det: np.ndarray, grid: pd.DataFrame, cfg: dict) -> np.ndarray:
+    """
+    What the ball is doing on each grid point (``p1_ball_state``), from P1's control call: controlled, contested,
+    in flight within one team's possession, loose, out of play or unknown. Reads the next control (batch only).
+    """
+    n = len(control)
+    ts, per = grid["frame_ts"].to_numpy(float), grid["period"].to_numpy()
+    is_dead = np.zeros(n, dtype=bool) if dead is None else np.asarray(dead, dtype=bool)
+    team_ctl = np.where(np.isin(control, TEAMS), control, None)
+    last, nxt = np.full(n, None, dtype=object), np.full(n, None, dtype=object)
+    cur = None
+    for k in range(n):
+        if (k and per[k] != per[k - 1]) or is_dead[k]:
+            cur = None
+        cur = team_ctl[k] if team_ctl[k] is not None else cur
+        last[k] = cur
+    cur = None
+    for k in range(n - 1, -1, -1):
+        if (k < n - 1 and per[k] != per[k + 1]) or is_dead[k]:
+            cur = None
+        cur = team_ctl[k] if team_ctl[k] is not None else cur
+        nxt[k] = cur
+    st = np.full(n, "unknown", dtype=object)
+    free = ~is_dead & (team_ctl == None) & (control != "contested") & det
+    flight = free & (last != None) & (last == nxt)
+    st[flight & (last == "home")], st[flight & (last == "away")] = "in_flight_home", "in_flight_away"
+    loose = free & ~flight
+    # A spell with nobody near the ball for longer than p1_loose_max_s says nothing about who has it: unknown.
+    k = 0
+    while k < n:
+        if not loose[k]:
+            k += 1
+            continue
+        j = k
+        while j + 1 < n and loose[j + 1] and per[j + 1] == per[k]:
+            j += 1
+        if ts[j] - ts[k] <= cfg["p1_loose_max_s"]:
+            st[k:j + 1] = "loose"
+        k = j + 1
+    st[team_ctl == "home"], st[team_ctl == "away"] = "controlled_home", "controlled_away"
+    st[(control == "contested") & ~is_dead] = "contested"
+    st[is_dead] = "out_of_play"
+    return st
+
+
 def label_possession(grid: pd.DataFrame, ball: pd.DataFrame, near: pd.DataFrame, event_poss: np.ndarray,
                      dead: np.ndarray | None, cfg: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -541,6 +595,8 @@ class _Fields:
                      "FIFA's possession state: in_possession_home, in_possession_away, in_contest (neither team has control: both at the ball, or after a logged duel, clearance, block or deflection until a team holds the ball), out_of_play or unknown. Since P1 0.3.0; p1_possession is unchanged."),
         ContextField("p1_state_source", "label", "observed",
                      "Where the state came from: events (a logged contest or dead ball), observed, inferred or unknown."),
+        ContextField("p1_ball_state", "label", "estimated",
+                     "What the ball is doing: controlled_home, controlled_away, contested, in_flight_home or in_flight_away (travelling within that team's possession: the same team controls it before and after), loose (nobody controls it and the next team to is not the last: a clearance, a misplaced pass, a deflection), out_of_play or unknown. Reads the next control, so it describes a finished match. Since P1 0.4.0."),
         ContextField("p1_score_home", "goals", "observed", "Home goals so far; null when the score at this moment is unknown."),
         ContextField("p1_score_away", "goals", "observed", "Away goals so far; null when the score at this moment is unknown."),
         ContextField("p1_red_home", "cards", "observed", "Home red cards so far; null when unknown."),
@@ -551,7 +607,7 @@ class _Fields:
 
 class PossessionPackage(ContextPackage):
     name = "p1"
-    version = "0.3.0"
+    version = "0.4.0"
     fields = _Fields().items
 
     def compute(self, ctx: ContextInput) -> PackageOutput:
@@ -564,6 +620,7 @@ class PossessionPackage(ContextPackage):
         lab, src, control = label_possession(g, ball, near, event_poss, dead, cfg)
         contest, contest_team = contest_events_on_grid(m, g)
         st, st_src = possession_state(lab, src, control, contest, g, cfg)
+        bs = ball_state(control, dead, ball["ball_detected"].to_numpy(bool), g, cfg)
         gs, gs_source, gs_info = game_state_on_grid(m, g, cfg, upload)
         chain, chains = build_chains(g, lab, src, setp, m, cfg, gs_info.get("goals", []) if gs_source == "events" else [], setp_team,
                                      contest_team)
@@ -580,6 +637,7 @@ class PossessionPackage(ContextPackage):
             "p1_set_piece": setp,
             "p1_state": st,
             "p1_state_source": st_src,
+            "p1_ball_state": bs,
             "p1_score_home": pd.array(gs["score_home"], dtype="Float64").astype("Int64"),
             "p1_score_away": pd.array(gs["score_away"], dtype="Float64").astype("Int64"),
             "p1_red_home": pd.array(gs["red_home"], dtype="Float64").astype("Int64"),
@@ -616,6 +674,8 @@ class PossessionPackage(ContextPackage):
             "state_share_in_play": {k: round(float(((st == k) & in_play).sum() / n_play), 4)
                                     for k in ("in_possession_home", "in_possession_away", "in_contest", "unknown")},
             "contest_events": int(contest.sum()),
+            "ball_state_share_in_play": {k: round(float(((bs == k) & in_play).sum() / n_play), 4)
+                                         for k in ("controlled_home", "controlled_away", "contested", "in_flight_home", "in_flight_away", "loose", "unknown")},
             "in_contest_from_events_share_in_play": round(float(((st_src == "events") & (st == "in_contest") & in_play).sum() / n_play), 4),
             "chains": {"count": int(len(chains)),
                        "known_start_share": round(float((~chains["start_type"].isin(["unknown"])).mean()), 4) if len(chains) else None,
