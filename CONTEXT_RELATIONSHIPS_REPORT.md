@@ -36,3 +36,5 @@ So FIFA's "in contest" (from the event log) and the founder's "nobody has it yet
 - **Keep `p1_state`** as FIFA's vocabulary, estimated: it is FIFA's own method (states from the event sequence), it changes no existing output, and it gives chains their "interrupted" and out-of-play outcomes.
 - **Agree `p1_contest_max_s` at 4 s?** 2 s and 4 s give the same calls; 6 s catches one more loose ball.
 - **Recommended next, separately:** an observed **ball-state** field (controlled by home, controlled by away, in flight, loose) from ball speed and the nearest player's distance, measured against the founder's calls with a larger judged sample. That is the reading behind "nobody has it yet", and the possession round already proposed it.
+
+**Decided by the founder on 20 November 2026:** `p1_state` kept as FIFA's vocabulary (estimated), and `p1_contest_max_s` agreed at 4 s (thresholds 0.14.0, no value changed). The ball-state field is built next (section 2), before P5.

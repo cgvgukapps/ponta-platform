@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.14.0 records the founder's agreement of ``p1_contest_max_s`` (4 s) on 20 November 2026; no value
+changed, so package output is unchanged.
 Version 0.12.0 moves ``p4_build_up_max_depth_share`` from a third to a quarter of the pitch, agreed by
 the founder on 20 November 2026 (P4 0.4.0; ``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 
@@ -42,7 +44,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.13.0"
+THRESHOLDS_VERSION = "0.14.0"
 
 
 @dataclass(frozen=True)
@@ -73,9 +75,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p1_loose_on_opponent_touch", 0.0, "switch (1 on, 0 off)", "proposed",
               "When the other team touches the ball without holding it for p1_min_switch_s (a deflection, block or clearance), possession is loose until a player of either team gains control (the founder's rule, 18 November 2026). Off: the team that had the ball keeps it.",
               "CONTEXT_STRUCTURE_REPORT.md, possession round: the founder's blind replay check on the IDSSE matches"),
-    Threshold("p1_contest_max_s", 4.0, "s", "proposed",
+    Threshold("p1_contest_max_s", 4.0, "s", "agreed",
               "After a logged duel, clearance, block or deflection, the ball is in contest until a team has held control for p1_min_switch_s, for at most this long (a ball undetected or travelling without anyone controlling it).",
-              "Stage C (context-relationships-task.md), deliverable 1; measured against the founder's possession replay calls"),
+              "Stage C (context-relationships-task.md), deliverable 1; measured against the founder's possession replay calls (CONTEXT_RELATIONSHIPS_REPORT.md, section 1); agreed by the founder, 20 November 2026"),
     Threshold("p1_degraded_inferred_share", 0.25, "share of in-play time", "agreed",
               "Possession is Degraded when more than this share of in-play time is not observed (inferred, from events or unknown). The Metrica matches sit at 11 to 18%; SkillCorner at 26%, partly because its dead-ball time is unknown and so counted as in play.",
               "CONTEXT_FOUNDATIONS_REPORT.md, possession sources; agreed by the founder, 17 November 2026"),
