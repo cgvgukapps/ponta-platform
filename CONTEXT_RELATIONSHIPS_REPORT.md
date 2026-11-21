@@ -237,3 +237,31 @@ At the founder's request, the adjusted score again with the cost term scaled by 
 - **These references cannot choose the weight.** The shot outcome and SkillCorner's analogue reward value only; neither rewards avoiding a costly loss, so any cost term scores worse on them by construction. The weight is a judgement until a risk-side check (do losses where the cost is high lead to the opponent's shots more often?) or the expert study (Gate 3b) measures it.
 
 **For the founder:** keep the weight at 1, or make it a versioned threshold `p7_cost_weight` (proposed 0.5, labelled estimated) on P7 0.2.0. Recommended: the threshold at 0.5, and the risk-side check on SkillCorner's and the German league's matches before any value is agreed.
+
+### P7 0.2.0 and the risk-side check (21 November 2026)
+
+**The founder's choice (21 November 2026):** `p7_cost_weight` at 0.5, proposed (thresholds 0.20.0, P7 0.2.0; each segment row names the weight). λ stays proposed. Golden outputs recaptured: only the adjusted score and P7's version change.
+
+**The check** (`tools/context_risk_check.py`): do losses where the cost is high lead to the opponent's shots more often? A loss is the other team taking the ball in play (SkillCorner: its next player possession within 3 s; the German league: the official team in possession changing, each side holding the ball at least 1 s; never just after the loser's own shot). The cost is the regaining team's threat (Plaiq's `xT_surface`) at the ball when it regains. The outcome is a shot by the regaining team within 15 s (10 and 20 s agree) before the loser has the ball again.
+
+| 15 s window | SkillCorner, 20 matches | German league, 7 matches |
+|---|---|---|
+| Losses (shot rate) | 2,330 (6.4%) | 1,786 (3.8%) |
+| AUC of the cost | **0.76** | **0.81** |
+| AUC of plain depth (how near its own goal the loser lost it) | 0.76 | 0.80 |
+| Shot rate, lowest to highest cost quintile | 1.5%, 0.9%, 6.2%, 7.1%, **16.3%** | 0.6%, 0.6%, 2.0%, 3.4%, **12.3%** |
+| Matches where the cost's AUC is above 0.5 | 20 of 20 | 7 of 7 |
+
+**The term as the score applies it** (SkillCorner, the chosen option's best cell at weight 0.5):
+
+| 15 s window | AUC |
+|---|---|
+| Failed passes (1,368): the cost at the option's cell | 0.73 (the cost at the actual loss point: 0.75) |
+| Every pass Choice scored (14,860): "this pass is lost and the opponent shoots", by the charge `(1 − p) × cost` | **0.81** |
+| The same, by `1 − p` alone | 0.75 |
+| The same, by the cost alone | 0.60 |
+
+- **The cost of losing the ball is real and the surface ranks it.** Losses in the top fifth of cost are followed by the opponent's shot more than ten times as often as the bottom two fifths on SkillCorner, and twenty times on the German league, in every match of both sources.
+- **The threat surface adds little over depth** (AUC 0.76 against 0.76, 0.81 against 0.80): the cost is mostly where on the pitch the ball is lost. That is expected of a location surface, and harmless.
+- **The charge the score applies is the right shape.** Before the outcome is known, `(1 − p) × cost` ranks the passes that end in a loss and an opponent's shot better than the risk of losing the ball alone or the cost alone (0.81 against 0.75 and 0.60). The option's cell stands in well for where the ball is actually lost (0.73 against 0.75).
+- **What it does not settle:** the weight. The check shows the cost term measures a real risk; how much of it to weigh against value is an exchange rate, which the shot outcomes cannot set. `p7_cost_weight` stays proposed at 0.5 until the expert study (Gate 3b).

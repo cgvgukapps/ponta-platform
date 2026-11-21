@@ -32,6 +32,9 @@ def test_adjusted_choice_weighs_the_cost_of_losing_the_ball():
     protect = adjusted_choice(opts, cost, 1.5)
     assert protect["adjusted"] < level["adjusted"] or np.isnan(protect["adjusted"])  # a leading team weighs the risk more
     assert adjusted_choice({**opts, "chosen": 0}, cost, 1.0)["adjusted"] == 1.0
+    # The cost weight scales the cost term: at 0 the score is the value ranking alone, and a lower weight leans less to safety.
+    assert adjusted_choice(opts, cost, 1.0, 0.0)["u_best"] == max(float(np.max(np.asarray(p) * np.asarray(v))) for p, v in zip(opts["p"], opts["values"], strict=True))
+    assert adjusted_choice(opts, cost, 1.0, 0.5)["u_chosen"] >= level["u_chosen"]
 
 
 def test_package_fields_and_entries():
@@ -44,3 +47,4 @@ def test_package_fields_and_entries():
     states = {e.metric: e.state for e in res.entries}
     assert states["space"] in ("full", "degraded") and states["adjusted_choice"] == "degraded"
     assert not [c for c in f.columns if c.startswith("p7_") and c.endswith(("_x", "_y", "_cell"))]
+    assert res.outputs["p7"].segments["adjusted_choice"]["cost_weight"].eq(0.5).all() or res.outputs["p7"].segments["adjusted_choice"].empty

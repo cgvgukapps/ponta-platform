@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.20.0 adds ``p7_cost_weight`` (0.5, proposed, the founder's choice of 21 November 2026 after the weights were
+measured); P7 0.2.0's adjusted Choice changes.
 Version 0.19.0 adds P7 0.1.0's seven thresholds (proposed; a new package; the five game-state weights are a
 judgement).
 Version 0.18.0 records the founder's agreement of ``p1_loose_max_s`` (5 s) and ``p6_carry_radius_m`` (3 m) on
@@ -52,7 +54,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.19.0"
+THRESHOLDS_VERSION = "0.20.0"
 
 
 @dataclass(frozen=True)
@@ -245,6 +247,9 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p7_lambda_trailing_late", 0.5, "weight", "proposed",
               "The same, for a trailing team from p7_late_minute.",
               "Stage C, P7 0.1.0: a judgement, labelled estimated until the expert study (Gate 3b) measures it"),
+    Threshold("p7_cost_weight", 0.5, "weight", "proposed",
+              "Scales the cost of losing the ball in context-adjusted Choice (U = p x value - p7_cost_weight x lambda x (1 - p) x cost); 0 gives Choice.",
+              "Stage C, P7 0.2.0: CONTEXT_RELATIONSHIPS_REPORT.md section 5; the value-only references cannot choose it, so a judgement until a risk-side check or the expert study"),
     Threshold("p5_min_unit_players", 2.0, "players", "proposed",
               "A defending line (unit) counts for line breaks only with at least this many players, as FIFA's Football Language defines a unit line.",
               "FIFA Football Language, penetrative action; ponta-blueprint/fifa-alignment.md; CONTEXT_STRUCTURE_REPORT.md, line breaks"),

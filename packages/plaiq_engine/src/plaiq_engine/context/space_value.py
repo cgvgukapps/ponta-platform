@@ -18,8 +18,9 @@ Stage C (``ponta-blueprint/context-relationships-task.md``, deliverable 4). Thre
   unknown ``λ`` is 1 and the Data check says so.
 - **Context-adjusted Choice**, a new score beside Choice (which stays the default): from Choice's own parts at each
   pass (``MatchAnalysis.choice_options``: every option's ring-1 cells, completion probability ``p`` and value), each
-  cell is worth ``U = p × value − λ × (1 − p) × cost``, where ``cost`` is the other team's threat at that cell (what
-  losing the ball there gives away). An option is its best cell; the score is the chosen option's ``U`` over the best
+  cell is worth ``U = p × value − w × λ × (1 − p) × cost``, where ``cost`` is the other team's threat at that cell (what
+  losing the ball there gives away) and ``w`` is ``p7_cost_weight`` (0.5 proposed; at 1 the score leans hard to safe
+  passes, at 0 it is Choice). An option is its best cell; the score is the chosen option's ``U`` over the best
   option's, when that is positive. The weight is named in the segment row.
 
 Estimated, not yet validated (Gate 3b, the expert study, decides whether the adjusted score is ever shown first).
@@ -56,15 +57,15 @@ def game_state_weight(goal_diff: float, minute: float, cfg: dict) -> float:
     return 1.0
 
 
-def adjusted_choice(opts: dict, cost_surface: np.ndarray, lam: float) -> dict:
+def adjusted_choice(opts: dict, cost_surface: np.ndarray, lam: float, cost_weight: float = 1.0) -> dict:
     """
-    Context-adjusted Choice for one pass from Choice's options: each cell's ``U = p × value − λ × (1 − p) × cost``; an
+    Context-adjusted Choice for one pass from Choice's options: each cell's ``U = p × value − w × λ × (1 − p) × cost``; an
     option is its best cell; the chosen option's ``U`` over the best option's when that is positive.
     """
     us = []
     for cs, p, v in zip(opts["cells"], opts["p"], opts["values"], strict=True):
         p, v = np.asarray(p, float), np.asarray(v, float)
-        u = p * v - lam * (1.0 - p) * cost_surface[np.asarray(cs, int)]
+        u = p * v - cost_weight * lam * (1.0 - p) * cost_surface[np.asarray(cs, int)]
         us.append(float(u.max()) if len(u) else -np.inf)
     us = np.array(us)
     best, chosen = float(us.max()), float(us[opts["chosen"]])
@@ -90,7 +91,7 @@ class _Fields:
 
 class SpaceValuePackage(ContextPackage):
     name = "p7"
-    version = "0.1.0"
+    version = "0.2.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -162,15 +163,16 @@ class SpaceValuePackage(ContextPackage):
             t = opts["team"].lower()
             diff = score[t][k] - score[OTHER[t]][k] if known else np.nan
             weight = game_state_weight(diff, minute[k], cfg)
-            r = adjusted_choice(opts, xt[OTHER[t]], weight)
+            r = adjusted_choice(opts, xt[OTHER[t]], weight, cfg["p7_cost_weight"])
             base = d2.at[idx, "dq_v2"] if idx in d2.index else np.nan
             rows.append({"event_idx": int(idx), "team": t, "ts": float(ts[k]), "choice": round(float(base), 4) if np.isfinite(base) else None,
                          "adjusted": round(float(r["adjusted"]), 4) if np.isfinite(r["adjusted"]) else None, "weight": weight,
+                         "cost_weight": cfg["p7_cost_weight"],
                          "goal_diff": None if not np.isfinite(diff) else int(diff), "minute": int(minute[k]),
                          "game_state": "known" if known else "unknown", "reason": r["reason"]})
             if np.isfinite(r["adjusted"]) and not np.isfinite(adj[k]):
                 adj[k] = r["adjusted"]
-        segs = pd.DataFrame(rows, columns=["event_idx", "team", "ts", "choice", "adjusted", "weight", "goal_diff", "minute",
+        segs = pd.DataFrame(rows, columns=["event_idx", "team", "ts", "choice", "adjusted", "weight", "cost_weight", "goal_diff", "minute",
                                            "game_state", "reason"]).sort_values("event_idx", kind="stable").reset_index(drop=True)
 
         frames = pd.DataFrame({"p7_home_high_value_open": np.round(hv_ctl["home"], 4),
