@@ -34,9 +34,9 @@ LANES = ("left_wing", "left_half_space", "centre", "right_half_space", "right_wi
 ENGAGEMENTS = ("recovery", "counter_press", "press", "pressure")
 #: Measured per measure (tools/context_profiles.py, CONTEXT_PROFILES_REPORT.md): the matches a team needs before a
 #: comparison gives a verdict, from the intraclass correlation on SkillCorner's 12 recurring teams lifted by Spearman-Brown
-#: to pf_reliability_target (0.7). Proposed (23 November 2026), basis reference: only measures whose 90% interval for
-#: the correlation lies above 0.1, so a measure that might be noise never yields a verdict. Every other measure gives
-#: "minimum not measured yet" until a club's own matches show it is stable. The founder agrees these.
+#: to pf_reliability_target (0.7). Basis reference: only measures whose 90% interval for the correlation lies above
+#: 0.1, so a measure that might be noise never yields a verdict. Every other measure gives "minimum not measured yet"
+#: until a club's own matches show it is stable. Agreed by the founder, 23 November 2026.
 MIN_MATCHES: dict[str, int] = {
     "out_share_high_block": 3,           # ICC 0.52 (90% 0.23 to 0.70)
     "field_tilt": 4,                     # ICC 0.42 (0.12 to 0.61)

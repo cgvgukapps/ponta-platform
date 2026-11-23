@@ -71,6 +71,6 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
 
 ## 8. Decisions for the founder
 
-1. **The proposed minimum matches** for the four stable measures (3, 4, 4, 5), and keeping every other measure without a verdict until a club's own data shows it is stable.
+1. *(Agreed by the founder, 23 November 2026.)* **The minimum matches** for the four stable measures (3, 4, 4, 5), and every other measure without a verdict until a club's own data shows it is stable.
 2. **`pf_verdict_sd`** (1.0 within-team standard deviation for "above / below your usual"): an engineering choice; to be measured on a design partner's season.
 3. **More data:** a design partner's season is what makes baselines useful; open sources with recurring teams (StatsBomb's open events, PFF FC's World Cup 2022 tracking) could be checked for licence and value first.
