@@ -37,6 +37,7 @@ from plaiq_engine.context.possession import GameStateInput, PossessionPackage
 from plaiq_engine.context.probe import ProbePackage
 from plaiq_engine.context.registry import Registry
 from plaiq_engine.context.space_value import SpaceValuePackage
+from plaiq_engine.context.states import StatesPackage
 from plaiq_engine.context.structure import StructurePackage
 from plaiq_engine.context.thresholds import THRESHOLDS_VERSION
 from plaiq_engine.context.zones import ZonesPackage
@@ -50,7 +51,7 @@ GOLDEN = repo_root() / "tests" / "golden" / "context"
 
 def registry() -> Registry:
     return Registry([ProbePackage(), PossessionPackage(), StructurePackage(), ZonesPackage(), PhasePackage(), LineBreakPackage(),
-                     MovementPackage(), SpaceValuePackage(), FifaViewPackage()])
+                     MovementPackage(), SpaceValuePackage(), FifaViewPackage(), StatesPackage()])
 
 
 def extras_for(key: str) -> dict:

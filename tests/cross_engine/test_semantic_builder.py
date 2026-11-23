@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.6").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2
+    assert sem["schema_version"].eq("1.7").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -161,6 +161,36 @@ def test_context_columns_from_p1(built):
     assert sem["score_diff"].dropna().eq(0).all()  # no goals in the synthetic match
     rec = nested_record(sem.iloc[0].to_dict())
     assert set(rec["match_context"]) == {"possession_chain_id", "possession_source", "score_diff", "red_card_diff"}
+
+
+def test_context_columns_and_states_from_every_package(built):
+    """Schema 1.7: the Stage B and C context and the episode on each row; earlier columns unchanged; the episode table."""
+    import sys
+    from pathlib import Path
+
+    from plaiq_engine.citations import check_quoted_numbers, resolve_state_citation
+    from plaiq_engine.semantic_builder import CONTEXT_COLUMNS
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    from context_golden import registry
+
+    analysis, builder, plain = built
+    ctx = registry().run(analysis.match, extras={"analysis": analysis})
+    b = SemanticBuilder(analysis, builder.parity, context=ctx)
+    sem = b.semantic_events()
+    p1 = ("possession_chain_id", "possession_source", "score_diff", "red_card_diff")
+    base_cols = [c for c in SEMANTIC_COLUMNS if c not in CONTEXT_COLUMNS and c not in p1]
+    pd.testing.assert_frame_equal(sem[base_cols], plain[base_cols])  # existing columns unchanged
+    assert sem["context_versions"].notna().all()
+    assert sem["state_id"].dropna().str.fullmatch(r"synthetic_1:\d:\d{4}").all()
+    assert sem["zone_third"].dropna().isin(["defensive", "middle", "attacking"]).all()
+    assert not [c for c in sem.columns if c.endswith(("_x", "_y", "_cell"))]
+    st = b.semantic_states(sem)
+    assert len(st) >= 1 and st["state_id"].is_unique
+    for r in st.to_dict("records"):
+        assert check_quoted_numbers(r["summary"], r) == [], r["summary"]
+        assert resolve_state_citation(st, r["match_id"], r["state_id"], r["start_s"], r["end_s"]).ok
+    assert set(sem["state_id"].dropna()) <= set(st["state_id"])
 
 
 def test_pass_completion_probability_on_passes_only(built):

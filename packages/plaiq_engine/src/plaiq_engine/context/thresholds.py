@@ -27,6 +27,7 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.22.0 adds P8 0.1.0's episode rule (a new package; proposed, to be measured against SkillCorner's phases of play).
 Version 0.21.0 adds P4v 0.1.0's thresholds (a new package, the FIFA view of phases; all proposed, five of them FIFA's
 published mid-block values).
 Version 0.20.0 adds ``p7_cost_weight`` (0.5, proposed, the founder's choice of 21 November 2026 after the weights were
@@ -56,7 +57,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.21.0"
+THRESHOLDS_VERSION = "0.22.0"
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,18 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p6_press_end_m", 5.0, "m", "proposed",
               "A defensive run is a pressing run when it ends within this distance of the ball carrier, having closed on them.",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
+    Threshold("p8_min_state_s", 2.0, "s", "proposed",
+              "Episode runs shorter than this merge into the run before them in the same possession chain (the one after for a chain's first run).",
+              "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),
+    Threshold("p8_keep_short_chains", 1.0, "switch", "proposed",
+              "1: a possession chain too short to merge (under p8_min_state_s, a single run) is still an episode; 0: it has none.",
+              "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),
+    Threshold("p8_split_formation", 1.0, "switch", "proposed",
+              "1: an episode also ends where either team's formation changes (P2); 0: phases only.",
+              "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),
+    Threshold("p8_split_fifa_phase", 0.0, "switch", "proposed",
+              "1: episodes split on P4v's FIFA phase (build-up opposed and unopposed), a finer cut; 0: on P4's phase.",
+              "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),
     Threshold("p4v_engage_radius_m", 8.0, "m", "proposed",
               "A defender can be engaging the ball carrier only within this distance. SkillCorner's engagements start within 10 m nine times in ten (median 6 to 8 m); other defenders sit a median 22 m away. Swept 6 to 12 m on the fit matches: 8 m finds 57% of SkillCorner's engagements at 65% precision (10 m: 60% at 55%).",
               "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),

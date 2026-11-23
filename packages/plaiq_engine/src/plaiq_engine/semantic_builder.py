@@ -29,6 +29,7 @@ section 7.1).
 
 from __future__ import annotations
 
+import json
 from importlib import metadata
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from matrix_engine.ingestion.metrica_io import find_goalkeeper
 from matrix_engine.parity import AnalyticsParityReport
 
 from plaiq_engine.analytics.event_stitch import clean_jersey
+from plaiq_engine.context.states import STATE_COLUMNS
 from plaiq_engine.match_analysis import MatchAnalysis
 
 #: 1.1 (17 November 2026): adds the context columns from package P1 (possession chain and
@@ -54,7 +56,11 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: "Gain" and version 2 as "Choice". Values change; columns do not.
 #: 1.6 (20 November 2026): Gain version 2 (``MatchAnalysis.gain_v2``, adopted beside version 1): ``gain_v2_score``
 #: (0 to 1.5, version 1's cut-offs and band names), ``gain_v2_band``, ``gain_v2_status``, ``gain_v2_version``. Passes only.
-SCHEMA_VERSION = "1.6"
+#: 1.7 (23 November 2026, Stage D): the Stage B and C context at each action's start, when a ContextResult is given
+#: (phase, FIFA phase, block, formations, the ball's zone, line breaks, relationships, runs, adjusted Choice, open space,
+#: engaging defenders), the episode it belongs to (``state_id``, P8) and the context versions. All estimated; labels and
+#: counts only, never coordinates. Earlier columns are unchanged.
+SCHEMA_VERSION = "1.7"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
@@ -78,6 +84,19 @@ THIRD_EDGE_M = 17.5
 #: Channels across the pitch (team frame, metres from the centre line, positive = left).
 CHANNEL_EDGES_M = (20.0, 9.0)
 
+#: Schema 1.7's context columns (all estimated). ``phase`` and ``out_phase`` belong to ``phase_team``, the team in
+#: possession; zones are in the actor's attacking direction (``zone_band`` only for the team in possession).
+CONTEXT_COLUMNS: tuple[str, ...] = (
+    "state_id", "phase_team", "phase", "out_phase", "fifa_phase", "fifa_out_phase", "block",
+    "formation_in", "formation_out", "zone_lane", "zone_third", "zone_band",
+    "units_broken", "furthest_line_broken", "received_inside_shape", "goal_side_defenders", "overload_at_ball",
+    "runs_in_behind", "adjusted_choice", "open_high_value_share", "engaging_defenders", "context_versions",
+)
+MIRROR_THIRD = {"defensive": "attacking", "middle": "middle", "attacking": "defensive"}
+#: ``semantic_states`` (schema 1.7): P8's episode row plus the event ids at its ends and the pass decision medians.
+STATE_EXTRA_COLUMNS: tuple[str, ...] = (*STATE_COLUMNS[:STATE_COLUMNS.index("summary")], "first_event_id", "last_event_id",
+                                        "gain_median", "choice_median", "adjusted_choice_median", "summary", "schema_version")
+
 SEMANTIC_COLUMNS: tuple[str, ...] = (
     "schema_version", "engine_version", "event_id", "match_id", "event_idx", "timestamp_s", "minute_display", "period",
     "actor_player_ref", "actor_team", "actor_role",
@@ -92,6 +111,8 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
     # Context package P1 (null unless a ContextResult is given): labels, never coordinates.
     "possession_chain_id", "possession_source", "score_diff", "red_card_diff",
+    # Context packages P2 to P8 (schema 1.7; null unless a ContextResult is given): labels and counts, never coordinates.
+    *CONTEXT_COLUMNS,
 )
 
 
@@ -161,6 +182,8 @@ class SemanticBuilder:
         self.parity = parity
         self.roles = roles or {}
         self._ctx = self._context_lookup(context)
+        self._ctx2 = self._context_lookup_17(context)
+        self._context = context
         self.match_id = f"{analysis.match.provider}_{analysis.match.match_id}"
         self.engine_version = _engine_version()
         self.goalkeepers = self._goalkeepers()
@@ -200,6 +223,68 @@ class SemanticBuilder:
             "possession_source": None if c["source"][i] is None else str(c["source"][i]),
             "score_diff": diff(c["score"]),
             "red_card_diff": diff(c["red"]),
+        }
+
+    def _context_lookup_17(self, context):
+        """Schema 1.7's context (P2 to P8) by native frame; per-pass fields from the P5 and P7 segments."""
+        if context is None or "p4_phase" not in getattr(context, "frames", pd.DataFrame()).columns:
+            return None
+        f = context.frames.sort_values("native_frame", kind="stable")
+
+        def col(name, ffill=False):
+            if name not in f:
+                return np.full(len(f), None, dtype=object)
+            s = f[name].astype(object).where(f[name].notna(), None)
+            return (s.ffill() if ffill else s).to_numpy(dtype=object)
+
+        out = {"frame": f["native_frame"].to_numpy(),
+               **{k: col(k) for k in ("p8_state_id", "p4_team", "p4_phase", "p4_out_phase", "p4v_phase", "p4v_out_phase", "p4_block",
+                                       "p3_attacking_team", "p3_ball_lane", "p3_ball_third", "p3_ball_band", "p5_goal_side_defenders",
+                                       "p5_overload_at_ball", "p6_runs_in_behind", "p4v_engaging_defenders")},
+               **{f"p2_{t}_formation_{k}": col(f"p2_{t}_formation_{k}") for t in ("home", "away") for k in ("in", "out")},
+               **{f"p7_{t}_high_value_open": col(f"p7_{t}_high_value_open", ffill=True) for t in ("home", "away")}}
+        lb = context.outputs["p5"].segments.get("line_breaks") if "p5" in context.outputs else None
+        out["passes"] = {} if lb is None else {int(r.event_row): r for r in lb.itertuples()}
+        adj = context.outputs["p7"].segments.get("adjusted_choice") if "p7" in context.outputs else None
+        out["adjusted"] = {} if adj is None else dict(zip(adj["event_idx"].astype(int), adj["adjusted"], strict=True))
+        versions = {c[:-len("_version")]: str(f[c].iloc[0]) for c in f.columns if c.endswith("_version") and len(f)}
+        out["versions"] = json.dumps({**versions, "thresholds": getattr(context, "thresholds_version", None)}, sort_keys=True)
+        return out
+
+    def _context_fields_17(self, idx: int, frame: int | None, team: str) -> dict:
+        empty = dict.fromkeys(CONTEXT_COLUMNS)
+        c = self._ctx2
+        if c is None or frame is None or team not in ("home", "away"):
+            return empty
+        i = int(np.searchsorted(c["frame"], frame, side="right")) - 1
+        if i < 0:
+            return empty
+        other = "away" if team == "home" else "home"
+
+        def num(v):
+            return None if v is None or pd.isna(v) else (int(v) if float(v).is_integer() else round(float(v), 4))
+
+        lane, third, band = c["p3_ball_lane"][i], c["p3_ball_third"][i], c["p3_ball_band"][i]
+        if c["p3_attacking_team"][i] not in (None, team):  # zones are the team in possession's: mirror them for the other
+            third = MIRROR_THIRD.get(third, third)
+            lane = None if lane is None else (lane.replace("left", "@").replace("right", "left").replace("@", "right"))
+            band = None
+        p = c["passes"].get(idx)
+        adj = c["adjusted"].get(idx)
+        return {
+            "state_id": c["p8_state_id"][i], "phase_team": c["p4_team"][i], "phase": c["p4_phase"][i], "out_phase": c["p4_out_phase"][i],
+            "fifa_phase": c["p4v_phase"][i], "fifa_out_phase": c["p4v_out_phase"][i], "block": c["p4_block"][i],
+            "formation_in": c[f"p2_{team}_formation_in"][i], "formation_out": c[f"p2_{other}_formation_out"][i],
+            "zone_lane": lane, "zone_third": third, "zone_band": band,
+            "units_broken": None if p is None else num(p.units_broken),
+            "furthest_line_broken": None if p is None or p.furthest is None or pd.isna(p.furthest) else str(p.furthest),
+            "received_inside_shape": None if p is None or p.received_inside is None or pd.isna(p.received_inside) else bool(p.received_inside),
+            "goal_side_defenders": num(c["p5_goal_side_defenders"][i]), "overload_at_ball": num(c["p5_overload_at_ball"][i]),
+            "runs_in_behind": num(c["p6_runs_in_behind"][i]),
+            "adjusted_choice": None if adj is None or pd.isna(adj) else round(float(adj), 4),
+            "open_high_value_share": num(c[f"p7_{team}_high_value_open"][i]),
+            "engaging_defenders": num(c["p4v_engaging_defenders"][i]),
+            "context_versions": c["versions"],
         }
 
     def _goalkeepers(self) -> set[str]:
@@ -250,6 +335,7 @@ class SemanticBuilder:
             "parity_spatial": self.parity.metrics["decision_quality"].state,
             "parity_physiological": self.parity.metrics["load_and_fatigue"].state,
             **self._context_fields(frame, team.lower()),
+            **self._context_fields_17(idx, frame, team.lower()),
         }
 
     # -- semantic events ----------------------------------------------------------
@@ -462,13 +548,43 @@ class SemanticBuilder:
 
     # -- output ---------------------------------------------------------------------------
 
+    def semantic_states(self, events: pd.DataFrame | None = None) -> pd.DataFrame:
+        """
+        The episodes (P8's ``states`` segment) for the AI layer, with the semantic event ids at each end and, for the
+        passes in each episode, the median Gain (0 to 1.5), Choice (0 to 1) and context-adjusted Choice, each named and
+        never combined. Empty when no ContextResult with P8 was given.
+        """
+        ctx = self._context
+        if ctx is None or "p8" not in getattr(ctx, "outputs", {}):
+            return pd.DataFrame(columns=list(STATE_EXTRA_COLUMNS))
+        st = ctx.outputs["p8"].segments["states"].copy()
+        ev = self.semantic_events() if events is None else events
+
+        def eid(i):
+            return None if i is None or pd.isna(i) else f"evt_{self.match_id}_{int(i):05d}"
+
+        st["first_event_id"] = [eid(i) for i in st["first_event_idx"]]
+        st["last_event_id"] = [eid(i) for i in st["last_event_idx"]]
+        passes = ev.loc[ev["action_type"] == "pass"]
+        by_state = {k: g for k, g in passes.groupby("state_id")}
+        for col, src in (("gain_median", "dq_score"), ("choice_median", "dq_v2_score"), ("adjusted_choice_median", "adjusted_choice")):
+            st[col] = [None if (g := by_state.get(sid)) is None or g[src].dropna().empty else round(float(g[src].dropna().astype(float).median()), 3)
+                       for sid in st["state_id"]]
+        st["schema_version"] = SCHEMA_VERSION
+        return st[[c for c in STATE_EXTRA_COLUMNS]]
+
     def write(self, out_dir: str | Path) -> dict[str, Path]:
-        """Write ``semantic_events.parquet`` and ``trajectories.parquet`` to ``out_dir``."""
+        """Write ``semantic_events.parquet``, ``trajectories.parquet`` and, with P8's context, ``semantic_states.parquet``."""
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         paths = {"semantic_events": out / "semantic_events.parquet", "trajectories": out / "trajectories.parquet"}
-        self.semantic_events().to_parquet(paths["semantic_events"], index=False)
+        events = self.semantic_events()
+        events.to_parquet(paths["semantic_events"], index=False)
         self.trajectories().to_parquet(paths["trajectories"], index=False)
+        states = self.semantic_states(events)
+        if len(states):
+            paths["semantic_states"] = out / "semantic_states.parquet"
+            states.to_parquet(paths["semantic_states"], index=False)
         return paths
 
 
@@ -505,6 +621,7 @@ def nested_record(row: dict) -> dict:
             "possession_chain_id": row.get("possession_chain_id"), "possession_source": row.get("possession_source"),
             "score_diff": row.get("score_diff"), "red_card_diff": row.get("red_card_diff"),
         },
+        "context": {k: row.get(k) for k in CONTEXT_COLUMNS},  # schema 1.7: Stage B to D context, all estimated
         "quality_gate": {
             "ball_detected": row["ball_detected"], "players_observed": row["players_observed"],
             "parity": {"spatial_intelligence": row["parity_spatial"], "physiological_context": row["parity_physiological"]},

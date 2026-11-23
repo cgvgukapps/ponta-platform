@@ -14,6 +14,7 @@
   "p4v",
   "p6",
   "p7",
+  "p8",
   "probe"
  ],
  "versions": {
@@ -25,7 +26,8 @@
   "p4v": "0.1.0",
   "p6": "0.2.0",
   "p7": "0.2.0",
+  "p8": "0.1.0",
   "probe": "0.1.0"
  },
- "thresholds_version": "0.21.0"
+ "thresholds_version": "0.22.0"
 }

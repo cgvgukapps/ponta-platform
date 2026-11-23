@@ -38,11 +38,12 @@ def test_every_grid_point_is_labelled_with_a_source(result):
 def test_data_check_entries_attach(result):
     m, res = result
     report = res.attach_to(parity_for_match(m))
-    assert set(report.packages) == {"p1", "p2", "p3", "p4", "p4v", "p5", "p6", "p7", "probe"}
+    assert set(report.packages) == {"p1", "p2", "p3", "p4", "p4v", "p5", "p6", "p7", "p8", "probe"}
     assert {e.metric for e in report.packages["p5"]} == {"line_breaks", "relationships"}
     assert {e.metric for e in report.packages["p6"]} == {"movement"}
     assert {e.metric for e in report.packages["p7"]} == {"space", "adjusted_choice"}
     assert {e.metric for e in report.packages["p4v"]} == {"engagements", "fifa_view", "fifa_block"}
+    assert {e.metric for e in report.packages["p8"]} == {"episodes"}
     assert {e.metric for e in report.packages["p1"]} == {"possession", "game_state", "possession_state"}
     assert {e.metric for e in report.packages["p2"]} == {"team_shape", "formation"}
     assert report.summary == parity_for_match(m).summary  # base metrics unchanged
