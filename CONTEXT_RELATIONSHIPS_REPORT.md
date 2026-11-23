@@ -41,6 +41,8 @@ So FIFA's "in contest" (from the event log) and the founder's "nobody has it yet
 
 **Decided by the founder on 20 November 2026:** `p1_state` kept as FIFA's vocabulary (estimated), and `p1_contest_max_s` agreed at 4 s (thresholds 0.14.0, no value changed). The ball-state field is built next (section 2), before P5.
 
+**Regrounded on 23 November 2026** (the founder asked that decisions rest on standards and professional reference data, not his calls; `tools/context_contest_reference.py`): in the leagues' own event coding, after a logged duel, clearance or block a player has the ball (a pass, a failed pass, a shot or a recovery) within 4 s in **84%** of 1,198 contests on the German league's 7 matches (median 1.0 s, 90th percentile 5.3 s) and **95%** of 743 on Metrica's 3 (405 and 196 more end in a dead ball first). The 4 s cap stands on that; its basis is now `reference`. No value changed.
+
 ## 2. Ball state (P1 0.4.0, 20 November 2026)
 
 **Why.** Section 1 showed that FIFA's "in contest" (from the event log) does not place the founder's "nobody has it yet". The founder asked for the separate ball-state field the possession round proposed, before P5.

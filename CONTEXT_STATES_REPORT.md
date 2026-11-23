@@ -94,6 +94,13 @@ A separate agent audited the codebase, read-only, for whether it will let users 
 - Every summary still passes the quoted-number check; no coordinate, cell or name column; storage about 150 KB a match.
 - **Not changed:** P4's set-play window (play after the kick stays a set play under SkillCorner's convention) is an upstream question to measure against SkillCorner's set-play phases before any decision; the episode boundaries.
 
+## 6b. The open questions, decided by the standards (23 November 2026)
+
+The founder's decision order (published definitions, then professional reference data, then outcomes, his own view only to break a tie) applied to the two questions the review left:
+
+- **P4's set-play window stays.** SkillCorner's published phases specification, which P4 follows, keeps the play after the kick in the set-play phase for up to 20 s, and its own phases-of-play files do so: 360 set-play phases on its 20 matches, median 4.8 s, 76% longer than 2 s. The founder's reading (a set play is the still ball) is a different convention, not evidence against this one. **P8 0.2.1** words the phase as "play from a set piece", which says what the convention means.
+- **Clearances stay logged-only.** A tracking-only candidate (`tools/context_clearance_tracking.py`: the end of a controlled spell, a fast ball from the kicking team's defensive zone that gains distance and is not collected by a team-mate) finds at most 6% of the German league's logged clearances, at 6% precision or less, across 27 combinations of speed, zone and distance on 4 matches; the best of them finds 4% at 3% precision on the other 3. A clearance is usually a single first-time touch, so the team never "controls" the ball in P1's sense; reading clearances from tracking needs a touch detector, which P1 does not have.
+
 ## 7. Deviations from the spec
 
 - The AI layer's typed query tool, state filters, episode playlists and CI questions stay in `ai-workflows-task.md` (no AI layer exists yet), as the spec says.

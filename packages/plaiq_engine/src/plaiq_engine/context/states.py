@@ -24,6 +24,10 @@ phase is.
 piece named in ``start_detail``, a restart or a kick-off, from P1's chain and the logged first action) and whether the
 team in possession made a logged clearance (``cleared``); an episode whose last logged action by that team is a clearance
 ends ``cleared``. The defending side of contested and set-play spells is no longer phrased as an opponent's phase.
+
+**Version 0.2.1** (23 November 2026): P4's ``set_play`` is summarised as "play from a set piece". SkillCorner's published
+convention, which P4 follows, keeps the play after the kick in the set-play phase (its set-play phases last a median
+4.8 s, up to 20 s), so the words now say that rather than suggesting a still ball.
 """
 
 from __future__ import annotations
@@ -65,7 +69,7 @@ OUT_OF_PLAY = {"throw_in", "corner_kick", "goal_kick"}
 PHASE_TEXT = {"build_up_opposed": "build-up (opposed)", "build_up_unopposed": "build-up (unopposed)", "build_up": "build-up",
               "progression": "progression", "final_third": "final-third play", "long_ball": "a long ball",
               "counter_attack": "a counter-attack", "attacking_transition": "an attacking transition",
-              "set_play": "a set play", "in_contest": "a contested spell", "create": "progression", "finish": "final-third play",
+              "set_play": "play from a set piece", "in_contest": "a contested spell", "create": "progression", "finish": "final-third play",
               "direct": "a long ball", "quick_break": "a counter-attack", "transition": "an attacking transition", "chaotic": "a contested spell"}
 #: The defending side of contested, set-play and long-ball spells is not phrased as an opponent's phase (0.2.0, the founder's review).
 OUT_TEXT = {"high_block": "a high block", "mid_block": "a mid-block", "low_block": "a low block", "high_press": "a high press",
@@ -239,7 +243,7 @@ class _Fields:
 
 class StatesPackage(ContextPackage):
     name = "p8"
-    version = "0.2.0"
+    version = "0.2.1"
     depends_on = ("p1", "p2", "p3", "p4", "p4v", "p5", "p6", "p7")
     fields = _Fields().items
 

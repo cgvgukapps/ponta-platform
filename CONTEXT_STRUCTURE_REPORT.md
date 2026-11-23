@@ -873,3 +873,16 @@ Taken on 18 November 2026 (later): the restarts round approved and done (P4 0.3.
 - **Build-up within a quarter of the pitch** (`p4_build_up_max_depth_share` 0.25; thresholds 0.12.0, P4 0.4.0). Golden outputs recaptured: on the four regression matches only P4's phase fields and the version stamps change.
 - **Roles are judged on the set,** as phases are: pooled over every player at least 75% grouped and 85% with central midfield merged, with the per-match bars kept as a reading. 1959846's box midfield is a recorded limit of P2's templates.
 - **Gate 2a across the 20 matches, on the agreed settings** (`tools/context_reference_set.py`, which now reports the set-level reading as `gate_2a_set`): phases pooled κ 0.670 and 0.638 by half, no match below 0.50 (lowest 0.524), 18 of 20 at κ 0.55 on both halves; roles pooled 84.1% grouped and 89.0% merged (per match 19 and 17 of 20); formations 20 of 20. **Gate 2a is met across the set.** Gate 2b (analysts) still comes before player-facing use.
+
+## Three phase rules rechecked against SkillCorner alone (23 November 2026)
+
+The founder asked that decisions rest on published definitions and professional reference data, with his own replay calls only breaking ties. Three P4 rules began in his replay review (18 November 2026) and were then measured with SkillCorner as well; each was rerun on SkillCorner's 20 matches alone, the rule on against off (`tools/context_reference_set.py --set`; phase κ against SkillCorner's phases-of-play file, pooled, with the held-out matches in brackets):
+
+| Rule | On (as agreed) | Off | Other value |
+|---|---|---|---|
+| Build-up whatever the block within a quarter of the pitch (`p4_build_up_max_depth_share` 0.25) | **0.652** (0.637) | 0.619 (0.604) | |
+| Final third needs the ball in the attacking half (`p4_finish_min_depth_share` 0.5) | **0.652** (0.637) | 0.638 (0.624) | 0.6: 0.644 (0.630) |
+| A break ends at the final third (`p4_break_end_depth_share` 0.667) | 0.652 (0.637) | 0.652 (0.639) | 0.6: 0.652; 0.75: 0.652 |
+
+- **The build-up and final-third rules stand on SkillCorner's data alone**; their basis is `reference`.
+- **The break-end rule has no measurable effect** on SkillCorner's labels (switched off, the lowest match half rises from 0.524 to 0.546). It rests on the founder's review, so its basis is now `judgement`. Switching it off is a decision for the founder; nothing was changed.

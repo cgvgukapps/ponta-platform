@@ -53,10 +53,16 @@ reads it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
+#: What a value rests on (the founder's decision order, 23 November 2026; CLAUDE.md "How decisions are made"):
+#: ``published`` a published definition (FIFA, SkillCorner's specifications, peer-reviewed papers); ``reference`` fitted
+#: or measured against professional reference data (SkillCorner's labels, the German league's official data, logged
+#: provider events); ``engineering`` a documented engineering choice not measured against a standard; ``judgement`` a
+#: modelling judgement or the founder's calls, with no reference behind it yet.
+Basis = Literal["published", "reference", "engineering", "judgement"]
 
 THRESHOLDS_VERSION = "0.23.0"
 
@@ -69,6 +75,7 @@ class Threshold:
     status: Status
     reason: str
     source: str | None = None
+    basis: Basis = "engineering"
 
 
 _ALL: tuple[Threshold, ...] = (
@@ -91,7 +98,7 @@ _ALL: tuple[Threshold, ...] = (
               "CONTEXT_STRUCTURE_REPORT.md, possession round: the founder's blind replay check on the IDSSE matches"),
     Threshold("p1_contest_max_s", 4.0, "s", "agreed",
               "After a logged duel, clearance, block or deflection, the ball is in contest until a team has held control for p1_min_switch_s, for at most this long (a ball undetected or travelling without anyone controlling it).",
-              "Stage C (context-relationships-task.md), deliverable 1; measured against the founder's possession replay calls (CONTEXT_RELATIONSHIPS_REPORT.md, section 1); agreed by the founder, 20 November 2026"),
+              "Stage C, deliverable 1; regrounded on 23 November 2026 in the leagues' own event coding (tools/context_contest_reference.py): after a logged duel, clearance or block a player has the ball within 4 s in 84% of cases in the German league (90th percentile 5.3 s) and 95% on Metrica. First measured against the founder's possession calls; agreed by the founder, 20 November 2026"),
     Threshold("p1_loose_max_s", 5.0, "s", "agreed",
               "A spell with nobody controlling a detected ball, when the next team to control it is not the last, is loose for at most this long; a longer spell is unknown (nobody near the ball says nothing about who has it).",
               "Stage C, ball state (CONTEXT_RELATIONSHIPS_REPORT.md, section 2): loose spells have a median of about 1 s, but spells over 5 s held half or more of the loose time on the league's matches; agreed by the founder, 20 November 2026 (with the duel rule, P1 0.5.0)"),
@@ -165,14 +172,14 @@ _ALL: tuple[Threshold, ...] = (
     # -- P4 refinements from the founder's replay review (17 November 2026; agreed 18 November 2026) --
     Threshold("p4_finish_min_depth_share", 0.5, "share of pitch length", "agreed",
               "Against a low block, finish needs the ball in the attacking half; otherwise it is create. Requiring the final third instead lost agreement with SkillCorner (kappa 0.55 against 0.61). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: on, pooled phase κ 0.652 (held out 0.637); off 0.638 (0.624); 0.6 0.644 (0.630)"),
     Threshold("p4_build_up_max_depth_share", 0.25, "share of pitch length", "agreed",
               "With the ball within this share of the pitch from the team's own goal line, the team is building up whatever the block (the reviewer: playing from the back is build-up). 0 turns the check off. A quarter since 0.12.0 (a third before).",
               "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; the rule agreed by the founder, 18 November 2026 (a third); "
-              "a quarter measured in the Gate 2a round (pooled kappa 0.670 / 0.638 from 0.609 / 0.610, held out by match, no match below 0.50) and agreed by the founder, 20 November 2026"),
+              "a quarter measured in the Gate 2a round (pooled kappa 0.670 / 0.638 from 0.609 / 0.610, held out by match, no match below 0.50) and agreed by the founder, 20 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: on, pooled phase κ 0.652 (held out 0.637); off 0.619 (0.604)"),
     Threshold("p4_break_end_depth_share", 0.667, "share of pitch length", "agreed",
               "A quick break or transition that began further back ends when the ball reaches the final third; the attack is then labelled by the block (usually finish). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026"),
+              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: no measurable effect (on 0.652, off 0.652; held out 0.637 and 0.639; lowest match half 0.524 on, 0.546 off), so the rule rests on the founder's review: basis judgement"),
     # -- Corners from player positions (the founder's proposal, 17 November 2026; agreed 18 November 2026) --
     Threshold("p4_corner_setup_crowd_min", 12.0, "players", "agreed",
               "Without a logged feed, a corner set-up needs at least this many players of both teams in that penalty area while one attacker stands at a corner flag. Finds 73% of SkillCorner's corners (55% of detections right) against 4% for the ball rule. 0 turns the position rule off (the ball rule is used).",
@@ -315,6 +322,25 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p4_min_phase_s", 1.0, "s", "agreed",
               "A phase shorter than this merges into the phase before it in the same possession.", "Proposed in CONTEXT_STRUCTURE_REPORT.md; agreed by the founder, 17 November 2026"),
 )
+
+_BASIS: dict[str, Basis] = {
+    **dict.fromkeys(("p2_window_s", "p2_min_possession_s", "p2_formation_persist_s", "p4_set_play_max_s", "p4_direct_min_gain_m",
+                     "p4_chaotic_max_s", "p5_min_unit_players", "p4v_fifa_max_speed_kmh", "p4v_fifa_min_behind",
+                     "p4v_fifa_min_players", "p4v_fifa_hold_s", "p4v_fifa_window_s"), "published"),
+    **dict.fromkeys(("p1_control_radius_m", "p1_max_control_ball_speed_mps", "p1_min_switch_s", "p1_max_carry_gap_s", "p1_contest_max_s",
+                     "p1_loose_max_s", "p1_degraded_inferred_share", "p2_template_4_2_2_2", "p4_low_block_max_m",
+                     "p4_high_block_min_m", "p4_break_min_gain_m", "p4_finish_min_depth_share", "p4_build_up_max_depth_share",
+                     "p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s",
+                     "p4_throw_in_hold_s", "p4_throw_in_out_m", "p4_throw_in_still_mps", "p4_throw_in_ball_m",
+                     "p5_lb_option_min_p", "p5_forced_turnover_min_pressure", "p6_run_min_speed_mps", "p6_run_min_s",
+                     "p6_carry_radius_m", "p8_min_state_s", "p8_keep_short_chains", "p8_split_formation", "p8_split_fifa_phase",
+                     "p4v_engage_radius_m", "p4v_engage_closing_mps", "p4v_engage_min_s", "p4v_recovery_back_mps",
+                     "p4v_counter_press_s", "p4v_pressure_max_depth_share", "p4v_press_min_players", "p4v_press_gap_s",
+                     "p4v_opposed_min_pressure"), "reference"),
+    **dict.fromkeys(("p1_loose_on_opponent_touch", "p4_break_end_depth_share", "p7_late_minute", "p7_lambda_leading",
+                     "p7_lambda_leading_late", "p7_lambda_trailing", "p7_lambda_trailing_late", "p7_cost_weight"), "judgement"),
+}
+_ALL = tuple(replace(t, basis=_BASIS.get(t.name, "engineering")) for t in _ALL)
 
 THRESHOLDS: dict[str, Threshold] = {t.name: t for t in _ALL}
 
