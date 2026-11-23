@@ -32,7 +32,8 @@ Within each P1 possession chain, in priority order:
    of the pitch (else ``create``), and with the ball inside ``p4_build_up_max_depth_share`` of
    it the team is building up whatever the block (a quarter of the pitch since 0.4.0, 20 November 2026; a
    third before). A quick break or transition that began
-   further back ends when the ball reaches ``p4_break_end_depth_share`` of the pitch.
+   further back ends when the ball reaches ``p4_break_end_depth_share`` of the pitch (0, off, since 0.5.0:
+   the founder's decision of 23 November 2026, after the rule showed no effect against SkillCorner).
 
 Runs shorter than ``p4_min_phase_s`` merge into the run before them in the same chain. The
 team out of possession gets the paired label (``low_block``, ``defending_transition`` …).
@@ -163,7 +164,7 @@ class _Fields:
 
 class PhasePackage(ContextPackage):
     name = "p4"
-    version = "0.4.0"
+    version = "0.5.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 

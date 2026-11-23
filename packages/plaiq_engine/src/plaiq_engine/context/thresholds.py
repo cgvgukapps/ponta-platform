@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.24.0 switches ``p4_break_end_depth_share`` off (0.667 to 0), agreed by the founder on 23 November 2026: on
+SkillCorner's 20 matches alone the rule had no measurable effect and its weakest match half improved without it (P4 0.5.0).
 Version 0.23.0 records the founder's agreement of ``p8_min_state_s`` (2 s) on 23 November 2026; no value changed.
 Version 0.22.0 adds P8 0.1.0's episode rule (a new package; proposed, to be measured against SkillCorner's phases of play).
 Version 0.21.0 adds P4v 0.1.0's thresholds (a new package, the FIFA view of phases; all proposed, five of them FIFA's
@@ -64,7 +66,7 @@ Status = Literal["proposed", "measured", "agreed"]
 #: modelling judgement or the founder's calls, with no reference behind it yet.
 Basis = Literal["published", "reference", "engineering", "judgement"]
 
-THRESHOLDS_VERSION = "0.23.0"
+THRESHOLDS_VERSION = "0.24.0"
 
 
 @dataclass(frozen=True)
@@ -177,10 +179,9 @@ _ALL: tuple[Threshold, ...] = (
               "With the ball within this share of the pitch from the team's own goal line, the team is building up whatever the block (the reviewer: playing from the back is build-up). 0 turns the check off. A quarter since 0.12.0 (a third before).",
               "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; the rule agreed by the founder, 18 November 2026 (a third); "
               "a quarter measured in the Gate 2a round (pooled kappa 0.670 / 0.638 from 0.609 / 0.610, held out by match, no match below 0.50) and agreed by the founder, 20 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: on, pooled phase κ 0.652 (held out 0.637); off 0.619 (0.604)"),
-    Threshold("p4_break_end_depth_share", 0.667, "share of pitch length", "agreed",
-              "A quick break or transition that began further back ends when the ball reaches the final third; the attack is then labelled by the block (usually finish). 0 turns the check off.",
-              "CONTEXT_STRUCTURE_REPORT.md, founder's replay review (50 moments) and SkillCorner's 20 open-data matches; agreed by the founder, 18 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: no measurable effect (on 0.652, off 0.652; held out 0.637 and 0.639; lowest match half 0.524 on, 0.546 off), so the rule rests on the founder's review: basis judgement"),
-    # -- Corners from player positions (the founder's proposal, 17 November 2026; agreed 18 November 2026) --
+    Threshold("p4_break_end_depth_share", 0.0, "share of pitch length", "agreed",
+              "When above 0, a quick break or transition that began further back ends when the ball reaches this share of the pitch, and the attack is then labelled by the block. 0 turns the check off (since 0.24.0): breaks end by the recovery rule (p4_recovered_players), the end of the chain or p4_break_max_s.",
+              "Added from the founder's replay review at 0.667, agreed by the founder, 18 November 2026; rechecked on SkillCorner's 20 matches alone on 23 November 2026: no measurable effect (pooled phase κ 0.652 on and off; held out 0.637 on, 0.639 off; lowest match half 0.524 on, 0.546 off); switched off, agreed by the founder, 23 November 2026"),
     Threshold("p4_corner_setup_crowd_min", 12.0, "players", "agreed",
               "Without a logged feed, a corner set-up needs at least this many players of both teams in that penalty area while one attacker stands at a corner flag. Finds 73% of SkillCorner's corners (55% of detections right) against 4% for the ball rule. 0 turns the position rule off (the ball rule is used).",
               "CONTEXT_STRUCTURE_REPORT.md, corner sweep: fitted on 10 SkillCorner matches, read on the other 10 and on Metrica's logged corners; agreed by the founder, 18 November 2026"),
@@ -330,14 +331,14 @@ _BASIS: dict[str, Basis] = {
     **dict.fromkeys(("p1_control_radius_m", "p1_max_control_ball_speed_mps", "p1_min_switch_s", "p1_max_carry_gap_s", "p1_contest_max_s",
                      "p1_loose_max_s", "p1_degraded_inferred_share", "p2_template_4_2_2_2", "p4_low_block_max_m",
                      "p4_high_block_min_m", "p4_break_min_gain_m", "p4_finish_min_depth_share", "p4_build_up_max_depth_share",
-                     "p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s",
+                     "p4_break_end_depth_share", "p4_corner_setup_crowd_min", "p4_corner_setup_radius_m", "p4_corner_setup_hold_s",
                      "p4_throw_in_hold_s", "p4_throw_in_out_m", "p4_throw_in_still_mps", "p4_throw_in_ball_m",
                      "p5_lb_option_min_p", "p5_forced_turnover_min_pressure", "p6_run_min_speed_mps", "p6_run_min_s",
                      "p6_carry_radius_m", "p8_min_state_s", "p8_keep_short_chains", "p8_split_formation", "p8_split_fifa_phase",
                      "p4v_engage_radius_m", "p4v_engage_closing_mps", "p4v_engage_min_s", "p4v_recovery_back_mps",
                      "p4v_counter_press_s", "p4v_pressure_max_depth_share", "p4v_press_min_players", "p4v_press_gap_s",
                      "p4v_opposed_min_pressure"), "reference"),
-    **dict.fromkeys(("p1_loose_on_opponent_touch", "p4_break_end_depth_share", "p7_late_minute", "p7_lambda_leading",
+    **dict.fromkeys(("p1_loose_on_opponent_touch", "p7_late_minute", "p7_lambda_leading",
                      "p7_lambda_leading_late", "p7_lambda_trailing", "p7_lambda_trailing_late", "p7_cost_weight"), "judgement"),
 }
 _ALL = tuple(replace(t, basis=_BASIS.get(t.name, "engineering")) for t in _ALL)

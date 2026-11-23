@@ -886,3 +886,5 @@ The founder asked that decisions rest on published definitions and professional 
 
 - **The build-up and final-third rules stand on SkillCorner's data alone**; their basis is `reference`.
 - **The break-end rule has no measurable effect** on SkillCorner's labels (switched off, the lowest match half rises from 0.524 to 0.546). It rests on the founder's review, so its basis is now `judgement`. Switching it off is a decision for the founder; nothing was changed.
+
+**Decided by the founder on 23 November 2026:** the break-end rule is switched off (`p4_break_end_depth_share` 0; thresholds 0.24.0, P4 0.5.0). Breaks now end by the recovery rule (enough defenders goal-side), the end of the chain or `p4_break_max_s` (both engineering choices, not published values). Measured as shipped on SkillCorner's 20 matches: pooled phase κ 0.672 / 0.640 by half (was 0.670 / 0.638), against the phases-of-play file 0.652 (held out 0.639), lowest match half 0.546 (was 0.524); the Gate 2a bars still hold (18 of 20 matches at κ 0.55 on both halves, none below 0.50).
