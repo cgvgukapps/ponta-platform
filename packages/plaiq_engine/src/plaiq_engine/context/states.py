@@ -18,6 +18,12 @@ zones; players are not named; distances (a team's length, a line's height) are l
 Data check state of every package for the match and the package versions. Every number and label the ``summary``
 quotes is a field of the same row (``plaiq_engine.citations.check_quoted_numbers``). Episodes are estimated: their
 phase is.
+
+**Version 0.2.0** (after the founder's episode review, 23 November 2026): each row says how the episode started
+(``start_reason``: continued from the previous phase in the same chain, won the ball, the goalkeeper had the ball, a set
+piece named in ``start_detail``, a restart or a kick-off, from P1's chain and the logged first action) and whether the
+team in possession made a logged clearance (``cleared``); an episode whose last logged action by that team is a clearance
+ends ``cleared``. The defending side of contested and set-play spells is no longer phrased as an opponent's phase.
 """
 
 from __future__ import annotations
@@ -28,20 +34,31 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.context.registry import (
     ContextField,
     ContextInput,
     ContextPackage,
     PackageOutput,
 )
-from plaiq_engine.context.structure import OTHER, TEAMS
+from plaiq_engine.context.structure import (
+    OTHER,
+    TEAMS,
+    window_index,
+    windows_from_segments,
+)
 from plaiq_engine.context.thresholds import THRESHOLDS_VERSION
 
 THIRDS = ("defensive", "middle", "attacking")
 LINE_ORDER = {"first": 1, "second_last": 2, "last": 3}
 #: How an episode ended (``end_reason``).
-END_REASONS = ("phase_changed", "formation_changed", "possession_lost", "shot", "goal", "ball_out_of_play",
+END_REASONS = ("phase_changed", "formation_changed", "possession_lost", "cleared", "shot", "goal", "ball_out_of_play",
                "foul_or_set_piece", "dead_ball", "end_of_period")
+#: How an episode started (``start_reason``; 0.2.0). ``start_detail`` names the set piece.
+START_REASONS = ("continued", "won_the_ball", "goalkeeper", "set_piece", "restart", "kick_off", "unknown")
+START_TEXT = {"won_the_ball": "won the ball", "goalkeeper": "the goalkeeper had the ball", "restart": "a restart", "kick_off": "a kick-off"}
+SET_PIECE_TEXT = {"corner_kick": "a corner", "throw_in": "a throw-in", "goal_kick": "a goal kick", "free_kick": "a free kick",
+                  "free_kick_direct": "a free kick", "free_kick_indirect": "a free kick", "penalty": "a penalty", "kick_off": "a kick-off"}
 #: P1 set pieces after a dead ball, by end reason.
 OUT_OF_PLAY = {"throw_in", "corner_kick", "goal_kick"}
 #: Readable names for the summary (FIFA's where P4v gives one).
@@ -50,11 +67,12 @@ PHASE_TEXT = {"build_up_opposed": "build-up (opposed)", "build_up_unopposed": "b
               "counter_attack": "a counter-attack", "attacking_transition": "an attacking transition",
               "set_play": "a set play", "in_contest": "a contested spell", "create": "progression", "finish": "final-third play",
               "direct": "a long ball", "quick_break": "a counter-attack", "transition": "an attacking transition", "chaotic": "a contested spell"}
+#: The defending side of contested, set-play and long-ball spells is not phrased as an opponent's phase (0.2.0, the founder's review).
 OUT_TEXT = {"high_block": "a high block", "mid_block": "a mid-block", "low_block": "a low block", "high_press": "a high press",
             "mid_press": "a mid press", "low_press": "a low press", "counter_press": "a counter-press",
-            "defensive_transition": "a defence in transition", "defending_long_ball": "a long ball",
-            "defending_set_play": "a set play", "in_contest": "a contested spell"}
+            "defensive_transition": "a defence in transition"}
 END_TEXT = {"phase_changed": "the phase changed", "formation_changed": "a formation changed", "possession_lost": "possession lost",
+            "cleared": "the ball was cleared",
             "shot": "a shot", "goal": "a goal", "ball_out_of_play": "the ball went out of play",
             "foul_or_set_piece": "a foul or set piece", "dead_ball": "a stoppage", "end_of_period": "the end of the period"}
 
@@ -70,7 +88,7 @@ DC_METRICS = (("p1", "possession"), ("p1", "possession_state"), ("p1", "game_sta
 
 STATE_COLUMNS: tuple[str, ...] = (
     "state_id", "match_id", "period", "start_s", "end_s", "duration_s", "minute_display",
-    "team", "chain_id", "share_controlled", "share_in_flight", "share_loose_or_contested", "score_diff", "red_card_diff",
+    "team", "chain_id", "start_reason", "start_detail", "cleared", "share_controlled", "share_in_flight", "share_loose_or_contested", "score_diff", "red_card_diff",
     "game_state_source",
     "phase", "out_phase", "fifa_phase", "fifa_out_phase", "block", "opposed_pct", "press_share", "counter_press_share",
     "fifa_mid_block_share", "fifa_low_block_share",
@@ -165,6 +183,10 @@ def summary_text(row: dict) -> str:
     if out:
         parts[-1] += f", against {out}"
     s = parts[0] + "."
+    if row["start_reason"] == "set_piece":
+        s += f" Started from {SET_PIECE_TEXT.get(row['start_detail'], 'a set piece')}."
+    elif row["start_reason"] in START_TEXT:
+        s += f" Started: {START_TEXT[row['start_reason']]}."
     if row["passes"]:  # null without an event feed: the summary then says nothing about passes
         s += (f" {_n(row['passes'], 'pass', 'passes')}, {row['passes_completed']} completed, "
               f"{row['passes_breaking_a_line']} broke a line.")
@@ -174,6 +196,8 @@ def summary_text(row: dict) -> str:
         s += f" {other} engaged the ball carrier {_n(row['engagements'], 'time', 'times')}" + (", including a counter-press." if row["counter_press"] else ".")
     if row["runs_in_behind"]:
         s += f" {_n(row['runs_in_behind'], 'run', 'runs')} in behind."
+    if row["cleared"] and row["end_reason"] != "cleared":
+        s += f" {team} cleared the ball."
     s += f" Ended: {END_TEXT.get(row['end_reason'], row['end_reason'])}."
     return s + " Context estimated, not yet validated."
 
@@ -215,7 +239,7 @@ class _Fields:
 
 class StatesPackage(ContextPackage):
     name = "p8"
-    version = "0.1.0"
+    version = "0.2.0"
     depends_on = ("p1", "p2", "p3", "p4", "p4v", "p5", "p6", "p7")
     fields = _Fields().items
 
@@ -260,6 +284,15 @@ class StatesPackage(ContextPackage):
         # "no passes" as a pattern.
         has_feed = bool(len(ev_frames))
         has_passes = has_feed and {"Type", "Start X"} <= set(ev.columns)
+        # Logged clearances (Metrica: a subtype; the German league: an event type) and who made each action.
+        typ = ev["Type"].astype(str).str.upper() if "Type" in ev else pd.Series("", index=ev.index)
+        sub = ev["Subtype"].astype(str).str.upper() if "Subtype" in ev else pd.Series("", index=ev.index)
+        is_clear = (typ.str.contains("CLEARANCE") | sub.str.contains("CLEARANCE")).to_numpy()
+        ev_team = ev["Team"].astype(str).str.lower().to_numpy() if "Team" in ev else np.full(len(ev), "", dtype=object)
+        actor = np.array([f"{tm}_{j}" if (j := clean_jersey(fr)) else None for tm, fr in
+                          zip(ev_team, ev["From"] if "From" in ev else [None] * len(ev), strict=True)], dtype=object)
+        keepers = windows_from_segments(up["p2"].segments).gk
+        win = window_index(g, cfg)
         ev_ts = np.interp(ev_frames, nf.astype(float), ts) if len(ev_frames) and n else np.array([])
         data_check = json.dumps({f"{e.package}.{e.metric}": e.state for k in sorted(up) for e in up[k].entries}, sort_keys=True)
         versions = json.dumps({**{k: next((e.package_version for e in up[k].entries), None) for k in sorted(up)},
@@ -320,11 +353,37 @@ class StatesPackage(ContextPackage):
                 else:
                     end_reason = "dead_ball"
             led = bool(np.isfinite(cid) and int(cid) in chains.index and chains.at[int(cid), "end_type"] in ("shot", "goal"))
+            # 0.2.0: how it started, and clearances (the founder's review, 23 November 2026).
+            own = [j for j in ev_in if ev_team[j] == t]
+            cleared = bool(any(is_clear[j] for j in own))
+            if own and is_clear[own[-1]] and end_reason in ("possession_lost", "ball_out_of_play", "dead_ball", "phase_changed"):
+                end_reason = "cleared"
+            prev = spans[idx - 1] if idx > 0 else None
+            start_detail = None
+            if prev is not None and np.isfinite(cid) and chain[prev[0]] == cid and prev[1] == a - 1:
+                start_reason = "continued"
+            else:
+                s_type = str(chains.at[int(cid), "start_type"]) if np.isfinite(cid) and int(cid) in chains.index else "unknown"
+                if s_type.startswith("set_piece:"):
+                    start_reason, start_detail = "set_piece", s_type.split(":", 1)[1].lower()
+                    if start_detail == "kick_off":
+                        start_reason = "kick_off"
+                elif s_type in ("recovery", "won"):
+                    first_by = actor[own[0]] if own else None
+                    gk = keepers.get((t, int(per[a]), int(win[a])))
+                    start_reason = "goalkeeper" if first_by is not None and first_by == gk else "won_the_ball"
+                elif s_type == "period_start":
+                    start_reason = "kick_off"
+                elif s_type == "restart":
+                    start_reason = "restart"
+                else:
+                    start_reason = "unknown"
 
             row = {
                 "state_id": sid, "match_id": match_id, "period": int(per[a]), "start_s": round(t0, 2), "end_s": round(t1 + step, 2),
                 "duration_s": round(t1 + step - t0, 1), "minute_display": f"{int(minute[a])}'",
                 "team": t, "chain_id": int(cid) if np.isfinite(cid) else None,
+                "start_reason": start_reason, "start_detail": start_detail, "cleared": cleared if has_feed else None,
                 "share_controlled": round(float(np.mean(bs == f"controlled_{t}")), 3),
                 "share_in_flight": round(float(np.mean(bs == f"in_flight_{t}")), 3),
                 "share_loose_or_contested": round(float(np.mean(np.isin(bs, ["loose", "contested"]))), 3),

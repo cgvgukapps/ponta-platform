@@ -16,6 +16,7 @@ from plaiq_engine.context.possession import PossessionPackage
 from plaiq_engine.context.registry import Registry
 from plaiq_engine.context.space_value import SpaceValuePackage
 from plaiq_engine.context.states import (
+    START_REASONS,
     STATE_COLUMNS,
     StatesPackage,
     segment,
@@ -38,6 +39,17 @@ def test_segment_merges_short_runs_within_a_chain():
     assert segment([("x",)] * 2 + [None] * 3, np.array([5, 5, np.nan, np.nan, np.nan]), ts[:5], per[:5], 1.0, 0.2) == [[0, 1]]
 
 
+def test_summary_says_how_it_started_and_clearances():
+    row = {"team": "away", "phase": "transition", "fifa_phase": "attacking_transition", "fifa_out_phase": "in_contest", "opposed_pct": None,
+           "duration_s": 3.6, "start_third": "middle", "end_third": "middle", "passes": 0, "passes_completed": 0, "passes_breaking_a_line": 0,
+           "carrier_pressure_max": None, "engagements": 0, "counter_press": False, "runs_in_behind": 0,
+           "start_reason": "set_piece", "start_detail": "throw_in", "cleared": True, "end_reason": "cleared"}
+    s = summary_text(row)
+    assert "Started from a throw-in." in s and "Ended: the ball was cleared." in s and "against" not in s
+    s2 = summary_text({**row, "end_reason": "possession_lost", "start_reason": "goalkeeper"})
+    assert "Started: the goalkeeper had the ball." in s2 and "Away cleared the ball." in s2
+
+
 def test_citations_resolve_and_numbers_are_checked():
     st = pd.DataFrame([{"match_id": "m", "state_id": "m:1:0000", "start_s": 10.0, "end_s": 24.2, "passes": 6, "duration_s": 14.2,
                         "carrier_pressure_max": 7}])
@@ -58,6 +70,8 @@ def test_package_states_and_summaries():
     assert list(st.columns) == list(STATE_COLUMNS) and len(st) >= 1
     assert st["state_id"].is_unique and st["label"].eq("estimated").all()
     assert st["passes"].isna().all() and st["events"].isna().all()  # no event feed: unknown, never zero
+    assert st["start_reason"].isin(START_REASONS).all() and st["cleared"].isna().all()  # 0.2.0; no feed: clearances unknown
+    assert not st["summary"].str.contains("against a contested spell|against a set play|against a long ball").any()
     dc = [c for c in st.columns if c.startswith("data_check_")]
     assert len(dc) == 16 and st[dc].isin(["full", "degraded", "blocked"]).all().all()  # one filterable column per metric
     assert st[[c for c in st.columns if c.startswith(("runs_", "engagements_"))]].dtypes.map(lambda d: d.kind in "iu").all()

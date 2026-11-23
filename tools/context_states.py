@@ -181,7 +181,11 @@ def other_scores(key: str, m, res, st: pd.DataFrame, change_frames: np.ndarray) 
     out = {"episodes": int(len(st)), "duration_s_p10_p50_p90": [round(float(np.percentile(st["duration_s"], q)), 1) for q in (10, 50, 90)] if len(st) else None,
            "possession_time_covered": round(float(covered[poss].mean()), 3) if poss.any() else None,
            "end_reasons": {k: int(v) for k, v in st["end_reason"].value_counts().items()},
-           "possession_changes": int(len(ch_t))}
+           "possession_changes": int(len(ch_t)),
+           "start_reasons": {k: int(v) for k, v in st["start_reason"].value_counts().items()} if "start_reason" in st else None,
+           "cleared_share_by_phase": ({ph: round(float(g["cleared"].astype(float).mean()), 3) for ph, g in st.groupby("phase")}
+                                      if "cleared" in st and st["cleared"].notna().any() else None),
+           "episodes_by_phase": {k: int(v) for k, v in st["phase"].value_counts().items()}}
     for tol in TOLS:
         out[f"changes_with_episode_start_{tol:g}s"] = round(float(near(ch_t, starts, tol).mean()), 3) if len(ch_t) else None
     return out

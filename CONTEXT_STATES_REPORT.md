@@ -1,4 +1,4 @@
-# Context States and Episodes — Report (Stage D, P8 0.1.0)
+# Context States and Episodes — Report (Stage D, P8 0.1.0 and 0.2.0)
 
 Stage D of `ponta-blueprint/context-packages.md`, built to `ponta-blueprint/context-states-task.md` (23 November 2026).
 
@@ -78,6 +78,22 @@ A separate agent audited the codebase, read-only, for whether it will let users 
 - **Two boundaries start late:** a set-play episode starts after the kick (P1's chain starts at the first touch after the restart), and one progression covers the other team's recovery first.
 - **Wording:** "against a contested spell" and "against a set play" read badly; the defending side of those phases should not be phrased as an opponent's phase.
 
+## 6a. P8 0.2.0, after the review (23 November 2026)
+
+**The founder's decisions:** keep the 2 s minimum (`p8_min_state_s` agreed; thresholds 0.23.0); build P8 0.2.0 as proposed.
+
+**Built:**
+- **How the episode started** (`start_reason`, `start_detail`): continued from the previous phase in the same chain; won the ball; the goalkeeper had the ball (the team's first logged action is the goalkeeper's, from P2's goalkeeper for that window); a set piece, named (throw-in, free kick, corner, goal kick); a restart; a kick-off. From P1's chain start and the logged first action. The summary says it: "Started: the goalkeeper had the ball.", "Started from a throw-in."
+- **Clearances:** `cleared` is true when the team in possession made a logged clearance in the episode (Metrica logs them as a subtype, the German league as an event type); an episode whose last logged action by that team is a clearance ends `cleared` ("Ended: the ball was cleared."). Null without an event feed.
+- **Wording:** the defending side of contested, set-play and long-ball spells is no longer phrased as an opponent's phase ("against a contested spell" is gone).
+
+**Measured** (Metrica 1 to 3 and the German league's 7 matches, about 6,800 episodes):
+- **Start reasons:** won the ball 3,542, continued 1,642, set piece 1,496, kick-off 94, goalkeeper 39.
+- **Clearances are rare in the feeds,** so `cleared` is rare: under 3% of episodes in every phase on Metrica, and on the German league 5.5% of attacking transitions, 2.7% of contested spells, 1.7% of long balls. Ended `cleared`: 1 to 13 a match.
+- **On the founder's clearance cases** (an indication): two of the three now carry the clearance (one ends "cleared", one says the team cleared the ball); the third has no logged clearance, so no rule from the feed can catch it. A clearance read from tracking (a long, high, unaimed ball out of the defending third under pressure) would need its own measurement first.
+- Every summary still passes the quoted-number check; no coordinate, cell or name column; storage about 150 KB a match.
+- **Not changed:** P4's set-play window (play after the kick stays a set play under SkillCorner's convention) is an upstream question to measure against SkillCorner's set-play phases before any decision; the episode boundaries.
+
 ## 7. Deviations from the spec
 
 - The AI layer's typed query tool, state filters, episode playlists and CI questions stay in `ai-workflows-task.md` (no AI layer exists yet), as the spec says.
@@ -86,7 +102,7 @@ A separate agent audited the codebase, read-only, for whether it will let users 
 
 ## 8. Decisions for the founder
 
-1. **The episode rule:** keep the 2 s minimum, or choose 1 s (marginally better agreement, more episodes) or dropping short chains (counts and durations nearest SkillCorner's). The formation split can stay (no cost) or go (no effect).
-2. **The summary, after the review (P8 0.2.0, proposed):** add how the episode started (P1's `start_type`: regain, set piece, restart, period start) and an end reason "cleared" when the last logged action is a clearance; fix the wording for contested and set-play spells; measure how often transitions and progressions end in a logged clearance on Metrica and the German league before changing anything upstream.
+1. *(Decided 23 November 2026: keep 2 s.)* **The episode rule:** keep the 2 s minimum, or choose 1 s (marginally better agreement, more episodes) or dropping short chains (counts and durations nearest SkillCorner's). The formation split can stay (no cost) or go (no effect).
+2. *(Done in 0.2.0, above.)* **The summary, after the review:** add how the episode started (P1's `start_type`: regain, set piece, restart, period start) and an end reason "cleared" when the last logged action is a clearance; fix the wording for contested and set-play spells; measure how often transitions and progressions end in a logged clearance on Metrica and the German league before changing anything upstream.
 4. **P4's set-play window** (upstream, agreed earlier): whether play after the kick stays a set play (SkillCorner's convention) or the phase ends once the ball is moving (the founder's reading); measure against SkillCorner's set-play phases first.
 3. **The thresholds** (`p8_min_state_s`, the three switches): agree, or keep proposed.
