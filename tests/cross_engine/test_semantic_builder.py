@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.7").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context
+    assert sem["schema_version"].eq("1.8").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context; 1.8 teams
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -179,7 +179,7 @@ def test_context_columns_and_states_from_every_package(built):
     b = SemanticBuilder(analysis, builder.parity, context=ctx)
     sem = b.semantic_events()
     p1 = ("possession_chain_id", "possession_source", "score_diff", "red_card_diff")
-    base_cols = [c for c in SEMANTIC_COLUMNS if c not in CONTEXT_COLUMNS and c not in p1]
+    base_cols = [c for c in SEMANTIC_COLUMNS if c not in CONTEXT_COLUMNS and c not in p1]  # team keys are context-independent
     pd.testing.assert_frame_equal(sem[base_cols], plain[base_cols])  # existing columns unchanged
     assert sem["context_versions"].notna().all()
     assert sem["state_id"].dropna().str.fullmatch(r"synthetic_1:\d:\d{4}").all()
@@ -191,6 +191,22 @@ def test_context_columns_and_states_from_every_package(built):
         assert check_quoted_numbers(r["summary"], r) == [], r["summary"]
         assert resolve_state_citation(st, r["match_id"], r["state_id"], r["start_s"], r["end_s"]).ok
     assert set(sem["state_id"].dropna()) <= set(st["state_id"])
+
+
+def test_team_keys_are_opaque_and_stable(built):
+    """Schema 1.8: every row carries pseudonymous team keys; an anonymous side gets a key for its match only."""
+    from plaiq_engine.teams import TeamRegistry
+
+    analysis, builder, sem = built
+    assert sem["actor_team_key"].str.fullmatch(r"t_[0-9a-f]{12}").all()
+    assert (sem["actor_team_key"] != sem["opponent_team_key"]).all()
+    reg = TeamRegistry()
+    assert reg.key("skillcorner", "1802") == reg.key("skillcorner", "1802") != reg.key("skillcorner", "866")
+    assert reg.key("skillcorner", "1802") != TeamRegistry(secret="tenant-a").key("skillcorner", "1802")
+    assert reg.key("synthetic", None, match_id="1", side="home") != reg.key("synthetic", None, match_id="2", side="home")
+    reg.merge("idsse", "DFL-CLU-000008", reg.key("skillcorner", "1802"))
+    assert reg.key("idsse", "DFL-CLU-000008") == reg.key("skillcorner", "1802")
+    assert "1802" not in reg.key("skillcorner", "1802")
 
 
 def test_pass_completion_probability_on_passes_only(built):

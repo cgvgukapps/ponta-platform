@@ -83,3 +83,27 @@ def check_quoted_numbers(text: str, row: dict | pd.Series) -> list[str]:
         if not any(round(v, digits) == q for v in values):
             bad.append(tok)
     return bad
+
+
+def resolve_profile_citation(profiles: pd.DataFrame, team_key: str, measure: str, match_ids: list[str]) -> Resolution:
+    """
+    A claim about a team's tendency cites ``[team_key, measure, match_ids]`` (plus an example episode, resolved apart).
+    It resolves when the measure is in the catalogue, every cited match has a usable profile row for the team, the
+    profiles share one set of versions, and the matches meet the measure's measured minimum (Stage E).
+    """
+    from plaiq_engine.profiles import MEASURES, MIN_MATCHES
+
+    if measure not in MEASURES:
+        return Resolution(False, "not a measure in the profile catalogue")
+    rows = profiles.loc[(profiles["team_key"] == team_key) & (profiles["measure"] == measure) & profiles["match_id"].isin(match_ids)]
+    usable = rows.loc[rows["value"].notna() & (rows["data_check"] != "blocked")]
+    if set(usable["match_id"]) != set(match_ids):
+        return Resolution(False, "a cited match has no usable profile for this team and measure")
+    if usable["versions"].nunique() > 1:
+        return Resolution(False, "the cited profiles were built from different versions")
+    need = MIN_MATCHES.get(measure)
+    if need is None:
+        return Resolution(False, "the minimum number of matches for this measure is not measured yet")
+    if len(set(match_ids)) < need:
+        return Resolution(False, f"a pattern needs at least {need} matches for this measure")
+    return Resolution(True)

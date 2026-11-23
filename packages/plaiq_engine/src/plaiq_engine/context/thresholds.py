@@ -27,6 +27,7 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.25.0 adds Stage E's comparison thresholds (``pf_verdict_sd``, ``pf_reliability_target``; proposed; no package output changes).
 Version 0.24.0 switches ``p4_break_end_depth_share`` off (0.667 to 0), agreed by the founder on 23 November 2026: on
 SkillCorner's 20 matches alone the rule had no measurable effect and its weakest match half improved without it (P4 0.5.0).
 Version 0.23.0 records the founder's agreement of ``p8_min_state_s`` (2 s) on 23 November 2026; no value changed.
@@ -66,7 +67,7 @@ Status = Literal["proposed", "measured", "agreed"]
 #: modelling judgement or the founder's calls, with no reference behind it yet.
 Basis = Literal["published", "reference", "engineering", "judgement"]
 
-THRESHOLDS_VERSION = "0.24.0"
+THRESHOLDS_VERSION = "0.25.0"
 
 
 @dataclass(frozen=True)
@@ -293,6 +294,12 @@ _ALL: tuple[Threshold, ...] = (
               "FIFA's block rule: the criteria hold for at least this long within p4v_fifa_window_s.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
     Threshold("p4v_fifa_window_s", 2.0, "s", "proposed",
               "FIFA's block rule: the window the hold time is counted in.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
+    Threshold("pf_verdict_sd", 1.0, "within-team standard deviations", "proposed",
+              "A comparison says above or below a team's usual only when the match differs from the team's shrunk baseline by more than this many within-team standard deviations; otherwise about its usual.",
+              "Stage E (ponta-blueprint/context-profiles-task.md); to be measured in CONTEXT_PROFILES_REPORT.md"),
+    Threshold("pf_reliability_target", 0.7, "reliability", "proposed",
+              "A measure's minimum number of matches is the number at which a team's mean reaches this split-half reliability (Spearman-Brown). 0.7 is the conventional threshold for acceptable reliability.",
+              "Nunnally (1978), Psychometric Theory: 0.7 as acceptable reliability; Stage E, CONTEXT_PROFILES_REPORT.md"),
     Threshold("p7_space_every_s", 5.0, "s", "proposed",
               "Space (control of high-value space, the open danger zone) is computed every this many seconds: Plaiq's pitch control costs about 25 ms per frame over the whole grid, and the runtime budget for P5 to P7 is 60 s per match.",
               "Stage C, P7 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 5)"),
@@ -325,7 +332,7 @@ _ALL: tuple[Threshold, ...] = (
 )
 
 _BASIS: dict[str, Basis] = {
-    **dict.fromkeys(("p2_window_s", "p2_min_possession_s", "p2_formation_persist_s", "p4_set_play_max_s", "p4_direct_min_gain_m",
+    **dict.fromkeys(("pf_reliability_target", "p2_window_s", "p2_min_possession_s", "p2_formation_persist_s", "p4_set_play_max_s", "p4_direct_min_gain_m",
                      "p4_chaotic_max_s", "p5_min_unit_players", "p4v_fifa_max_speed_kmh", "p4v_fifa_min_behind",
                      "p4v_fifa_min_players", "p4v_fifa_hold_s", "p4v_fifa_window_s"), "published"),
     **dict.fromkeys(("p1_control_radius_m", "p1_max_control_ball_speed_mps", "p1_min_switch_s", "p1_max_carry_gap_s", "p1_contest_max_s",

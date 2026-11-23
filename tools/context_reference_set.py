@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from matrix_engine.match import load_skillcorner_match
+from matrix_engine.match import load_skillcorner_match, with_skillcorner_metadata
 from matrix_engine.sample_data import repo_root
 from plaiq_engine.context.phase import PhasePackage
 from plaiq_engine.context.possession import PossessionPackage
@@ -71,7 +71,8 @@ def _load(match_dir: Path, cache: Path):
     p = cache / f"skillcorner_{match_dir.name}.pkl"
     if p.exists():
         with open(p, "rb") as fh:
-            return pickle.load(fh)
+            m = pickle.load(fh)
+        return with_skillcorner_metadata(m, str(match_dir), int(match_dir.name))  # Stage E metadata (ids only)
     m = load_skillcorner_match(str(match_dir), int(match_dir.name))
     cache.mkdir(parents=True, exist_ok=True)
     with open(p, "wb") as fh:

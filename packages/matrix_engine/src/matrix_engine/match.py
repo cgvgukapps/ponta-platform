@@ -75,6 +75,12 @@ class NormalisedMatch:
     slots : dict
         Per team, the vendor's jersey-slot order (strings). Kept so a round trip
         to wide frames reproduces the vendor's column order exactly.
+    teams : dict or None
+        The provider's own team id per side (``{"home": …, "away": …}``), never a
+        name; None when the provider does not give one (Metrica's sample games).
+    competition, season : str or None
+        The provider's competition id (``"<provider>:<id>"``) and season label
+        (``"2024/2025"``), when the provider gives them. Stage E (team identity).
     """
 
     provider: str
@@ -86,6 +92,10 @@ class NormalisedMatch:
     ball: pd.DataFrame
     events: pd.DataFrame
     slots: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Class-level defaults, so matches pickled before Stage E still load with these unset.
+    teams: dict[str, str] | None = None
+    competition: str | None = None
+    season: str | None = None
 
     @property
     def n_frames(self) -> int:
@@ -155,8 +165,29 @@ def load_skillcorner_match(match_dir: str, match_id: int) -> NormalisedMatch:
     """
     home, away, events, meta = SkillCornerAdapter(match_dir, match_id).load()
     pitch = meta.get("pitch") or PitchConfig(fps=SC_FPS)
-    return from_wide_frames(
+    m = from_wide_frames(
         home, away, events, provider="skillcorner", match_id=str(match_id), fps=SC_FPS, pitch=pitch,
+    )
+    return with_skillcorner_metadata(m, match_dir, match_id)
+
+
+def with_skillcorner_metadata(m: NormalisedMatch, match_dir: str, match_id: int) -> NormalisedMatch:
+    """Team ids, competition and season from SkillCorner's match file (ids only, never names)."""
+    import dataclasses
+    import json
+
+    path = os.path.join(match_dir, f"{match_id}_match.json")
+    if not os.path.exists(path):
+        return m
+    with open(path) as fh:
+        meta = json.load(fh)
+    edition = meta.get("competition_edition") or {}
+    comp, season = edition.get("competition") or {}, edition.get("season") or {}
+    return dataclasses.replace(
+        m,
+        teams={"home": str(meta["home_team"]["id"]), "away": str(meta["away_team"]["id"])},
+        competition=f"skillcorner:{comp['id']}" if comp.get("id") is not None else None,
+        season=season.get("name"),
     )
 
 

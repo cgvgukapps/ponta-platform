@@ -94,7 +94,15 @@ def read_info(path: Path) -> dict:
         for p in t.iter("Player"):
             persons[p.get("PersonId")] = {"team": team, "player_id": f"{team}_{p.get('ShirtNumber')}",
                                           "position": p.get("PlayingPosition"), "starting": p.get("Starting") == "true"}
-    return {"team_of": side, "persons": persons, "lineups": lineups, "result": g.get("Result") or ""}
+    return {"team_of": side, "persons": persons, "lineups": lineups, "result": g.get("Result") or "",
+            # Stage E: the league's own ids (never names) for team identity across matches.
+            "teams": {"home": g.get("HomeTeamId"), "away": g.get("GuestTeamId")},
+            "competition": f"{PROVIDER}:{g.get('CompetitionId')}" if g.get("CompetitionId") else None,
+            "season": g.get("Season")}
+
+
+def _with_metadata(m: NormalisedMatch, info: dict) -> NormalisedMatch:
+    return dataclasses.replace(m, teams=info["teams"], competition=info["competition"], season=info["season"])
 
 
 def read_positions(path: Path, persons: dict, team_of: dict) -> dict:
@@ -278,8 +286,10 @@ def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[Normal
     if pk.exists():
         with open(pk, "rb") as fh:
             m, official = pickle.load(fh)
-        # The P1 event table is rebuilt from the league's events, so a mapping change needs no re-parse.
-        return dataclasses.replace(m, events=to_p1_events(official.events), slots=_slots(m.tracking)), official
+        # The P1 event table is rebuilt from the league's events, so a mapping change needs no re-parse; the
+        # match information (small) is read again for the Stage E metadata.
+        m = dataclasses.replace(m, events=to_p1_events(official.events), slots=_slots(m.tracking))
+        return _with_metadata(m, read_info(_files(Path(data_dir), match_id)["info"])), official
     f = _files(Path(data_dir), match_id)
     info = read_info(f["info"])
     pos = read_positions(f["positions"], info["persons"], info["team_of"])
@@ -318,4 +328,4 @@ def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[Normal
         lineups=info["lineups"], result=info["result"])
     with open(pk, "wb") as fh:
         pickle.dump((m, official), fh)
-    return dataclasses.replace(m, slots=_slots(m.tracking)), official
+    return _with_metadata(dataclasses.replace(m, slots=_slots(m.tracking)), info), official

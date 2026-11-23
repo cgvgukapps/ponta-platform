@@ -41,6 +41,7 @@ from matrix_engine.parity import AnalyticsParityReport
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.context.states import STATE_COLUMNS
 from plaiq_engine.match_analysis import MatchAnalysis
+from plaiq_engine.teams import TeamRegistry
 
 #: 1.1 (17 November 2026): adds the context columns from package P1 (possession chain and
 #: source, score and red-card difference for the actor's team). Earlier columns are unchanged.
@@ -60,7 +61,10 @@ from plaiq_engine.match_analysis import MatchAnalysis
 #: (phase, FIFA phase, block, formations, the ball's zone, line breaks, relationships, runs, adjusted Choice, open space,
 #: engaging defenders), the episode it belongs to (``state_id``, P8) and the context versions. All estimated; labels and
 #: counts only, never coordinates. Earlier columns are unchanged.
-SCHEMA_VERSION = "1.7"
+#: 1.8 (23 November 2026, Stage E): ``actor_team_key`` and ``opponent_team_key`` (pseudonymous team keys, stable across
+#: matches; ``plaiq_engine.teams``), ``competition`` and ``season`` (the provider's ids, never names), on every row and
+#: on ``semantic_states``. Earlier columns are unchanged.
+SCHEMA_VERSION = "1.8"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
@@ -93,9 +97,12 @@ CONTEXT_COLUMNS: tuple[str, ...] = (
     "runs_in_behind", "adjusted_choice", "open_high_value_share", "engaging_defenders", "context_versions",
 )
 MIRROR_THIRD = {"defensive": "attacking", "middle": "middle", "attacking": "defensive"}
+#: Schema 1.8's team identity columns.
+TEAM_COLUMNS: tuple[str, ...] = ("actor_team_key", "opponent_team_key", "competition", "season")
 #: ``semantic_states`` (schema 1.7): P8's episode row plus the event ids at its ends and the pass decision medians.
 STATE_EXTRA_COLUMNS: tuple[str, ...] = (*STATE_COLUMNS[:STATE_COLUMNS.index("summary")], "first_event_id", "last_event_id",
-                                        "gain_median", "choice_median", "adjusted_choice_median", "summary", "schema_version")
+                                        "gain_median", "choice_median", "adjusted_choice_median",
+                                        "team_key", "opp_team_key", "competition", "season", "summary", "schema_version")
 
 SEMANTIC_COLUMNS: tuple[str, ...] = (
     "schema_version", "engine_version", "event_id", "match_id", "event_idx", "timestamp_s", "minute_display", "period",
@@ -113,6 +120,8 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "possession_chain_id", "possession_source", "score_diff", "red_card_diff",
     # Context packages P2 to P8 (schema 1.7; null unless a ContextResult is given): labels and counts, never coordinates.
     *CONTEXT_COLUMNS,
+    # Team identity (schema 1.8): opaque keys, stable across matches; the provider's competition id and season.
+    *TEAM_COLUMNS,
 )
 
 
@@ -177,7 +186,7 @@ class SemanticBuilder:
     """
 
     def __init__(self, analysis: MatchAnalysis, parity: AnalyticsParityReport, *, roles: dict[str, str] | None = None,
-                 context=None) -> None:
+                 context=None, teams: TeamRegistry | None = None) -> None:
         self.a = analysis
         self.parity = parity
         self.roles = roles or {}
@@ -185,6 +194,9 @@ class SemanticBuilder:
         self._ctx2 = self._context_lookup_17(context)
         self._context = context
         self.match_id = f"{analysis.match.provider}_{analysis.match.match_id}"
+        self.team_keys = (teams or TeamRegistry()).keys_for(analysis.match)
+        self.competition = getattr(analysis.match, "competition", None)
+        self.season = getattr(analysis.match, "season", None)
         self.engine_version = _engine_version()
         self.goalkeepers = self._goalkeepers()
 
@@ -336,6 +348,10 @@ class SemanticBuilder:
             "parity_physiological": self.parity.metrics["load_and_fatigue"].state,
             **self._context_fields(frame, team.lower()),
             **self._context_fields_17(idx, frame, team.lower()),
+            "actor_team_key": self.team_keys.get(team.lower()),
+            "opponent_team_key": self.team_keys.get({"home": "away", "away": "home"}.get(team.lower(), "")),
+            "competition": self.competition,
+            "season": self.season,
         }
 
     # -- semantic events ----------------------------------------------------------
@@ -570,6 +586,9 @@ class SemanticBuilder:
         for col, src in (("gain_median", "dq_score"), ("choice_median", "dq_v2_score"), ("adjusted_choice_median", "adjusted_choice")):
             st[col] = [None if (g := by_state.get(sid)) is None or g[src].dropna().empty else round(float(g[src].dropna().astype(float).median()), 3)
                        for sid in st["state_id"]]
+        st["team_key"] = st["team"].map(self.team_keys)
+        st["opp_team_key"] = st["team"].map({"home": self.team_keys.get("away"), "away": self.team_keys.get("home")})
+        st["competition"], st["season"] = self.competition, self.season
         st["schema_version"] = SCHEMA_VERSION
         return st[[c for c in STATE_EXTRA_COLUMNS]]
 
