@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.21.0 adds P4v 0.1.0's thresholds (a new package, the FIFA view of phases; all proposed, five of them FIFA's
+published mid-block values).
 Version 0.20.0 adds ``p7_cost_weight`` (0.5, proposed, the founder's choice of 21 November 2026 after the weights were
 measured); P7 0.2.0's adjusted Choice changes.
 Version 0.19.0 adds P7 0.1.0's seven thresholds (proposed; a new package; the five game-state weights are a
@@ -54,7 +56,7 @@ from typing import Literal
 
 Status = Literal["proposed", "measured", "agreed"]
 
-THRESHOLDS_VERSION = "0.20.0"
+THRESHOLDS_VERSION = "0.21.0"
 
 
 @dataclass(frozen=True)
@@ -226,6 +228,49 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p6_press_end_m", 5.0, "m", "proposed",
               "A defensive run is a pressing run when it ends within this distance of the ball carrier, having closed on them.",
               "Stage C, P6 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 4)"),
+    Threshold("p4v_engage_radius_m", 8.0, "m", "proposed",
+              "A defender can be engaging the ball carrier only within this distance. SkillCorner's engagements start within 10 m nine times in ten (median 6 to 8 m); other defenders sit a median 22 m away. Swept 6 to 12 m on the fit matches: 8 m finds 57% of SkillCorner's engagements at 65% precision (10 m: 60% at 55%).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_engage_closing_mps", 1.0, "m/s", "proposed",
+              "A defender within the radius is engaging while closing on the carrier at this speed or more. SkillCorner's engagements start closing at a median 2.7 m/s; other defenders at 0.6 m/s.",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_closing_lag_s", 0.4, "s", "proposed",
+              "Closing speed and running back are measured over this interval, with the same carrier at both ends (two grid points at 5 Hz).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_engage_min_s", 0.4, "s", "proposed",
+              "Engagement spells shorter than this are dropped. SkillCorner's shortest tenth last 0.5 s.",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_recovery_back_mps", 1.0, "m/s", "proposed",
+              "An engagement is a recovery when the defender is running towards its own goal at this speed or more at its start. SkillCorner's recovery presses: nine in ten at 1.0 m/s or more (median 3.5 m/s); its other engagements mostly move forward.",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_counter_press_s", 5.0, "s", "proposed",
+              "An engagement within this time of the defender's team losing the ball is a counter-press. SkillCorner's counter-presses start a median 2.6 s after the loss, 77% within 5 s.",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_pressure_max_depth_share", 0.4, "share of pitch length", "proposed",
+              "An engagement with the ball within this share of the pitch from the defender's own goal is pressure (engaging deep); beyond it, a press. Swept 0.2 to 0.5 on the fit matches: type κ best at 0.4 (0.53; a third: 0.50).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_press_min_players", 2.0, "players", "proposed",
+              "A press needs engagements by at least this many different defenders (SkillCorner's pressing chains have two or more engagements).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_press_gap_s", 4.0, "s", "proposed",
+              "Consecutive engagements belong to one press when the next starts within this time of the previous one's end, with no change of possession. Swept 1.5 to 4 s on the fit matches: SkillCorner's chain time found rises to 55% at 4 s with precision unchanged (38%).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_opposed_min_pressure", 6.0, "1 to 10", "proposed",
+              "Build-up is opposed when P5's carrier pressure reaches this value. Swept 6 to 9 on the fit matches against SkillCorner's build-up possessions with an engagement: κ 0.50 at 6, 0.27 at 8; adding P4v's engagements over-calls opposed (κ 0.39).",
+              "Stage C, P4v 0.1.0: SkillCorner's build-up possessions on the fit matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_opposed_hold_s", 2.0, "s", "proposed",
+              "Build-up stays opposed for this long after the carrier pressure last reached p4v_opposed_min_pressure, while the same player carries the ball (held across carriers it over-called opposed: κ 0.36 held out).",
+              "Stage C, P4v 0.1.0: SkillCorner's engagements on 8 open-data matches (comparison only); CONTEXT_RELATIONSHIPS_REPORT.md section 6"),
+    Threshold("p4v_fifa_max_speed_kmh", 10.0, "km/h", "proposed",
+              "FIFA's block rule: no outfield player moving forward or backward faster than this.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
+    Threshold("p4v_fifa_min_behind", 4.0, "players", "proposed",
+              "FIFA's block rule: at least this many defenders behind the ball.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
+    Threshold("p4v_fifa_min_players", 8.0, "players", "proposed",
+              "FIFA's block rule: at least this many outfield players in the middle and defensive thirds (all in the defensive third: low block).", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
+    Threshold("p4v_fifa_hold_s", 1.6, "s", "proposed",
+              "FIFA's block rule: the criteria hold for at least this long within p4v_fifa_window_s.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
+    Threshold("p4v_fifa_window_s", 2.0, "s", "proposed",
+              "FIFA's block rule: the window the hold time is counted in.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
     Threshold("p7_space_every_s", 5.0, "s", "proposed",
               "Space (control of high-value space, the open danger zone) is computed every this many seconds: Plaiq's pitch control costs about 25 ms per frame over the whole grid, and the runtime budget for P5 to P7 is 60 s per match.",
               "Stage C, P7 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 5)"),

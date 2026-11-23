@@ -265,3 +265,43 @@ At the founder's request, the adjusted score again with the cost term scaled by 
 - **The threat surface adds little over depth** (AUC 0.76 against 0.76, 0.81 against 0.80): the cost is mostly where on the pitch the ball is lost. That is expected of a location surface, and harmless.
 - **The charge the score applies is the right shape.** Before the outcome is known, `(1 − p) × cost` ranks the passes that end in a loss and an opponent's shot better than the risk of losing the ball alone or the cost alone (0.81 against 0.75 and 0.60). The option's cell stands in well for where the ball is actually lost (0.73 against 0.75).
 - **What it does not settle:** the weight. The check shows the cost term measures a real risk; how much of it to weigh against value is an exchange rate, which the shot outcomes cannot set. `p7_cost_weight` stays proposed at 0.5 until the expert study (Gate 3b).
+
+## 6. The FIFA view of phases (P4v 0.1.0, 21 to 23 November 2026)
+
+**Built** (`plaiq_engine/context/fifa_view.py`, a package beside P4 so P4's agreed labels are unchanged; depends on P1, P2, P4 and P5; all fields estimated, not yet validated):
+- **Engagements, the pressing measure:** a defending outfield player within `p4v_engage_radius_m` of the ball carrier (P5's carrier) and closing on them at `p4v_engage_closing_mps` or more, over `p4v_closing_lag_s` with the same carrier; spells under `p4v_engage_min_s` dropped. Typed at the start, in order: **recovery** (running towards its own goal at `p4v_recovery_back_mps` or more: FIFA's recovery), **counter-press** (within `p4v_counter_press_s` of its team losing the ball), **press** (the ball beyond `p4v_pressure_max_depth_share` of the pitch from its goal) and **pressure** (nearer). Segment `engagements`; `p4v_engaging_defenders` per grid point.
+- **Presses:** engagements (not pressure) by at least `p4v_press_min_players` defenders, each within `p4v_press_gap_s` of the last, with no change of possession; a counter-press when the first is one. Segment `presses`.
+- **FIFA's names** for P4's phases (`p4v_phase`, `p4v_out_phase`): build-up split into **opposed** (P5's carrier pressure at `p4v_opposed_min_pressure` or more in the last `p4v_opposed_hold_s`, on the same carrier) and **unopposed**; progression, final third, long ball, counter-attack, attacking transition, set play, in contest. Out of possession: **high, mid or low press** while a press is under way, **counter-press** while one is, otherwise high, mid or low block; defensive transition and the other defending phases by name.
+- **FIFA's published mid-block rule** (`p4v_fifa_block`, World Cup 2022 article): no outfield player moving forward or backward faster than 10 km/h, at least four behind the ball, at least eight outfield players in the middle and defensive thirds (all in the defensive third: low block), held 1.6 s of 2.0 s. The "horizontal lines" condition is not checked.
+- Thresholds 0.21.0: sixteen, all proposed (five are FIFA's published values). Golden outputs recaptured (P4v added). P4v takes about 1 s a match.
+
+**Grounding the pressing measure** (SkillCorner's engagements on 8 matches, comparison only): its engagements start a median 6 to 8 m from the carrier, closing at a median 2.7 m/s, while other defenders sit a median 22 m away closing at 0.6 m/s. Its subtypes separate on three axes: recovery presses run back (towards their own goal at a median 3.5 m/s; nine in ten at 1 m/s or more); counter-presses come a median 2.6 s after the loss (77% within 5 s); "pressing" happens only in high and medium blocks and "pressure" mostly in low blocks and the defensive third.
+
+**Chosen on the fit matches** (P4v rerun on the same upstream outputs): radius 8 m (6 to 12 m swept: 8 m finds 57% at 65% precision; 10 m 60% at 55%), the press/pressure split at 0.4 of the pitch (type κ 0.50 at a third, 0.53 at 0.4), a 4 s press gap (chain time found 22% at 1.5 s, 46% at 3 s, 55% at 4 s, precision unchanged), a 5 s counter-press window (3 to 6 s barely move κ), carrier pressure 6 for opposed (κ 0.50; 8: 0.27).
+
+**Measured on SkillCorner's 20 matches with the chosen settings** (fit / held out):
+
+| | Fit | Held out |
+|---|---|---|
+| SkillCorner's engagements found (8,963 / 8,481) | 57.3% | 57.8% |
+| P4v's engagements that SkillCorner has | 65.0% | 65.2% |
+| Type on found pairs, agreement (κ) | 66.1% (**0.54**) | 65.7% (**0.54**) |
+| Type recall: recovery / press / counter-press / pressure | 92% / 77% / 53% / 38% | 90% / 75% / 51% / 42% |
+| SkillCorner's pressing-chain time inside a P4v press | 46% | 45% |
+| P4v press time inside a SkillCorner chain | 44% | 41% |
+| SkillCorner's counter-press chains found by a P4v counter-press | 96 of 230 | 84 of 210 |
+| Build-up opposed against SkillCorner's build-up possessions with an engagement (1,148 / 932; 69% / 67% opposed), agreement (κ) | 74.7% (**0.48**) | 77.5% (**0.52**) |
+
+- **Recovery and press agree well; counter-press and pressure less.** Most of SkillCorner's counter-presses that P4v misses it calls pressure (about 330 a half): engagements more than 5 s after P1's change of possession, or deep in the defender's half. SkillCorner's loss moment and P1's differ, and its counter-press evidently is not only a time window.
+- **Build-up opposed, after one fix found on the confirmation run.** Held over 2 s regardless of who had the ball, pressure on one carrier made the next one's build-up opposed too: 77% opposed against SkillCorner's 67%, κ 0.36 held out. The hold now applies only while the same player carries the ball (an opposed build-up is about the player on the ball, as FIFA puts it), giving 0.52 held out (pressure alone at any point of the possession: 0.53). The hold length itself was not swept.
+- **Presses match SkillCorner's chains about halfway** both ways: a chain is its own grouping of engagements, and P4v finds about 58% of the engagements in it.
+
+**FIFA's mid-block rule beside P4's block and SkillCorner's phases** (out-of-possession grid points; held out, fit in brackets):
+- **FIFA's rule is much stricter:** it holds on 11% (10%) of the time out of possession as a mid-block and 4% (5%) as a low block. It needs every outfield player nearly still.
+- **Where it holds, it points the same way:** inside P4's medium block it is a FIFA mid-block 31% (29%) of the time; inside P4's low block a FIFA low block 17% (17%) and a mid-block 6%; inside P4's high block a mid-block 5% (4%) and never a low block. Against SkillCorner's medium block 27% FIFA mid-block, its low block 15% FIFA low block.
+- **Compactness:** during FIFA's mid-block the defending team's median width and length are 35.5 × 25.8 m (37.0 × 24.5), against FIFA's World Cup 2022 mid-block average of 40.1 × 27.2 m (P4's medium block: 36.0 × 28.1 m). A different competition and a median against a mean: an internal sanity check only, never a public comparison.
+
+**For the founder:**
+- Agree P4v's thresholds or keep them proposed (the engagement radius, closing speed, counter-press window, press gap, the press/pressure depth and carrier pressure 6 for opposed build-up). FIFA's five block values are published; adopting them as agreed is a vocabulary choice.
+- The counter-press type is moderate (recall about 52%): a better loss moment (P1's change of possession against SkillCorner's) is the next lever, measured before any rule moves.
+- The FIFA view is analysts-only and estimated, as every context field is until Gate 2b.
