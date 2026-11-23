@@ -63,7 +63,20 @@ A separate agent audited the codebase, read-only, for whether it will let users 
 
 ## 6. The founder's episode review
 
-`tools/context_states_review.py` built a page of 38 episodes from three German league matches (5 per phase; 3 counter-attacks in the 3 to 30 s range), each replayed with its summary, judged for boundaries and summary accuracy. Results pending.
+`tools/context_states_review.py` built a page of 38 episodes from three German league matches (5 per phase; 3 counter-attacks in the 3 to 30 s range), each replayed with its summary, judged for boundaries and summary accuracy. The calls, without positions, are in `tools/data/episode_review_2026-11-23.json`.
+
+| | Agrees with the founder's call |
+|---|---|
+| Boundaries: start and end with the passage | **36 of 38** (2 start too late) |
+| Summary accurate / partly / wrong | **28** / 8 / 2 |
+| By phase, summary accurate | long ball 5/5, counter-attack 3/3, build-up 4/5, final third 4/5, progression 3/5, attacking transition 3/5, set play 3/5, contested 3/5 |
+
+**What the notes point to** (none is tuned to; each needs the references as well):
+- **Clearances read as attacking play (4 cases).** A ball cleared out of the defending half is summarised as an attacking transition or progression; one note describes a defensive recovery and a clearance. P4 labels the cleared team's next spell from how far the ball travels, and the summary does not say the episode ended in a clearance. P1 already reads logged clearances (0.3.0).
+- **Set play after the ball is moving (2 cases).** The founder's reading: a set play starts from a still ball, so play some seconds after the kick is not one. P4 follows SkillCorner's convention, where the set-play phase continues after the kick up to `p4_set_play_max_s`. An upstream P4 question, not P8's.
+- **How an episode starts is missing.** A goalkeeper's catch and throw read as an opposed build-up; a contested header won by a team reads as progression; a contested spell runs on until one team clearly regains. The row has how it ended but not how it started (P1's chains carry `start_type`).
+- **Two boundaries start late:** a set-play episode starts after the kick (P1's chain starts at the first touch after the restart), and one progression covers the other team's recovery first.
+- **Wording:** "against a contested spell" and "against a set play" read badly; the defending side of those phases should not be phrased as an opponent's phase.
 
 ## 7. Deviations from the spec
 
@@ -74,5 +87,6 @@ A separate agent audited the codebase, read-only, for whether it will let users 
 ## 8. Decisions for the founder
 
 1. **The episode rule:** keep the 2 s minimum, or choose 1 s (marginally better agreement, more episodes) or dropping short chains (counts and durations nearest SkillCorner's). The formation split can stay (no cost) or go (no effect).
-2. **The summary templates,** after the episode review.
+2. **The summary, after the review (P8 0.2.0, proposed):** add how the episode started (P1's `start_type`: regain, set piece, restart, period start) and an end reason "cleared" when the last logged action is a clearance; fix the wording for contested and set-play spells; measure how often transitions and progressions end in a logged clearance on Metrica and the German league before changing anything upstream.
+4. **P4's set-play window** (upstream, agreed earlier): whether play after the kick stays a set play (SkillCorner's convention) or the phase ends once the ball is moving (the founder's reading); measure against SkillCorner's set-play phases first.
 3. **The thresholds** (`p8_min_state_s`, the three switches): agree, or keep proposed.
