@@ -21,6 +21,9 @@ Two steps, so the slow one runs once:
         --match-cache /tmp/ponta-context/sc-cache --cache ~/ponta-reference-data/cache/stage-e
     python tools/context_profiles.py build --source idsse --data ~/ponta-reference-data/idsse \
         --match-cache /tmp/ponta-context/idsse-cache --cache ~/ponta-reference-data/cache/stage-e
+    python tools/context_profiles.py build --source pff --data ~/ponta-reference-data/pff-worldcup2022 \
+        --match-cache ~/ponta-reference-data/cache/pff-matches --cache ~/ponta-reference-data/cache/stage-e --step 3
+    python tools/context_profiles.py build --source pff ... --step 3 --refs-only   # PFF's own figures only, from cache
     python tools/context_profiles.py analyse --cache ~/ponta-reference-data/cache/stage-e --out /tmp/ponta-context/profiles.json
 """
 
@@ -46,6 +49,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from context_golden import registry
 from context_reference_set import _load as load_sc
 from idsse import MATCH_IDS, load_idsse_match
+from pff import load_pff_match
+from pff import match_ids as pff_match_ids
 
 
 def _outside(path: Path) -> bool:
@@ -67,17 +72,35 @@ def build(args) -> None:
     args.cache.mkdir(parents=True, exist_ok=True)
     if args.source == "skillcorner":
         items = [d for d in sorted((args.data / "matches").iterdir()) if (d / f"{d.name}_phases_of_play.csv").exists()]
+    elif args.source == "pff":
+        items = pff_match_ids(args.data)
     else:
         items = list(MATCH_IDS)
+    if args.matches:
+        wanted = set(args.matches.split(","))
+        items = [it for it in items if (it.name if args.source == "skillcorner" else it) in wanted]
     i, n = (int(x) for x in args.shard.split("/"))
     for it in items[i::n]:
         name = it.name if args.source == "skillcorner" else it
+        off = None
         out = args.cache / f"{args.source}_{name}.parquet"
+        if args.refs_only:
+            # Recompute only the reference's own figures on a cached profile (the context measures are untouched).
+            if args.source != "pff" or not out.exists():
+                sys.exit("--refs-only is for cached PFF profiles")
+            m, off = load_pff_match(args.data, it, args.match_cache, ball=args.ball, step=args.step)
+            pr = pd.read_parquet(out)
+            pr = pr[[c for c in pr.columns if not c.startswith("ref_")]].merge(reference_figures(args.source, it, m, None, off), on="team", how="left")
+            pr.to_parquet(out, index=False)
+            print(name, "reference figures refreshed", flush=True)
+            continue
         if out.exists() and not args.force:
             print(name, "cached", flush=True)
             continue
         if args.source == "skillcorner":
             m = load_sc(it, args.match_cache)
+        elif args.source == "pff":
+            m, off = load_pff_match(args.data, it, args.match_cache, ball=args.ball, step=args.step)
         else:
             m, off = load_idsse_match(args.data, it, args.match_cache)
             if "End X" not in m.events:
@@ -86,7 +109,7 @@ def build(args) -> None:
                 clock = m.frames.set_index("frame")["time_s"]
                 m = dataclasses.replace(m, events=m.events.assign(**{"Start Time [s]": m.events["Start Frame"].map(clock)}))
         pr, res = _profiles_for(m, cfg)
-        ref = reference_figures(args.source, it, m, res, off if args.source == "idsse" else None)
+        ref = reference_figures(args.source, it, m, res, off)
         pr = pr.merge(ref, on="team", how="left") if len(ref) else pr
         pr.to_parquet(out, index=False)
         print(name, len(pr), "profile rows", flush=True)
@@ -94,8 +117,6 @@ def build(args) -> None:
 
 def reference_figures(source: str, it, m, res, off) -> pd.DataFrame:
     """Per team: the reference's own phase shares and pressing chains (SkillCorner) or official possession (league)."""
-    g = res.frames
-    nf, ts = g["native_frame"].to_numpy(float), g["frame_ts"].to_numpy(float)
     rows = []
     if source == "skillcorner":
         meta = json.loads((it / f"{it.name}_match.json").read_text())
@@ -111,6 +132,27 @@ def reference_figures(source: str, it, m, res, off) -> pd.DataFrame:
             for p in PHASES:
                 row[f"ref_phase_share_{p}"] = float(mine.loc[mine["team_in_possession_phase_type"] == p, "dur"].sum() / tot) if tot else np.nan
             rows.append(row)
+    elif source == "pff":
+        # PFF's own event data (comparison only): on-ball time, pressure applied, lines broken. Source: PFF FC.
+        ev = off.events
+        minutes = len(m.frames) / m.fps / 60.0
+        on_ball = ev.loc[ev["gev"] == "OTB"].drop_duplicates("game_event_id")
+        total = float(on_ball["duration"].fillna(0).sum())
+        pressed = ev.loc[ev["pressure"].isin(["P", "A"]) | ev["initial_pressure"].isin(["P", "A"])].drop_duplicates("possession_event_id")
+        lines = ev.loc[ev["lines_broken"].notna() & ev["pev"].isin(["PA", "CR", "BC", "CH"])]
+        for t in ("home", "away"):
+            mine = lines.loc[lines["team"] == t, "lines_broken"].astype(str)
+            # Pressure is applied while the opponents have the ball: a rate per minute of their on-ball time, so a team
+            # that defends for longer does not score higher just for that (the per-90 count is kept for reference).
+            opp_on_ball_min = float(on_ball.loc[on_ball["team"].notna() & (on_ball["team"] != t), "duration"].fillna(0).sum()) / 60.0
+            rows.append({"team": t,
+                         "ref_possession_share": float(on_ball.loc[on_ball["team"] == t, "duration"].fillna(0).sum() / total) if total else np.nan,
+                         "ref_pressures_p90": float((pressed["pressure_team"] == t).sum() / minutes * 90) if minutes else np.nan,
+                         "ref_pressures_per_opp_on_ball_min": float((pressed["pressure_team"] == t).sum() / opp_on_ball_min) if opp_on_ball_min else np.nan,
+                         "ref_dropped_periods": ",".join(map(str, off.dropped_periods)), "ref_events_without_frames": off.events_without_frames,
+                         "ref_lines_broken_midfield_p90": float(mine.str.contains("M").sum() / minutes * 90) if minutes else np.nan,
+                         "ref_lines_broken_defence_p90": float(mine.str.contains("D").sum() / minutes * 90) if minutes else np.nan,
+                         "ref_visible_share": off.visible_share, "ref_ball_share": off.ball_share, "ref_orientation_agrees": off.orientation_agrees})
     else:
         b = off.ball
         live = b["ball_status"].eq(1)
@@ -149,6 +191,23 @@ def analyse(args) -> None:
                  "versions_identical": bool(pr["versions"].nunique() == 1)}
     rng = np.random.default_rng(1)
     sc = pr.loc[pr["match_id"].str.startswith("skillcorner")]
+    for src in ("skillcorner", "pff"):
+        part = pr.loc[pr["match_id"].str.startswith(src)]
+        if part["match_id"].nunique():
+            out[f"stability_{src}"] = stability(part, cfg, rng)
+            out[f"baseline_vs_set_mean_{src}"] = baseline_help(part)
+    _agreement(pr, sc, out)
+    out["checks"] = {"rows": int(len(pr)), "missing_label_or_basis": int(pr[["label", "basis", "data_check"]].isna().any(axis=1).sum()),
+                     "blocked_share": round(float((pr["data_check"] == "blocked").mean()), 3),
+                     "blocked_share_by_source": {src: round(float((g["data_check"] == "blocked").mean()), 3)
+                                                 for src, g in pr.groupby(pr["match_id"].str.split("_").str[0])}}
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(out, indent=1, default=str))
+    print(json.dumps({k: v for k, v in out.items() if not k.startswith(("stability_", "baseline_vs_set_mean"))}, indent=1, default=str))
+
+
+def stability(sc: pd.DataFrame, cfg: dict, rng) -> dict:
+    """ICC(1) per measure on the teams with two or more usable matches, with a 90% interval from resampling teams."""
     stab = {}
     for meas in CATALOGUE:
         d = sc.loc[(sc["measure"] == meas.name) & sc["value"].notna() & (sc["data_check"] != "blocked")]
@@ -167,8 +226,16 @@ def analyse(args) -> None:
                            "icc_90pct": [round(float(np.percentile(boots, 5)), 3), round(float(np.percentile(boots, 95)), 3)] if len(boots) else None,
                            "matches_for_0.7": matches_needed(icc, cfg["pf_reliability_target"]), "matches_for_0.8": matches_needed(icc, 0.8),
                            "basis": meas.basis}
-    out["stability_skillcorner"] = stab
-    # Agreement with the references.
+    return stab
+
+
+def _spearman(d: pd.DataFrame, a: str, b: str) -> dict:
+    d = d[[a, b]].dropna()
+    return {"n": int(len(d)), "spearman": round(float(d[a].rank().corr(d[b].rank())), 3) if len(d) > 5 else None}
+
+
+def _agreement(pr: pd.DataFrame, sc: pd.DataFrame, out: dict) -> None:
+    """Agreement with each reference's own figures (comparison only)."""
     agree = {}
     for p in PHASES:
         d = sc.loc[sc["measure"] == f"phase_share_{p}", ["value", f"ref_phase_share_{p}"]].dropna()
@@ -178,8 +245,41 @@ def analyse(args) -> None:
     ids = pr.loc[pr["match_id"].str.startswith("idsse") & (pr["measure"] == "possession_share"), ["value", "ref_possession_share"]].dropna()
     agree["possession_share_vs_official"] = {"n": int(len(ids)), "mean_abs_diff": round(float((ids["value"] - ids["ref_possession_share"]).abs().mean()), 4) if len(ids) else None,
                                              "pearson": round(float(ids["value"].corr(ids["ref_possession_share"])), 3) if len(ids) > 3 else None}
+    pf = pr.loc[pr["match_id"].str.startswith("pff")]
+    if len(pf):
+        def wide(measure: str, ref: str) -> pd.DataFrame:
+            return pf.loc[pf["measure"] == measure, ["value", ref]].rename(columns={"value": measure})
+        d = wide("possession_share", "ref_possession_share").dropna()
+        agree["pff_possession_share_vs_on_ball_time"] = {
+            "n": int(len(d)), "pearson": round(float(d["possession_share"].corr(d["ref_possession_share"])), 3) if len(d) > 3 else None,
+            "mean_abs_diff": round(float((d["possession_share"] - d["ref_possession_share"]).abs().mean()), 4) if len(d) else None}
+        # PFF's pressure rate per minute of the opponents' on-ball time (the per-90 count mixes in time out of possession).
+        eng = [c for c in pf["measure"].unique() if c.startswith("engagements_") and c.endswith("_per_min_out")]
+        tot = pf.loc[pf["measure"].isin(eng)].groupby(["match_id", "team"], as_index=False).agg(
+            engagements_per_min_out=("value", "sum"), ref=("ref_pressures_per_opp_on_ball_min", "first"))
+        for meas in ("engagements_pressure_per_min_out", "engagements_counter_press_per_min_out", "presses_per_min_out",
+                     "carrier_pressure_median_out", "ppda"):
+            agree[f"pff_{meas}_vs_pressure_rate"] = _spearman(wide(meas, "ref_pressures_per_opp_on_ball_min"), meas, "ref_pressures_per_opp_on_ball_min")
+        agree["pff_engagements_total_per_min_out_vs_pressure_rate"] = _spearman(
+            tot.rename(columns={"ref": "ref_pressures_per_opp_on_ball_min"}), "engagements_per_min_out", "ref_pressures_per_opp_on_ball_min")
+        agree["pff_pressure_rate_vs_own_possession"] = _spearman(
+            wide("possession_share", "ref_pressures_per_opp_on_ball_min"), "possession_share", "ref_pressures_per_opp_on_ball_min")
+        agree["pff_receptions_behind_midfield_vs_lines_broken"] = _spearman(
+            wide("efi_receptions_behind_midfield_p90", "ref_lines_broken_midfield_p90"), "efi_receptions_behind_midfield_p90", "ref_lines_broken_midfield_p90")
+        agree["pff_receptions_behind_defence_vs_lines_broken"] = _spearman(
+            wide("efi_receptions_behind_defence_p90", "ref_lines_broken_defence_p90"), "efi_receptions_behind_defence_p90", "ref_lines_broken_defence_p90")
+        q = pf.drop_duplicates(["match_id", "team"])
+        agree["pff_tracking"] = {"visible_share_median": round(float(q["ref_visible_share"].median()), 3),
+                                 "ball_share_median": round(float(q["ref_ball_share"].median()), 3),
+                                 "orientation_agrees": int(q.drop_duplicates("match_id")["ref_orientation_agrees"].sum()),
+                                 "periods_dropped": {k: v for k, v in q.drop_duplicates("match_id").set_index("match_id")["ref_dropped_periods"].items() if v},
+                                 "events_without_frames": {k: int(v) for k, v in q.drop_duplicates("match_id").set_index("match_id")["ref_events_without_frames"].items() if v},
+                                 "matches": int(q["match_id"].nunique())}
     out["agreement"] = agree
-    # Does a baseline help? Leave one match out on teams with three or more matches.
+
+
+def baseline_help(sc: pd.DataFrame) -> dict:
+    """Leaving one match out, the shrunk team baseline's error against the set mean's, on teams with three or more matches."""
     help_ = {}
     for meas in CATALOGUE:
         d = sc.loc[(sc["measure"] == meas.name) & sc["value"].notna() & (sc["data_check"] != "blocked")]
@@ -196,24 +296,23 @@ def analyse(args) -> None:
         if err_b:
             help_[meas.name] = {"n": len(err_b), "mae_baseline": round(float(np.mean(err_b)), 4), "mae_set_mean": round(float(np.mean(err_s)), 4),
                                 "error_reduction": round(1 - float(np.mean(err_b)) / float(np.mean(err_s)), 3) if np.mean(err_s) > 0 else None}
-    out["baseline_vs_set_mean"] = help_
-    out["checks"] = {"rows": int(len(pr)), "missing_label_or_basis": int(pr[["label", "basis", "data_check"]].isna().any(axis=1).sum()),
-                     "blocked_share": round(float((pr["data_check"] == "blocked").mean()), 3)}
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(out, indent=1, default=str))
-    print(json.dumps({k: v for k, v in out.items() if k not in ("stability_skillcorner", "baseline_vs_set_mean")}, indent=1, default=str))
+    return help_
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
-    b.add_argument("--source", choices=("skillcorner", "idsse"), required=True)
+    b.add_argument("--source", choices=("skillcorner", "idsse", "pff"), required=True)
+    b.add_argument("--ball", choices=("tracked", "smoothed"), default="tracked", help="PFF only: the tracked ball, or PFF's event-placed ball")
+    b.add_argument("--step", type=int, default=1, help="PFF only: keep every n-th video frame (3 gives 9.99 Hz, SkillCorner's rate)")
     b.add_argument("--data", type=Path, required=True)
     b.add_argument("--match-cache", type=Path, required=True)
     b.add_argument("--cache", type=Path, required=True)
     b.add_argument("--force", action="store_true")
     b.add_argument("--shard", default="0/1", help="i/n: build every n-th match from the i-th, so shards can run in parallel")
+    b.add_argument("--matches", default="", help="comma-separated match ids: build only these")
+    b.add_argument("--refs-only", action="store_true", help="PFF only: recompute the reference columns of cached profiles")
     a = sub.add_parser("analyse")
     a.add_argument("--cache", type=Path, required=True)
     a.add_argument("--out", type=Path, required=True)
