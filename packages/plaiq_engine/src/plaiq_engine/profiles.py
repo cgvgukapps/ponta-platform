@@ -33,15 +33,19 @@ BLOCKS = ("high_block", "mid_block", "low_block")
 LANES = ("left_wing", "left_half_space", "centre", "right_half_space", "right_wing")
 ENGAGEMENTS = ("recovery", "counter_press", "press", "pressure")
 #: Measured per measure (tools/context_profiles.py, CONTEXT_PROFILES_REPORT.md): the matches a team needs before a
-#: comparison gives a verdict, from the intraclass correlation on SkillCorner's 12 recurring teams lifted by Spearman-Brown
-#: to pf_reliability_target (0.7). Basis reference: only measures whose 90% interval for the correlation lies above
-#: 0.1, so a measure that might be noise never yields a verdict. Every other measure gives "minimum not measured yet"
-#: until a club's own matches show it is stable. Agreed by the founder, 23 November 2026.
+#: comparison gives a verdict, from the intraclass correlation lifted by Spearman-Brown to pf_reliability_target (0.7).
+#: Basis reference: only measures whose 90% interval for the correlation lies above 0.1 on SkillCorner's 12 recurring
+#: teams, so a measure that might be noise never yields a verdict. Each value is the larger of two reference sets:
+#: SkillCorner's 12 teams (3, 4, 4, 5; agreed 23 November 2026) and PFF FC's World Cup 2022 set, 32 teams (5, 5, 6, 7;
+#: development use only). The larger was agreed by the founder on 24 November 2026. Every other measure gives "minimum
+#: not measured yet" until a club's own matches show it is stable.
+#: **Gate:** these values are derived from PFF's data. Before they govern anything a customer, pilot or demo sees, PFF's
+#: written approval is needed, or they are re-measured on licensed data (ponta-blueprint/legal-compliance.md).
 MIN_MATCHES: dict[str, int] = {
-    "out_share_high_block": 3,           # ICC 0.52 (90% 0.23 to 0.70)
-    "field_tilt": 4,                     # ICC 0.42 (0.12 to 0.61)
-    "efi_def_line_m_out_middle": 4,      # ICC 0.40 (0.15 to 0.69)
-    "out_share_low_block": 5,            # ICC 0.36 (0.11 to 0.51)
+    "out_share_high_block": 5,           # ICC 0.52 (90% 0.23 to 0.70) SkillCorner: 3; 0.33 (0.17 to 0.47) PFF: 5
+    "field_tilt": 5,                     # 0.42 (0.12 to 0.61): 4; 0.36 (0.20 to 0.49): 5
+    "efi_def_line_m_out_middle": 6,      # 0.40 (0.15 to 0.69): 4; 0.30 (0.06 to 0.47): 6
+    "out_share_low_block": 7,            # 0.36 (0.11 to 0.51): 5; 0.26 (0.10 to 0.40): 7
 }
 _STATE_RANK = {"blocked": 0, "degraded": 1, "full": 2}
 

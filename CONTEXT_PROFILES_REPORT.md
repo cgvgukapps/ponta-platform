@@ -51,7 +51,7 @@ The intraclass correlation (ICC(1), one-way random effects, unequal group sizes)
 | Median Choice of passes (Ponta) | 0.28 (0.09 to 0.37) | 7 / 11 |
 
 - **Everything else is below 0.25 or has an interval reaching zero**: on two to seven matches a team, most measures vary as much within a team as between teams. Among them: possession share (0.22), PPDA (0.01), final-third entries (0.19), receptions behind the lines (0.19, 0.30), median Gain (0.09), counter-pressing (0.01 to 0.15), runs in behind (below zero).
-- **Proposed minimum matches** (`MIN_MATCHES`, basis reference): only the four measures whose interval lies above 0.1, the top four rows. With 46 measures tested on 12 teams, a few would clear a looser bar by chance, so the bar is set where chance is unlikely. Every other measure answers "the minimum is not measured yet" until a club's own matches show it is stable. Block height, field tilt and line height are also known style traits in published analysis, which supports reading them as team habits.
+- **Proposed minimum matches** (`MIN_MATCHES`, basis reference; *revised to 5, 5, 6, 7 on 24 November 2026 after PFF's set, section 8*): only the four measures whose interval lies above 0.1, the top four rows. With 46 measures tested on 12 teams, a few would clear a looser bar by chance, so the bar is set where chance is unlikely. Every other measure answers "the minimum is not measured yet" until a club's own matches show it is stable. Block height, field tilt and line height are also known style traits in published analysis, which supports reading them as team habits.
 
 ## 5. Does a baseline help?
 
@@ -107,10 +107,10 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
 
 | Measure | SkillCorner (12 teams) | PFF (32 teams) |
 |---|---|---|
-| Time in a high block (agreed minimum 3) | 0.52 (0.23 to 0.70): 3 / 4 | 0.33 (0.17 to 0.47): **5** / 9 |
-| Field tilt (agreed minimum 4) | 0.42 (0.12 to 0.61): 4 / 6 | 0.36 (0.20 to 0.49): **5** / 7 |
-| Line height, ball in the middle third (agreed minimum 4) | 0.40 (0.15 to 0.69): 4 / 7 | 0.30 (0.06 to 0.47): **6** / 10 |
-| Time in a low block (agreed minimum 5) | 0.36 (0.11 to 0.51): 5 / 8 | 0.26 (0.10 to 0.40): **7** / 12 |
+| Time in a high block (minimum 3, now 5) | 0.52 (0.23 to 0.70): 3 / 4 | 0.33 (0.17 to 0.47): **5** / 9 |
+| Field tilt (minimum 4, now 5) | 0.42 (0.12 to 0.61): 4 / 6 | 0.36 (0.20 to 0.49): **5** / 7 |
+| Line height, ball in the middle third (minimum 4, now 6) | 0.40 (0.15 to 0.69): 4 / 7 | 0.30 (0.06 to 0.47): **6** / 10 |
+| Time in a low block (minimum 5, now 7) | 0.36 (0.11 to 0.51): 5 / 8 | 0.26 (0.10 to 0.40): **7** / 12 |
 | Possession share | 0.22 (−0.16 to 0.49) | 0.37 (0.19 to 0.51): 4 / 7 |
 | Time in a mid block | 0.01 (−0.31 to 0.19) | 0.40 (0.18 to 0.55): 4 / 6 |
 | PPDA | 0.01 (−0.25 to 0.22) | 0.28 (0.10 to 0.39): 7 / 11 |
@@ -129,9 +129,8 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
 ## 9. Decisions for the founder
 
 1. *(Agreed by the founder, 23 November 2026.)* **The minimum matches** for the four stable measures (3, 4, 4, 5), and every other measure without a verdict until a club's own data shows it is stable.
-   - **Reopened by PFF's set (24 November 2026), for the founder.** On 32 teams the same four measures are stable but need more matches: 5, 5, 6, 7.
-   - **Recommendation: take the larger of the two (5, 5, 6, 7).** PFF's estimate rests on nearly three times as many teams, and a verdict shown too early is the costlier mistake.
-   - This is a choice between two reference sets that differ in context (a league and a World Cup), so it is the founder's call, as the order of decisions allows.
-   - Add no new measures until a club's own season shows them stable.
+   - **Revised by the founder, 24 November 2026: the larger of the two sets, 5, 5, 6, 7** (high block, field tilt, line height with the ball in the middle third, low block), in `MIN_MATCHES`. PFF's set needs more matches for each, and its estimate rests on 32 teams against 12 (section 8).
+   - No new measures until a club's own season shows them stable.
+   - **Gate:** the revised values derive from PFF's data, so before they govern anything a customer, pilot or demo sees, PFF's written approval is needed or they are re-measured on licensed data (a design partner's season).
 2. **`pf_verdict_sd`** (1.0 within-team standard deviation for "above / below your usual"): an engineering choice; to be measured on a design partner's season.
 3. **More data:** a design partner's season is what makes baselines useful. PFF's set is now read (section 8); StatsBomb's open events are next once the founder has registered.
