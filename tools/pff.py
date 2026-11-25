@@ -42,6 +42,7 @@ import bz2
 import dataclasses
 import json
 import pickle
+import sys as _sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,7 +52,12 @@ from matrix_engine.match import NormalisedMatch
 from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import coerce_schema, validate_schema
 
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag as cache_tag
+
 PROVIDER = "pff"
+#: The reader's version, in its cache key (cache_tag): 2 since the observed flag and the period check.
+READER_VERSION = "2"
 SOURCE = "PFF FC, FIFA World Cup 2022 (no licence stated; internal development only)"
 PERIOD_OFFSET_S = {1: 0.0, 2: 45 * 60.0, 3: 90 * 60.0, 4: 105 * 60.0}
 #: PFF's set-piece codes (``setpieceType``) as P1's set-piece subtypes. Drop balls (D) are not set pieces for P1.
@@ -421,7 +427,7 @@ def load_pff_match(data_dir: Path, gid: str, cache: Path, ball: str = "tracked",
     """
     data_dir = Path(data_dir)
     cache.mkdir(parents=True, exist_ok=True)
-    pk = cache / f"pff_{gid}_{ball}.pkl"
+    pk = cache / f"pff_{gid}_{ball}.{cache_tag(PROVIDER, READER_VERSION)}.pkl"
     md = read_metadata(data_dir, gid)
     if pk.exists():
         with open(pk, "rb") as fh:

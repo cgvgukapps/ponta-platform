@@ -36,6 +36,7 @@ import pandas as pd
 from matrix_engine.sample_data import repo_root
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from context_reference_set import _load
 from plaiq_dq_replay import BANDS, band_of
 from plaiq_references import auc, spearman
@@ -49,7 +50,7 @@ def _outside(path: Path) -> bool:
 
 
 def one(match_dir: Path, cache: Path) -> pd.DataFrame:
-    p = cache / f"pov_skillcorner_{match_dir.name}.pkl"
+    p = cache / f"pov_skillcorner_{match_dir.name}.{tag()}.pkl"
     if not p.exists():
         return pd.DataFrame()
     pov = pd.read_pickle(p)

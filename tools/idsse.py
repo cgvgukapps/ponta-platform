@@ -31,6 +31,7 @@ from __future__ import annotations
 import dataclasses
 import pickle
 import re
+import sys as _sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -42,8 +43,13 @@ from matrix_engine.match import NormalisedMatch
 from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import coerce_schema, validate_schema
 
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag as cache_tag
+
 FPS = 25.0
 PROVIDER = "idsse"
+#: The reader's version, in its cache key (cache_tag).
+READER_VERSION = "1"
 PERIODS = {"firstHalf": 1, "secondHalf": 2}
 MATCH_IDS = ("J03WMX", "J03WN1", "J03WOH", "J03WOY", "J03WPY", "J03WQQ", "J03WR9")
 
@@ -282,7 +288,7 @@ def _slots(tracking: pd.DataFrame) -> dict[str, tuple[str, ...]]:
 def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[NormalisedMatch, Official]:
     """One IDSSE match as a ``NormalisedMatch`` and the league's references. Cached as a pickle."""
     cache.mkdir(parents=True, exist_ok=True)
-    pk = cache / f"idsse_{match_id}.pkl"
+    pk = cache / f"idsse_{match_id}.{cache_tag(PROVIDER, READER_VERSION)}.pkl"
     if pk.exists():
         with open(pk, "rb") as fh:
             m, official = pickle.load(fh)

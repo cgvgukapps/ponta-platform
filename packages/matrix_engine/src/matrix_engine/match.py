@@ -178,7 +178,7 @@ def load_metrica_epts_match(data_dir: str, game_id: int = 3) -> NormalisedMatch:
     )
 
 
-def load_skillcorner_match(match_dir: str, match_id: int) -> NormalisedMatch:
+def load_skillcorner_match(match_dir: str, match_id: int, *, prototype_inputs: bool = False) -> NormalisedMatch:
     """
     Load a SkillCorner open-data match.
 
@@ -187,8 +187,12 @@ def load_skillcorner_match(match_dir: str, match_id: int) -> NormalisedMatch:
     the dynamic events onto tracking frames. The vendor's per-period clock is
     kept as ``time_s``; the Matrix provider's continuous rebased clock is a
     reconciliation concern and is not applied here.
+
+    Two corrections depart from the prototype's inputs (review backlog A, 25 November 2026): records with no period
+    (pre-match, half-time, post-match) are dropped, and SkillCorner's recorded stoppages become SET PIECE rows.
+    ``prototype_inputs=True`` reproduces the prototype's inputs, for the engine-equivalence test only.
     """
-    home, away, events, meta = SkillCornerAdapter(match_dir, match_id).load()
+    home, away, events, meta = SkillCornerAdapter(match_dir, match_id, prototype_inputs=prototype_inputs).load()
     pitch = meta.get("pitch") or PitchConfig(fps=SC_FPS)
     m = from_wide_frames(
         home, away, events, provider="skillcorner", match_id=str(match_id), fps=SC_FPS, pitch=pitch,

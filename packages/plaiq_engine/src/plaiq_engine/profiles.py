@@ -11,8 +11,9 @@ such), then Ponta's own measures from the context packages, labelled as Ponta's.
 where known), refuses profiles built from different versions, leaves Blocked matches out, and pulls a team's mean
 towards the set's in proportion to its sample (empirical Bayes shrinkage; the weight of the set is the within-team
 variance over the between-team variance). **A comparison** gives a verdict only when the team has at least the
-measure's minimum number of matches (``MIN_MATCHES``, measured, not assumed) and the difference exceeds
-``pf_verdict_sd`` within-team standard deviations; otherwise it says why not.
+measure's minimum number of matches (``MIN_MATCHES``, measured, not assumed) and the match falls outside the team's
+usual range, a prediction interval set for a stated false-alarm rate (``pf_verdict_false_alarm``, 10% two-sided); the
+comparison returns that range beside the word. Otherwise it says why not.
 
 Labels and aggregates only: no coordinates, cells, names or provider ids.
 """
@@ -26,28 +27,42 @@ import numpy as np
 import pandas as pd
 
 from plaiq_engine.context.structure import OTHER, TEAMS
+from plaiq_engine.context.thresholds import THRESHOLDS
 
-PROFILE_VERSION = "0.2.0"  # 0.2.0 (25 November 2026): out_share_* from the team's own block (AN-02); PPDA's mapping (AN-01)
+PROFILE_VERSION = "0.2.0"  # 0.2.0 (25 November 2026, review backlog A): out_share_* from the team's own block (AN-02); PPDA's
+#                            mapping (AN-01); Blocked rows null (AI-05); minimums from the thresholds config with source (GC-03)
 PHASES = ("build_up", "create", "finish", "direct", "quick_break", "transition", "set_play", "chaotic")
 BLOCKS = ("high_block", "mid_block", "low_block")
 P4_BLOCK_LABEL = {"high_block": "high_block", "mid_block": "medium_block", "low_block": "low_block"}
 LANES = ("left_wing", "left_half_space", "centre", "right_half_space", "right_wing")
 ENGAGEMENTS = ("recovery", "counter_press", "press", "pressure")
-#: Measured per measure (tools/context_profiles.py, CONTEXT_PROFILES_REPORT.md): the matches a team needs before a
-#: comparison gives a verdict, from the intraclass correlation lifted by Spearman-Brown to pf_reliability_target (0.7).
-#: Basis reference: only measures whose 90% interval for the correlation lies above 0.1 on SkillCorner's 12 recurring
-#: teams, so a measure that might be noise never yields a verdict. Each value is the larger of two reference sets:
-#: SkillCorner's 12 teams (3, 4, 4, 5; agreed 23 November 2026) and PFF FC's World Cup 2022 set, 32 teams (5, 5, 6, 7;
-#: development use only). The larger was agreed by the founder on 24 November 2026. Every other measure gives "minimum
-#: not measured yet" until a club's own matches show it is stable.
-#: **Gate:** these values are derived from PFF's data. Before they govern anything a customer, pilot or demo sees, PFF's
-#: written approval is needed, or they are re-measured on licensed data (ponta-blueprint/legal-compliance.md).
+#: The matches a team needs before a comparison gives a verdict, per measure: from the intraclass correlation lifted by
+#: Spearman-Brown to pf_reliability_target (tools/context_profiles.py, CONTEXT_PROFILES_REPORT.md). Kept in the
+#: thresholds config with source and licence (thresholds 0.27.0, review GC-03, AI-14): ``MIN_MATCHES`` holds the values
+#: measured on licensed data (SkillCorner's open data), the default; ``MIN_MATCHES_UNLICENSED`` the values measured on
+#: PFF's World Cup 2022 set, used only when ``pf_allow_unlicensed_derived`` is on (internal development; never for
+#: anything a customer, pilot or demo sees before PFF's written approval). Every other measure gives "minimum not
+#: measured yet" until a club's own matches show it is stable.
 MIN_MATCHES: dict[str, int] = {
-    "out_share_high_block": 5,           # ICC 0.52 (90% 0.23 to 0.70) SkillCorner: 3; 0.33 (0.17 to 0.47) PFF: 5
-    "field_tilt": 5,                     # 0.42 (0.12 to 0.61): 4; 0.36 (0.20 to 0.49): 5
-    "efi_def_line_m_out_middle": 6,      # 0.40 (0.15 to 0.69): 4; 0.30 (0.06 to 0.47): 6
-    "out_share_low_block": 7,            # 0.36 (0.11 to 0.51): 5; 0.26 (0.10 to 0.40): 7
+    k[len("pf_min_matches_"):]: int(t.value) for k, t in THRESHOLDS.items() if k.startswith("pf_min_matches_") and not k.endswith("_pff")
 }
+MIN_MATCHES_UNLICENSED: dict[str, int] = {
+    k[len("pf_min_matches_"):-len("_pff")]: int(t.value) for k, t in THRESHOLDS.items() if k.startswith("pf_min_matches_") and k.endswith("_pff")
+}
+MIN_SOURCE_LICENSED = THRESHOLDS["pf_min_matches_out_share_high_block"].licence
+MIN_SOURCE_UNLICENSED = THRESHOLDS["pf_min_matches_out_share_high_block_pff"].licence
+
+
+def min_matches(measure: str, cfg: dict | None = None) -> tuple[int | None, str | None]:
+    """A measure's minimum matches and the licence of the data it was measured on (the larger when unlicensed is allowed)."""
+    lic = MIN_MATCHES.get(measure)
+    if cfg and cfg.get("pf_allow_unlicensed_derived", 0) >= 1 and measure in MIN_MATCHES_UNLICENSED:
+        un = MIN_MATCHES_UNLICENSED[measure]
+        if lic is None or un > lic:
+            return un, MIN_SOURCE_UNLICENSED
+    return lic, (MIN_SOURCE_LICENSED if lic is not None else None)
+
+
 _STATE_RANK = {"blocked": 0, "degraded": 1, "full": 2}
 #: Measures that read how chains start and end: Degraded when the feed gives no restarts (P1 ``dead_ball_known`` false),
 #: since every stoppage then reads as a loss and a regain (review AN-03).
@@ -153,7 +168,14 @@ def match_profiles(match, res, team_keys: dict[str, str], semantic_events: pd.Da
     poss = f["p1_possession"].astype(object).to_numpy()
     in_play_min = float(np.isin(poss, [*TEAMS, "contested"]).sum()) * step / 60.0
     dc = {(e.package, e.metric): e.state for k in out for e in out[k].entries}
-    versions = json.dumps({**res.versions, "thresholds": res.thresholds_version, "profiles": PROFILE_VERSION}, sort_keys=True)
+    from matrix_engine.parity import SCHEMA_VERSION as DATA_CHECK_SCHEMA
+
+    from plaiq_engine.semantic_builder import SCHEMA_VERSION as SEMANTIC_SCHEMA
+    from plaiq_engine.semantic_builder import _engine_version
+
+    # Engines and schemas too (review SE-07), so profiles from before and after a loader or engine change never mix.
+    versions = json.dumps({**res.versions, "thresholds": res.thresholds_version, "profiles": PROFILE_VERSION, "engine": _engine_version(),
+                           "semantic_schema": SEMANTIC_SCHEMA, "data_check_schema": DATA_CHECK_SCHEMA}, sort_keys=True)
     ev = match.events
     has_feed = bool(len(ev)) and {"Type", "Team", "Start X"} <= set(ev.columns)
     L = match.pitch.length_m
@@ -296,6 +318,22 @@ def worst_state(states) -> str | None:
     return min(s, key=lambda x: _STATE_RANK.get(x, 0)) if s else None
 
 
+def variance_components(means: np.ndarray, counts: np.ndarray, values: np.ndarray, team_vars: np.ndarray) -> tuple[float, float, int]:
+    """
+    Within-team and between-team variance by the one-way ANOVA method of moments (review ST-06, 25 November 2026): the
+    between component is (MSB - MSW) / n0, not the variance of the observed team means, which also carries each mean's
+    own noise and so under-shrinks teams with few matches. Returns (within, between, within degrees of freedom).
+    """
+    g, N = len(means), float(counts.sum())
+    if g < 2 or N - g < 1:
+        return np.nan, np.nan, 0
+    grand = float(values.mean())
+    msw = float(((counts - 1) * team_vars).sum() / (N - g))
+    msb = float((counts * (means - grand) ** 2).sum() / (g - 1))
+    n0 = (N - float((counts ** 2).sum()) / N) / (g - 1)
+    return msw, max(0.0, (msb - msw) / n0), int(N - g)
+
+
 def baseline(profiles: pd.DataFrame, team_key: str, measure: str, exclude_match: str | None = None) -> dict:
     """
     A team's baseline for one measure against the set's, with shrinkage; refuses mixed versions and leaves Blocked out.
@@ -313,15 +351,16 @@ def baseline(profiles: pd.DataFrame, team_key: str, measure: str, exclude_match:
         return {"refused": "no usable matches for this team and measure"}
     by_team = p.groupby("team_key")["value"]
     means, counts = by_team.mean(), by_team.count()
-    within = float(np.average(by_team.var(ddof=1).fillna(0), weights=np.maximum(counts - 1, 0))) if (counts > 1).any() else np.nan
-    between = float(np.var(means, ddof=1)) if len(means) > 1 else np.nan
     n, t_mean = int(len(team)), float(team["value"].mean())
     set_mean = float(p["value"].mean())
+    within, between, df_within = variance_components(means.to_numpy(float), counts.to_numpy(float), p["value"].to_numpy(float),
+                                                     by_team.var(ddof=1).fillna(0).to_numpy(float))
     k = within / between if np.isfinite(within) and np.isfinite(between) and between > 0 else np.inf
     shrunk = (n * t_mean + (k * set_mean if np.isfinite(k) else 0)) / (n + k) if np.isfinite(k) else set_mean
     return {"measure": measure, "team_key": team_key, "data_check": worst_state(team["data_check"]), "team_matches": n, "team_mean": round(t_mean, 4), "set_matches": int(len(p)),
             "set_teams": int(len(means)), "set_mean": round(set_mean, 4), "within_sd": round(float(np.sqrt(within)), 4) if np.isfinite(within) else None,
             "shrunk": round(float(shrunk), 4), "set_weight": None if not np.isfinite(k) else round(float(k), 3),
+            "within_df": df_within, "baseline_n": None if not np.isfinite(k) else round(float(n + k), 3),
             "blocked_left_out": int(((profiles["measure"] == measure) & (profiles["team_key"] == team_key) & (profiles["data_check"] == "blocked")).sum())}
 
 
@@ -334,15 +373,24 @@ def compare(profiles: pd.DataFrame, match_id: str, team_key: str, measure: str, 
     b = baseline(profiles, team_key, measure, exclude_match=match_id)
     if "refused" in b:
         return {"value": value, "verdict": None, "reason": b["refused"], "data_check": row["data_check"].iloc[0]}
-    need = MIN_MATCHES.get(measure)
+    need, need_source = min_matches(measure, cfg)
     # The worst Data check state behind the comparison, which the AI must disclose (review AI-05).
-    out = {"value": value, **b, "data_check": worst_state([row["data_check"].iloc[0], b["data_check"]]), "minimum_matches": need}
+    out = {"value": value, **b, "data_check": worst_state([row["data_check"].iloc[0], b["data_check"]]), "minimum_matches": need, "minimum_source": need_source}
     if need is None:
         return {**out, "verdict": None, "reason": "the minimum number of matches for this measure is not measured yet"}
     if b["team_matches"] < need:
         return {**out, "verdict": "not enough matches yet", "reason": f"{b['team_matches']} of the {need} matches needed"}
-    if b["within_sd"] is None or b["within_sd"] == 0:
+    if b["within_sd"] is None or b["within_sd"] == 0 or not b["within_df"]:
         return {**out, "verdict": None, "reason": "no within-team spread to compare against"}
-    z = (value - b["shrunk"]) / b["within_sd"]
-    verdict = "above your usual" if z > cfg["pf_verdict_sd"] else "below your usual" if z < -cfg["pf_verdict_sd"] else "about your usual"
-    return {**out, "verdict": verdict, "difference_in_sd": round(float(z), 2)}
+    # A prediction interval for one new match around the team's baseline (review ST-05): the within-team spread plus the
+    # baseline's own uncertainty, at a stated two-sided false-alarm rate, with a t quantile on the within-team degrees of
+    # freedom. Outside it is "above" or "below your usual"; under pure noise that happens at about that rate.
+    from scipy.stats import t as student_t
+
+    n_eff = b["baseline_n"] if b["baseline_n"] else b["team_matches"]
+    spread = b["within_sd"] * np.sqrt(1.0 + 1.0 / n_eff)
+    q = float(student_t.ppf(1.0 - cfg["pf_verdict_false_alarm"] / 2.0, b["within_df"]))
+    lo, hi = b["shrunk"] - q * spread, b["shrunk"] + q * spread
+    verdict = "above your usual" if value > hi else "below your usual" if value < lo else "about your usual"
+    return {**out, "verdict": verdict, "difference_in_sd": round(float((value - b["shrunk"]) / b["within_sd"]), 2),
+            "usual_range": [round(float(lo), 4), round(float(hi), 4)], "false_alarm_rate": cfg["pf_verdict_false_alarm"]}

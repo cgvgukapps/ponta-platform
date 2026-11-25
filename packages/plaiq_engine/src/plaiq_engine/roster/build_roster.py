@@ -51,7 +51,6 @@ from plaiq_engine.roster.player_db import PLAYER_DB, get_player
 
 # Processed-data directory, resolved outside the repo (see matrix_engine.sample_data).
 # Defined locally so the Second Spectrum roster path stays free of any demo-script import.
-DATA_DIR = processed_dir()
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +280,9 @@ def build_team_roster(game_id: int, side_label: str, team_key: str,
 def _load_game(game_id: int):
     """Plain CSV read of a processed Metrica game. Local equivalent of the prototype's
     ``replay.load_game`` (a matplotlib demo script that is not ported)."""
-    home = pd.read_csv(f"{DATA_DIR}/Game_{game_id}_tracking_home.csv", index_col="Frame")
-    away = pd.read_csv(f"{DATA_DIR}/Game_{game_id}_tracking_away.csv", index_col="Frame")
-    events = pd.read_csv(f"{DATA_DIR}/Game_{game_id}_events.csv")
+    home = pd.read_csv(f"{processed_dir()}/Game_{game_id}_tracking_home.csv", index_col="Frame")
+    away = pd.read_csv(f"{processed_dir()}/Game_{game_id}_tracking_away.csv", index_col="Frame")
+    events = pd.read_csv(f"{processed_dir()}/Game_{game_id}_events.csv")
     return home, away, events
 
 
@@ -415,7 +414,7 @@ def write_secondspectrum_roster(game_id: int, meta: dict,
 
 
 def roster_path(game_id: int) -> str:
-    return os.path.join(DATA_DIR, f"Game_{game_id}_roster.json")
+    return os.path.join(processed_dir(), f"Game_{game_id}_roster.json")
 
 
 # ---------------------------------------------------------------------------
@@ -552,11 +551,11 @@ def write_skillcorner_roster(
 
 
 def sc_roster_path(match_id: int) -> str:
-    return os.path.join(DATA_DIR, f"SC_{match_id}_roster.json")
+    return os.path.join(processed_dir(), f"SC_{match_id}_roster.json")
 
 
 def sb_roster_path(match_id: int) -> str:
-    return os.path.join(DATA_DIR, f"SB_Match_{match_id}_roster.json")
+    return os.path.join(processed_dir(), f"SB_Match_{match_id}_roster.json")
 
 
 # ---------------------------------------------------------------------------
@@ -672,7 +671,7 @@ def main():
     else:
         games = []
         for gid in range(1, 50):
-            evts_path = os.path.join(DATA_DIR, f"Game_{gid}_events.csv")
+            evts_path = os.path.join(processed_dir(), f"Game_{gid}_events.csv")
             if os.path.exists(evts_path):
                 games.append(gid)
 

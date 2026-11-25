@@ -21,6 +21,10 @@ are compared with ``OUTPUT_ATOL``/``OUTPUT_RTOL``; non-numeric columns must matc
 exactly. Any difference beyond tolerance is a finding to record as an
 ``engine_version`` decision, not something to fix by editing formulas.
 
+**Recorded departure (25 November 2026, review backlog A).** The production SkillCorner loader drops records with no
+period and maps SkillCorner's stoppages to SET PIECE rows; the prototype did neither. This test loads the SkillCorner
+match with ``prototype_inputs=True`` so it still checks the engine maths on the prototype's inputs.
+
 Opt-in: loading and scoring both full matches takes several minutes, so the test
 runs only with ``PONTA_EQUIVALENCE=1`` (and the sample data and golden files present).
 """
@@ -33,6 +37,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from matrix_engine.ingestion.second_spectrum_io import HIGH_PASS
 from matrix_engine.match import load_metrica_epts_match, load_skillcorner_match
 from matrix_engine.sample_data import processed_dir, repo_root, sample_data_dir
 
@@ -76,7 +81,9 @@ def _require(path: Path) -> None:
 def _load(label: str):
     if label == "metrica_3":
         return load_metrica_epts_match(sample_data_dir(), 3)
-    return load_skillcorner_match(os.path.join(sample_data_dir(), "skillcorner", "matches", "1886347"), 1886347)
+    # The prototype's inputs: the production loader now drops records with no period and adds restart rows (review
+    # DE-01, DE-11, 25 November 2026), a recorded departure; this test checks the engine on the inputs it was captured on.
+    return load_skillcorner_match(os.path.join(sample_data_dir(), "skillcorner", "matches", "1886347"), 1886347, prototype_inputs=True)
 
 
 def _profiles(label: str, home_j: list[str], away_j: list[str]):
@@ -151,14 +158,15 @@ def test_inputs_equal_the_prototypes_processed_files(analysis):
             ok = ~np.isnan(a)
             assert np.allclose(a[ok], b[ok], atol=INPUT_ATOL, rtol=0), f"{team} {col}: max diff {np.max(np.abs(a[ok] - b[ok]))}"
     ev = pd.read_csv(f"{processed_dir()}/{prefix}_events.csv")
-    assert list(ev.columns) == list(ma.match.events.columns)
+    # ``High Pass`` is a recorded addition (da92464, the pass-height flag carried through Matrix); the prototype had none.
+    assert list(ev.columns) == [c for c in ma.match.events.columns if c != HIGH_PASS]
     assert len(ev) == len(ma.match.events)
 
 
 def test_event_delta_v(analysis):
     label, ma = analysis
     golden = pd.read_parquet(GOLDEN / label / "event_delta_v.parquet")
-    mine = ma.events.copy()
+    mine = ma.events.drop(columns=[HIGH_PASS], errors="ignore")  # a recorded addition, see above
     # The golden events were read back from CSV, so ids are typed int/float there and
     # str here; the engine normalises both to the same jersey string.
     for col in ("From", "To"):

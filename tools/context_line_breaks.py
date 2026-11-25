@@ -51,6 +51,7 @@ from plaiq_engine.context.thresholds import values
 from plaiq_engine.context.zones import ZonesPackage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from context_reference_set import _kappa, _load
 
 MIN_UNIT_PLAYERS = 2
@@ -72,7 +73,7 @@ def sc_passes(match_dir: Path, home_id: int) -> pd.DataFrame:
 
 def plaiq_pov(m, cache: Path) -> pd.DataFrame:
     """Plaiq's pass option value per event and teammate (``MatchAnalysis.event_pov``). Cached: it takes minutes."""
-    p = cache / f"pov_{m.provider}_{m.match_id}.pkl"
+    p = cache / f"pov_{m.provider}_{m.match_id}.{tag()}.pkl"
     if p.exists():
         return pd.read_pickle(p)
     from plaiq_engine.match_analysis import MatchAnalysis

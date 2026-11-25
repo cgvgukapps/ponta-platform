@@ -27,6 +27,12 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.28.0 replaces ``pf_verdict_sd`` with ``pf_verdict_false_alarm`` (10%, agreed by the founder on 25 November
+2026): Stage E's verdict uses a prediction interval set for that false-alarm rate (review ST-05).
+Version 0.27.0 moves Stage E's minimum matches into this config (review GC-03, AI-14, 25 November 2026): each measure's
+value from SkillCorner's open data (MIT, the default) and from PFF FC's World Cup 2022 set (no licence: internal
+development only), with ``pf_allow_unlicensed_derived`` (off) choosing whether the PFF-derived values may be used.
+Values unchanged; with the switch off, comparisons use the SkillCorner values.
 Version 0.26.0 adds ``p8_restart_before_s`` and ``p8_restart_after_s`` (P8 0.3.0, review backlog A, 25 November 2026;
 proposed): an episode starts at a restart found from player positions when P1 has no logged restart for it.
 Version 0.25.0 adds Stage E's comparison thresholds (``pf_verdict_sd``, ``pf_reliability_target``; proposed; no package output changes).
@@ -69,7 +75,7 @@ Status = Literal["proposed", "measured", "agreed"]
 #: modelling judgement or the founder's calls, with no reference behind it yet.
 Basis = Literal["published", "reference", "engineering", "judgement"]
 
-THRESHOLDS_VERSION = "0.26.0"
+THRESHOLDS_VERSION = "0.28.0"
 
 
 @dataclass(frozen=True)
@@ -81,6 +87,8 @@ class Threshold:
     reason: str
     source: str | None = None
     basis: Basis = "engineering"
+    #: The licence of the data the value was measured on, when it came from reference data (review GC-03).
+    licence: str | None = None
 
 
 _ALL: tuple[Threshold, ...] = (
@@ -302,12 +310,39 @@ _ALL: tuple[Threshold, ...] = (
               "FIFA's block rule: the criteria hold for at least this long within p4v_fifa_window_s.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
     Threshold("p4v_fifa_window_s", 2.0, "s", "proposed",
               "FIFA's block rule: the window the hold time is counted in.", "FIFA, World Cup 2022 article on the mid-block (published value); ponta-blueprint/fifa-alignment.md"),
-    Threshold("pf_verdict_sd", 1.0, "within-team standard deviations", "proposed",
-              "A comparison says above or below a team's usual only when the match differs from the team's shrunk baseline by more than this many within-team standard deviations; otherwise about its usual.",
-              "Stage E (ponta-blueprint/context-profiles-task.md); to be measured in CONTEXT_PROFILES_REPORT.md"),
+    Threshold("pf_verdict_false_alarm", 0.10, "share of matches (two-sided)", "agreed",
+              "A comparison says above or below a team's usual only when the match falls outside the team's usual range: a prediction interval around its shrunk baseline (the within-team spread and the baseline's own uncertainty, a t quantile) that an ordinary match leaves this often. 10% two-sided is about 1.65 standard deviations; replaces pf_verdict_sd (1.0), which flagged about a third of ordinary matches.",
+              "Review finding ST-05; 10% two-sided agreed by the founder, 25 November 2026 (work-review.md, decision 3)", "judgement"),
     Threshold("pf_reliability_target", 0.7, "reliability", "proposed",
               "A measure's minimum number of matches is the number at which a team's mean reaches this split-half reliability (Spearman-Brown). 0.7 is the conventional threshold for acceptable reliability.",
               "Nunnally (1978), Psychometric Theory: 0.7 as acceptable reliability; Stage E, CONTEXT_PROFILES_REPORT.md"),
+    Threshold("pf_min_matches_out_share_high_block", 3.0, "matches", "agreed",
+              "Matches a team needs before a comparison on out_share_high_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
+              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_out_share_high_block_pff", 5.0, "matches", "agreed",
+              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
+              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_field_tilt", 4.0, "matches", "agreed",
+              "Matches a team needs before a comparison on field_tilt gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
+              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_field_tilt_pff", 5.0, "matches", "agreed",
+              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
+              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_efi_def_line_m_out_middle", 4.0, "matches", "agreed",
+              "Matches a team needs before a comparison on efi_def_line_m_out_middle gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
+              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_efi_def_line_m_out_middle_pff", 6.0, "matches", "agreed",
+              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
+              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_out_share_low_block", 5.0, "matches", "agreed",
+              "Matches a team needs before a comparison on out_share_low_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
+              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_out_share_low_block_pff", 7.0, "matches", "agreed",
+              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
+              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_allow_unlicensed_derived", 0.0, "switch", "agreed",
+              "1: values measured on unlicensed reference data (PFF's set) may govern outputs, each comparison then taking the larger minimum; 0 (the default, and the only setting for anything a customer, pilot or demo sees): only licensed values.",
+              "The data guardrails agreed by the founder, 23 and 24 November 2026 (legal-compliance.md); review backlog A, approved 25 November 2026"),
     Threshold("p7_space_every_s", 5.0, "s", "proposed",
               "Space (control of high-value space, the open danger zone) is computed every this many seconds: Plaiq's pitch control costs about 25 ms per frame over the whole grid, and the runtime budget for P5 to P7 is 60 s per match.",
               "Stage C, P7 0.1.0 (CONTEXT_RELATIONSHIPS_REPORT.md, section 5)"),
@@ -356,7 +391,7 @@ _BASIS: dict[str, Basis] = {
     **dict.fromkeys(("p1_loose_on_opponent_touch", "p7_late_minute", "p7_lambda_leading",
                      "p7_lambda_leading_late", "p7_lambda_trailing", "p7_lambda_trailing_late", "p7_cost_weight"), "judgement"),
 }
-_ALL = tuple(replace(t, basis=_BASIS.get(t.name, "engineering")) for t in _ALL)
+_ALL = tuple(replace(t, basis=_BASIS.get(t.name, t.basis)) for t in _ALL)
 
 THRESHOLDS: dict[str, Threshold] = {t.name: t for t in _ALL}
 

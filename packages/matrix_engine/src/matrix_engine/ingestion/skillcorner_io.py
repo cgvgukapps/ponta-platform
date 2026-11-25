@@ -519,6 +519,7 @@ def load_skillcorner_events(
     h1_home_sign: int = 1,
     normalize_direction: bool = True,
     player_id_to_jersey: dict | None = None,
+    restarts: bool = True,
 ) -> pd.DataFrame:
     """
     Map SkillCorner dynamic_events.csv to a PLAIQ events DataFrame.
@@ -587,7 +588,7 @@ def load_skillcorner_events(
     target_x_pass_col    = _find_col(df, ["player_targeted_x_pass"])
     target_y_pass_col    = _find_col(df, ["player_targeted_y_pass"])
     high_pass_col        = _find_col(df, ["high_pass"])
-    interruption_col     = _find_col(df, ["game_interruption_before"])
+    interruption_col     = _find_col(df, ["game_interruption_before"]) if restarts else None
 
     def _to_jersey(pid_int):
         if pid_int is None:
@@ -899,10 +900,14 @@ class SkillCornerAdapter:
         match_file: str | None = None,
         tracking_file: str | None = None,
         events_file: str | None = None,
+        prototype_inputs: bool = False,
     ):
         self.match_dir  = match_dir
         self.match_id   = int(match_id)
         self.normalize  = normalize_playing_direction
+        # The frozen prototype's inputs, for the engine-equivalence test only: frames with no period kept (as period 1)
+        # and no restart rows. Every other caller gets the corrected inputs (review DE-01, DE-11).
+        self.prototype_inputs = prototype_inputs
 
         def _resolve(override, template):
             if override:
@@ -934,7 +939,7 @@ class SkillCornerAdapter:
         # they were labelled period 1 with clock 0, which stretched period 1 over the
         # break and shifted every event time (review finding DE-01, 25 November 2026).
         # The Matrix provider path already drops them (providers/skillcorner.py).
-        records = [r for r in self.load_tracking_raw() if r.get("period") is not None]
+        records = [r for r in self.load_tracking_raw() if self.prototype_inputs or r.get("period") is not None]
 
         h1_sign = meta["h1_home_sign"] if self.normalize else 1
 
@@ -972,6 +977,7 @@ class SkillCornerAdapter:
             h1_home_sign=h1_sign,
             normalize_direction=self.normalize,
             player_id_to_jersey=pid_to_jersey,
+            restarts=not self.prototype_inputs,
         )
 
         # Add pitch config to meta for downstream consumers

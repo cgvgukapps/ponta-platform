@@ -40,6 +40,7 @@ from plaiq_engine.context.thresholds import values
 from plaiq_engine.context.zones import ZonesPackage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from context_phase_sweep import agreement
 from context_references import sc_phase_file, sc_phase_spans
 from context_structure_measure import formations_by_half, role_agreement
@@ -68,7 +69,7 @@ def _overrides(items: list[str] | None) -> dict[str, float]:
 
 
 def _load(match_dir: Path, cache: Path):
-    p = cache / f"skillcorner_{match_dir.name}.pkl"
+    p = cache / f"skillcorner_{match_dir.name}.{tag()}.pkl"
     if p.exists():
         with open(p, "rb") as fh:
             m = pickle.load(fh)

@@ -148,3 +148,61 @@ def test_a_blocked_match_gets_no_verdict_and_degraded_is_disclosed(monkeypatch):
     assert P.compare(deg, "mt_a0", "t_a", "possession_share", cfg)["data_check"] == "degraded"
     r = resolve_profile_citation(deg, "t_a", "possession_share", [f"mt_a{i}" for i in range(4)])
     assert r.ok and r.data_check == "degraded"
+
+
+def test_unlicensed_derived_minimums_are_off_by_default():
+    """PFF-derived values never govern a comparison unless the switch is on, and every verdict names its source (GC-03)."""
+    from plaiq_engine.context.thresholds import THRESHOLDS
+
+    cfg = values()
+    assert cfg["pf_allow_unlicensed_derived"] == 0.0
+    tagged = {k for k, t in THRESHOLDS.items() if t.licence and not t.licence.startswith("skillcorner")}
+    assert tagged and all(k.endswith("_pff") for k in tagged)
+    for m in P.MIN_MATCHES_UNLICENSED:
+        n, src = P.min_matches(m, cfg)
+        assert n == P.MIN_MATCHES[m] and src.startswith("skillcorner")
+        n, src = P.min_matches(m, values({"pf_allow_unlicensed_derived": 1.0}))
+        assert n == max(P.MIN_MATCHES[m], P.MIN_MATCHES_UNLICENSED[m])
+    pr = _synthetic_profiles()
+    out = P.compare(pr, "mt_a0", "t_a", "field_tilt", cfg)
+    assert "minimum_source" in out or out.get("reason")
+
+
+def _noise_profiles(rng, teams=12, per_team=6, icc=0.3, measure="possession_share"):
+    sd_b, sd_w = np.sqrt(icc), np.sqrt(1 - icc)
+    rows = []
+    for t in range(teams):
+        centre = rng.normal(0, sd_b)
+        for i in range(per_team):
+            rows.append({"match_id": f"m{t}_{i}", "team": "home", "team_key": f"t{t}", "opp_team_key": "tx", "competition": "c", "season": "s",
+                         "measure": measure, "value": centre + rng.normal(0, sd_w), "denominator": "", "sample_minutes": 90, "sample_n": 0,
+                         "label": "estimated", "basis": "common", "source": "", "data_check": "full", "has_feed": True, "versions": "v"})
+    return pd.DataFrame(rows, columns=list(P.PROFILE_COLUMNS))
+
+
+def test_the_verdict_fires_at_its_stated_false_alarm_rate(monkeypatch):
+    """Under pure noise "above" or "below your usual" comes up about pf_verdict_false_alarm of the time (review ST-05)."""
+    monkeypatch.setitem(P.MIN_MATCHES, "possession_share", 3)
+    cfg = values()
+    rng = np.random.default_rng(5)
+    flags = total = 0
+    for _ in range(60):
+        pr = _noise_profiles(rng)
+        for t in range(12):
+            out = P.compare(pr, f"m{t}_0", f"t{t}", "possession_share", cfg)
+            total += 1
+            flags += out["verdict"] in ("above your usual", "below your usual")
+            assert out["usual_range"][0] < out["usual_range"][1] and out["false_alarm_rate"] == cfg["pf_verdict_false_alarm"]
+    rate = flags / total
+    assert 0.06 <= rate <= 0.14, rate  # 10% stated; the old 1 SD rule gave about a third
+
+
+def test_shrinkage_weight_is_the_method_of_moments():
+    """The set's weight is within over between variance with between from (MSB - MSW) / n0 (review ST-06)."""
+    rng = np.random.default_rng(9)
+    ks = []
+    for _ in range(200):
+        b = P.baseline(_noise_profiles(rng, teams=12, per_team=3, icc=0.1), "t0", "possession_share")
+        ks.append(np.inf if b["set_weight"] is None else b["set_weight"])  # no between-team spread: the set mean
+    # True weight (1 - ICC) / ICC = 9; the old estimator (variance of the team means) gave a median near 2.
+    assert 6.0 <= float(np.median(ks)) <= 20.0, np.median(ks)

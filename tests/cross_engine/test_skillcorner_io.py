@@ -380,7 +380,7 @@ class TestSkillCornerAdapter:
         def gap(frames):
             return [{"frame": f, "timestamp": None, "period": None, "ball_data": None, "player_data": []} for f in frames]
 
-        records = gap(range(0, P1_START)) + [r for r in base if r["period"] == 1] \
+        records = gap(range(P1_START)) + [r for r in base if r["period"] == 1] \
             + gap(range(P1_END + 1, P2_START)) + [r for r in base if r["period"] == 2] + gap(range(P2_END + 1, P2_END + 6))
         match_dir = write_fixture_dir(str(tmp_path), tracking_records=records)
         home, _, events, meta = SkillCornerAdapter(match_dir, MATCH_ID).load()

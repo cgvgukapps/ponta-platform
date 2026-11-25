@@ -33,6 +33,7 @@ import argparse
 import dataclasses
 import json
 import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -177,6 +178,31 @@ def icc1(groups: list[np.ndarray]) -> float:
     return float((msb - msw) / denom) if denom > 0 else np.nan
 
 
+def icc1_interval(groups: list[np.ndarray], level: float = 0.90) -> tuple[float, float] | None:
+    """
+    The analytic interval for ICC(1) from the F distribution (Shrout and Fleiss 1979; McGraw and Wong 1996), with the
+    unequal-size n0: deterministic, no resampling seed (review ST-04, 25 November 2026).
+    """
+    from scipy.stats import f as f_dist
+
+    groups = [g for g in groups if len(g) >= 1]
+    k = len(groups)
+    n_i = np.array([len(g) for g in groups], float)
+    N = n_i.sum()
+    if k < 2 or N - k < 1:
+        return None
+    grand = np.concatenate(groups).mean()
+    msb = sum(len(g) * (g.mean() - grand) ** 2 for g in groups) / (k - 1)
+    msw = sum(((g - g.mean()) ** 2).sum() for g in groups) / (N - k)
+    if msw <= 0:
+        return None
+    n0 = (N - (n_i ** 2).sum() / N) / (k - 1)
+    F, a = msb / msw, (1 - level) / 2
+    fl = F / f_dist.ppf(1 - a, k - 1, N - k)
+    fu = F * f_dist.ppf(1 - a, N - k, k - 1)
+    return float((fl - 1) / (fl + n0 - 1)), float((fu - 1) / (fu + n0 - 1))
+
+
 def matches_needed(icc: float, target: float) -> float | None:
     if not np.isfinite(icc) or icc <= 0:
         return None
@@ -206,7 +232,11 @@ def analyse(args) -> None:
     print(json.dumps({k: v for k, v in out.items() if not k.startswith(("stability_", "baseline_vs_set_mean"))}, indent=1, default=str))
 
 
-def stability(sc: pd.DataFrame, cfg: dict, rng) -> dict:
+#: Team resamples per measure for the bootstrap interval (review ST-04).
+RESAMPLES = 5000
+
+
+def stability(sc: pd.DataFrame, cfg: dict, rng=None) -> dict:
     """ICC(1) per measure on the teams with two or more usable matches, with a 90% interval from resampling teams."""
     stab = {}
     for meas in CATALOGUE:
@@ -216,15 +246,23 @@ def stability(sc: pd.DataFrame, cfg: dict, rng) -> dict:
             stab[meas.name] = {"teams": len(g), "icc": None}
             continue
         icc = icc1(list(g.values()))
+        # 5,000 resamples of teams with a fixed seed per measure (review ST-04: 500 left the selection seed-dependent),
+        # beside the analytic F interval, which needs no seed.
         boots = []
         keys = list(g)
-        for _ in range(500):
-            pick = rng.choice(len(keys), len(keys), replace=True)
+        r = np.random.default_rng(zlib.crc32(meas.name.encode()))
+        for _ in range(RESAMPLES):
+            pick = r.choice(len(keys), len(keys), replace=True)
             boots.append(icc1([g[keys[i]] for i in pick]))
         boots = np.array([b for b in boots if np.isfinite(b)])
+        f_int = icc1_interval(list(g.values()))
+        target = cfg["pf_reliability_target"]
         stab[meas.name] = {"teams": len(g), "team_matches": int(sum(len(v) for v in g.values())), "icc": round(icc, 3) if np.isfinite(icc) else None,
                            "icc_90pct": [round(float(np.percentile(boots, 5)), 3), round(float(np.percentile(boots, 95)), 3)] if len(boots) else None,
-                           "matches_for_0.7": matches_needed(icc, cfg["pf_reliability_target"]), "matches_for_0.8": matches_needed(icc, 0.8),
+                           "icc_90pct_f": [round(f_int[0], 3), round(f_int[1], 3)] if f_int else None,
+                           "matches_for_0.7": matches_needed(icc, target), "matches_for_0.8": matches_needed(icc, 0.8),
+                           # The minimum as a range: matches needed at the interval's upper and lower ends.
+                           "matches_for_0.7_range": [matches_needed(f_int[1], target), matches_needed(f_int[0], target)] if f_int else None,
                            "basis": meas.basis}
     return stab
 

@@ -52,6 +52,7 @@ from plaiq_engine.analytics.pass_probability import (
 from scipy.optimize import minimize
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from idsse import MATCH_IDS
 from plaiq_calibration import availability, idsse_passes, skillcorner_rows
 from plaiq_references import auc
@@ -133,7 +134,7 @@ def main() -> None:
     for p in (args.idsse, args.sc_data, args.cache, args.out):
         if not _outside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")
-    ipk, spk = args.cache / "pass_probability_idsse.pkl", args.cache / "pass_probability_skillcorner.pkl"
+    ipk, spk = args.cache / f"pass_probability_idsse.{tag()}.pkl", args.cache / f"pass_probability_skillcorner.{tag()}.pkl"
     if ipk.exists():
         idsse = pd.read_pickle(ipk)
     else:

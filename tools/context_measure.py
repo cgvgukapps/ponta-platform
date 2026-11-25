@@ -44,6 +44,9 @@ from plaiq_engine.context.possession import (
 )
 from plaiq_engine.context.thresholds import values
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
+
 SC_ID = 1886347
 RADII = (1.0, 1.5, 2.0, 2.5, 3.0)
 SPEEDS = (8.0, 12.0, 16.0, 1e9)
@@ -51,7 +54,7 @@ SWITCHES = (0.0, 0.4, 0.8, 1.2)
 
 
 def load(key: str, cache: Path):
-    p = cache / f"{key}.pkl"
+    p = cache / f"{key}.{tag()}.pkl"
     if p.exists():
         with open(p, "rb") as fh:
             return pickle.load(fh)

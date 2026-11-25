@@ -103,12 +103,10 @@ _SYNONYMS = {"peaked": "max", "peak": "max", "highest": "max", "maximum": "max",
 #: Named scores: only their own fields.
 _NAMED = {"gain": ("dq_score", "gain_v2_score", "gain_median"),
           "choice": ("dq_v2_score", "choice_median", "adjusted_choice", "adjusted_choice_median")}
-_STOP = frozenset("a an the of at on to and or was were is are with for by from it its this that their there than then "
-                  "about around only just over under after before during ball carrier time times home away".split())
+_STOP = frozenset(["a", "an", "the", "of", "at", "on", "to", "and", "or", "was", "were", "is", "are", "with", "for", "by", "from", "it", "its", "this", "that", "their", "there", "than", "then", "about", "around", "only", "just", "over", "under", "after", "before", "during", "ball", "carrier", "time", "times", "home", "away"])
 _SECONDS = frozenset({"s", "sec", "secs", "second", "seconds"})
 _METRES = frozenset({"m", "metre", "metres", "meter", "meters"})
-_NUMBER_WORDS = frozenset("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
-                          "sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred".split())
+_NUMBER_WORDS = frozenset(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred"])
 # A number ends before a letter, a colon or a decimal part; a full stop after it ends the sentence ("was 22.").
 _TOKEN = re.compile(r"(?<![\w.:])(-?\d+(?:\.\d+)?)(%|st|nd|rd|th|m|s)?(?![\w:]|\.\d)")
 _CLOCK = re.compile(r"(?<![\w.:])(\d{1,3}):(\d{2})(?![\w:]|\.\d)")

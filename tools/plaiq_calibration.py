@@ -46,6 +46,7 @@ from plaiq_engine.analytics.pass_option_value import _build_defender_data
 from plaiq_engine.match_analysis import MatchAnalysis
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from idsse import FPS, MATCH_IDS, load_idsse_match
 from plaiq_references import auc
 
@@ -287,7 +288,7 @@ def main() -> None:
     for p in [args.idsse, args.cache, args.out] + ([args.sc_data] if args.sc_data else []):
         if not _outside(p):
             sys.exit(f"refusing to read or write sample data inside the repository: {p}")
-    rows_pk, kin_pk = args.cache / "calibration_passes.pkl", args.cache / "calibration_kinematics.pkl"
+    rows_pk, kin_pk = args.cache / f"calibration_passes.{tag()}.pkl", args.cache / f"calibration_kinematics.{tag()}.pkl"
     if rows_pk.exists() and kin_pk.exists():
         passes, kin = pd.read_pickle(rows_pk), pd.read_pickle(kin_pk)
     else:
@@ -376,7 +377,7 @@ def main() -> None:
         "v1_row": v1_row,
     }
     if args.sc_data:
-        sc_pk = args.cache / "calibration_skillcorner.pkl"
+        sc_pk = args.cache / f"calibration_skillcorner.{tag()}.pkl"
         if sc_pk.exists():
             sc = pd.read_pickle(sc_pk)
         else:

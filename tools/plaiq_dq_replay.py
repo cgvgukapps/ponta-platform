@@ -36,6 +36,7 @@ from plaiq_engine.context.grid import build_grid
 from plaiq_engine.context.structure import attack_signs
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cache_tag import tag
 from context_possession_replay import PAGE as _POSSESSION_PAGE
 from context_reference_set import _load
 from plaiq_pressure import weighted_kappa
@@ -57,7 +58,7 @@ def _outside(path: Path) -> bool:
 def candidates(data: Path, cache: Path) -> pd.DataFrame:
     rows = []
     for d in sorted((data / "matches").iterdir()):
-        p = cache / f"pov_skillcorner_{d.name}.pkl"
+        p = cache / f"pov_skillcorner_{d.name}.{tag()}.pkl"
         if not p.exists():
             continue
         pov = pd.read_pickle(p)

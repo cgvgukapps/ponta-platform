@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # Prefixed distribution names: see packages/matrix_engine/pyproject.toml.
 name = "ponta-plaiq-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Ponta Plaiq: spatial decision-quality analysis and the semantic football event builder."
 requires-python = ">=3.13"
 dependencies = [
