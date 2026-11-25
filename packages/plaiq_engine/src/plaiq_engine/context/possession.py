@@ -740,12 +740,14 @@ class PossessionPackage(ContextPackage):
         elif gs_source == "final_only":
             fs = gs_info["final_score"]
             entries.append(self.entry("game_state", "Game state", "degraded",
-                                      "Only the final score is known, so the score at each moment, red cards and dead-ball time are unknown.",
+                                      "Only the final score is known, so the score at each moment and red cards are unknown"
+                                      + (", and so is dead-ball time." if dead is None else "; dead-ball time comes from the feed's restarts."),
                                       measure=f"final score {fs['home']}–{fs['away']}",
                                       unlock="Upload goal times and red cards, or add the logged event feed.", coverage="0.0% of match time"))
         else:
             entries.append(self.entry("game_state", "Game state", "blocked",
-                                      "No logged event feed and no uploaded game state, so score, cards and dead-ball time are unknown.",
+                                      "No logged event feed and no uploaded game state, so score and cards are unknown"
+                                      + (", and so is dead-ball time." if dead is None else "; dead-ball time comes from the feed's restarts."),
                                       unlock="Upload the final score, goal times and red cards, or add the logged event feed.",
                                       coverage="0.0% of match time"))
         return PackageOutput(frames=frames, entries=entries, segments={"chains": chains}, measurements=measurements)

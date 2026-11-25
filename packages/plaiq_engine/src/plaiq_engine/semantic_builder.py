@@ -83,7 +83,8 @@ GAIN_V2_LABEL = "estimated"
 DQ_V2_LABEL = "estimated"
 
 #: Decision-quality bands (ANALYTICS_SPECIFICATION.md 7.1): unified across event types. Version 1, shown as "Gain":
-#: how much of the best option's value the action realised. Cut-offs unchanged; names descriptive since schema 1.5
+#: forward movement on the threat surface relative to the passer's position (description corrected 25 November 2026,
+#: review SM-01; it is not the share of the best option's value). Cut-offs unchanged; names descriptive since schema 1.5
 #: (they were optimal, good, suboptimal and poor).
 BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "full_gain"), (0.80, "most_gain"), (0.55, "partial_gain"))
 LOWEST_BAND = "low_gain"
