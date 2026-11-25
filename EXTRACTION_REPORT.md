@@ -100,5 +100,5 @@ Decisions and deviations from `ai-layer.md`:
 ## Decisions recorded (15 November 2026)
 
 1. The characterised Metrica differences are the platform baseline; `engine_version` is unchanged. The carry near-tie (event 3373) is noted for the engine-validity work in `engine-governance.md`.
-2. The SkillCorner Data check follows the measured data: pass option value and event ΔV are Full; shot quality stays Blocked because the shots are derived from tracking.
+2. The SkillCorner Data check follows the measured data: pass option value and event ΔV are Full; shot quality stays Blocked because the shots are derived from tracking. *(Revised 24 November 2026: SkillCorner's extrapolated tracking fills in players off camera, about 41% of positions on the pitch and 17% within 15 m of the ball in match 1886347. The Data check now counts an estimated position as a missing one, so every position-based metric, pass option value included, is Degraded on SkillCorner with the measured share in its reason. Founder decision; Data check schema 1.1.)*
 3. `ai-layer.md`'s semantic event schema was updated to the implemented builder, and its invented "pressure index ≥ 0.7" example replaced: the engine's pressure is on a 1 to 10 scale and no named threshold exists yet.

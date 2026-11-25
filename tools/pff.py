@@ -16,7 +16,8 @@ event table for comparisons (pressure on the ball, lines broken, possession sequ
   player's side, shirt and position group in the roster. Team and competition ids only, never names; no video links.
 - **Tracking:** PFF's smoothed player positions (a Kalman filter over Sportlogiq's broadcast tracking, PFF tracking
   specification 2.2). Players off camera are estimated by the provider, as in SkillCorner's open data; the share of
-  visible positions is kept for the Data check report. **The ball is the tracked ball** (``balls``), not PFF's smoothed
+  visible positions is kept for the Data check report, and each row carries PFF's flag (schema column ``observed``;
+  pickles cached before 24 November 2026 do not). **The ball is the tracked ball** (``balls``), not PFF's smoothed
   ball, which PFF places at the ball carrier from its own events: using it would make Ponta's possession agree with
   PFF's events by construction. ``ball="smoothed"`` reads it instead.
 - **Consistency:** a period is dropped when its player tracking disagrees with PFF's own ball and events (the player
@@ -444,7 +445,7 @@ def load_pff_match(data_dir: Path, gid: str, cache: Path, ball: str = "tracked",
     tracking = pd.DataFrame({"timestamp": pl["frame"].map(clock).to_numpy(), "frame": pl["frame"].to_numpy(),
                              "player_id": (pl["team"] + "_" + pl["shirt"]).to_numpy(), "team": pl["team"].to_numpy(),
                              "x": pl["x"].to_numpy() * s_pl, "y": pl["y"].to_numpy() * s_pl, "source": PROVIDER,
-                             "sample_rate_hz": md["fps"]})
+                             "sample_rate_hz": md["fps"], "observed": pl["visible"].to_numpy(dtype=bool)})
     tracking = validate_schema(coerce_schema(tracking), name=PROVIDER)
     ball_df = pd.DataFrame({"frame": bl["frame"].to_numpy(), "x": bl["x"].to_numpy() * s_bl, "y": bl["y"].to_numpy() * s_bl}) \
         if len(bl) else pd.DataFrame({"frame": pd.Series(dtype="int64"), "x": pd.Series(dtype=float), "y": pd.Series(dtype=float)})

@@ -53,6 +53,16 @@ Optional columns
   while still reporting positions is invisible to them. ``native_quality`` is
   the only signal in the schema that can catch that case, which is why it is
   carried through the pipeline rather than dropped at the adapter boundary.
+
+``observed`` — whether the source saw the player at this frame (bool).
+  Broadcast tracking only sees the players the camera shows. Some providers fill
+  in the rest with their own estimates rather than leaving the rows out:
+  SkillCorner's extrapolated tracking (``is_detected``) and PFF FC's
+  (``visibility``). Those rows are positions, but not observations, so the
+  provider's flag is kept here: ``False`` marks a position the provider
+  estimated. Absent means the source does not say (optical and wearable feeds,
+  which leave unseen players out), and every row is read as observed. The Data
+  check reads it (``parity.py``); the engines use the positions as given.
 """
 
 from __future__ import annotations
@@ -92,11 +102,12 @@ _DTYPE_KINDS: dict[str, tuple[str, ...]] = {
 #: Optional columns a provider may add. Absent is valid; present must be
 #: well-formed. Kept separate from :data:`REQUIRED_COLUMNS` so that
 #: ``coerce_schema`` still orders the required set first.
-OPTIONAL_COLUMNS: tuple[str, ...] = ("native_quality",)
+OPTIONAL_COLUMNS: tuple[str, ...] = ("native_quality", "observed")
 
 #: Accepted dtype kinds for the optional columns, checked only when present.
 _OPTIONAL_DTYPE_KINDS: dict[str, tuple[str, ...]] = {
     "native_quality": ("f",),
+    "observed": ("b",),
 }
 
 #: Inclusive bounds on ``native_quality``. A vendor diagnostic is normalised to
@@ -320,6 +331,8 @@ def coerce_schema(df: pd.DataFrame) -> pd.DataFrame:
     out["source"] = out["source"].astype("object")
     if "native_quality" in out.columns:
         out["native_quality"] = out["native_quality"].astype("float64")
+    if "observed" in out.columns:
+        out["observed"] = out["observed"].astype(bool)
 
     finite = (
         np.isfinite(out["timestamp"].to_numpy())

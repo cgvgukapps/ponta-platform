@@ -112,9 +112,20 @@ def test_measured_inputs_on_the_skillcorner_sample_match(data_dir):
     assert inputs["events_derived_from_tracking"] is True
     # The ball is undetected in about a quarter of this match's frames (golden manifest).
     assert 0.70 < inputs["ball_detected_share"] < 0.78
+    # SkillCorner's extrapolated tracking fills in players off camera (24 November 2026): about 59% of positions
+    # are observed on the pitch and 83% within 15 m of the ball, so every position-based metric is Degraded,
+    # where the panel (which did not know) said Full. The panel's other differences stand.
+    assert 0.55 < inputs["observed_share"] < 0.65 and 0.78 < inputs["observed_near_ball_share"] < 0.88
+    assert 0.55 < report.coverage["observed_position_share"] < 0.65
     states = report.states()
+    estimated = {"pressure_1v1", "pressure_zonal", "control_zones", "movement_value", "pass_option_value",
+                 "decision_quality", "pass_completion", "decision_quality_v2", "gain_v2"}
+    for mid in estimated:
+        assert states[mid] == "degraded", f"{mid}: {states[mid]} (inputs {inputs})"
+    assert "estimates, not observations" in report.metrics["control_zones"].reason
+    assert "within 15 m of the ball" in report.metrics["pressure_1v1"].reason
     for state, ids in SKILLCORNER_PANEL.items():
-        for mid in ids:
+        for mid in ids - estimated:
             expected = MEASURED_DIFFERS_FROM_PANEL.get(mid, state)
             assert states[mid] == expected, f"{mid}: {states[mid]} != {expected} (inputs {inputs})"
     # Shots derived from tracking still do not support shot quality.
@@ -152,3 +163,38 @@ def test_gain_v2_has_choices_state_everywhere():
                    ParityInputs(provider="statsports", mode="gps_only", sample_rate_hz=10.0, teams_tracked=("home",))):
         r = classify(inputs).metrics
         assert (r["gain_v2"].state, r["gain_v2"].reason) == (r["decision_quality_v2"].state, r["decision_quality_v2"].reason)
+
+
+def _optical(**kw) -> ParityInputs:
+    base = dict(provider="metrica", mode="full_tracking", sample_rate_hz=25.0, teams_tracked=("away", "home"),
+                player_dropout=0.0, has_events=True, has_shot_events=True)
+    return ParityInputs(**(base | kw))
+
+
+def test_estimated_positions_count_as_missing_ones_near_the_ball_and_on_the_pitch():
+    unflagged = classify(_optical())
+    assert classify(_optical(observed_share=1.0, observed_near_ball_share=1.0)).states() == unflagged.states()
+    # Mostly seen near the ball, mostly estimated elsewhere: 1v1 pressure stays, whole-pitch metrics degrade.
+    r = classify(_optical(observed_share=0.6, observed_near_ball_share=0.95))
+    assert r.states()["pressure_1v1"] == "full"
+    for mid in ("pressure_zonal", "control_zones", "movement_value", "pass_option_value", "decision_quality"):
+        m = r.metrics[mid]
+        assert m.state == "degraded" and "40.0% of player positions on the pitch" in m.reason and "full-pitch" in m.unlock
+    # Where another limit already degrades a metric (pass completion fitted elsewhere), its reason leads and the
+    # estimated share is still in the measure.
+    assert r.states()["gain_v2"] == "degraded" and "40.0% of positions on the pitch estimated" in r.metrics["gain_v2"].measure
+    assert "5.0% of positions within 15 m of the ball estimated" in r.metrics["pressure_1v1"].measure
+    assert "40.0% of positions are the provider's estimates" in r.metrics["physical_summary"].reason
+    # Estimated near the ball too: 1v1 pressure degrades.
+    assert classify(_optical(observed_share=0.6, observed_near_ball_share=0.8)).states()["pressure_1v1"] == "degraded"
+    # At the bar (10% estimated) a metric stays Full, as for dropout.
+    assert classify(_optical(observed_share=0.9, observed_near_ball_share=0.9)).states()["control_zones"] == "full"
+
+
+def test_unflagged_reports_keep_their_coverage_and_reasons():
+    r = classify(_optical())
+    assert set(r.coverage) == {"ball_detected_share", "player_observation_share"}
+    assert r.metrics["control_zones"].reason == "Both teams are tracked throughout."
+    flagged = classify(_optical(observed_share=0.6, observed_near_ball_share=0.9))
+    assert flagged.coverage["observed_position_share"] == 0.6 and flagged.coverage["observed_near_ball_share"] == 0.9
+    assert flagged.to_dict()["schema_version"] == "1.1"

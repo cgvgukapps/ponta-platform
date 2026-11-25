@@ -462,6 +462,38 @@ def tracking_to_wide(
     return home_df, away_df
 
 
+def estimated_positions(records: list[dict], home_players: list[dict], away_players: list[dict]) -> pd.DataFrame:
+    """
+    The positions SkillCorner estimated rather than detected (``is_detected`` false), as
+    ``frame`` and ``player_id`` (``home_<jersey>`` / ``away_<jersey>``, the ids
+    ``tracking_to_wide`` produces). The extrapolated file gives every player a position in
+    every frame; broadcast cameras see only some of them, and SkillCorner fills in the rest.
+    """
+    lookup: dict = {}
+    for team, players in (("home", home_players), ("away", away_players)):
+        for p in players:
+            if p["shirt"] == "?":
+                continue
+            for key in (p.get("player_id"), p.get("trackable_object")):
+                if key is not None:
+                    lookup.setdefault((team, key), p["shirt"])
+    frames: list[int] = []
+    ids: list[str] = []
+    for rec in records:
+        for item in rec.get("player_data") or []:
+            if item.get("is_detected", True) or item.get("x") is None or item.get("y") is None:
+                continue
+            pid = item.get("player_id")
+            # The same order as tracking_to_wide: a home match first, then away.
+            for team in ("home", "away"):
+                shirt = lookup.get((team, pid))
+                if shirt is not None:
+                    frames.append(int(rec["frame"]))
+                    ids.append(f"{team}_{shirt}")
+                    break
+    return pd.DataFrame({"frame": np.asarray(frames, dtype="int64"), "player_id": ids})
+
+
 def _build_periods_from_df(home_df: pd.DataFrame) -> dict[int, tuple[int, int]]:
     """Derive {period: (min_frame, max_frame)} from a wide tracking DataFrame."""
     result: dict[int, tuple[int, int]] = {}
@@ -873,6 +905,9 @@ class SkillCornerAdapter:
             h1_home_sign=h1_sign,
             normalize_direction=self.normalize,
         )
+
+        # Positions SkillCorner estimated (off camera), for the Data check (schema column ``observed``).
+        meta["estimated_positions"] = estimated_positions(records, meta["home_players"], meta["away_players"])
 
         # Derive period frame bounds from actual tracking data
         periods = _build_periods_from_df(home_df)

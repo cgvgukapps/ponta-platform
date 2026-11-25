@@ -18,6 +18,12 @@ modes:
   class; anything needing continuous positions is Blocked or Degraded.
 * **Optical tracking**: Full, Degraded with the measured figure when the frame rate
   is low or players drop out, and the event feed's limits applied on top.
+* **Broadcast tracking that fills in unseen players** (the schema's ``observed``
+  column): a position the provider estimated is not an observation, so it counts
+  as a missing one. Metrics that read the players around the ball (1v1 pressure)
+  are judged on the positions within ``NEAR_BALL_M`` of it; metrics that read every
+  player (control, zonal pressure, movement, pass options, decision quality, pass
+  completion) on all positions.
 * **No physiological source**: every load or fatigue metric is Blocked.
 
 Changing a rule here changes what the product claims: it is a material change, to be
@@ -35,7 +41,7 @@ import pandas as pd
 
 from matrix_engine.match import NormalisedMatch
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"  # 1.1 (24 November 2026): estimated positions in the inputs and coverage
 
 State = Literal["full", "degraded", "blocked"]
 Mode = Literal["full_tracking", "event_only", "gps_only"]
@@ -45,6 +51,15 @@ Mode = Literal["full_tracking", "event_only", "gps_only"]
 LOW_RATE_HZ = 10.0
 #: Above this share of missing player observations, position-based metrics are Degraded.
 MAX_PLAYER_DROPOUT = 0.10
+#: Above this share of player positions the provider estimated rather than observed,
+#: metrics that read those positions are Degraded. An estimated position counts as a
+#: missing observation, so the bar is the same as for dropout (engineering).
+MAX_ESTIMATED_SHARE = MAX_PLAYER_DROPOUT
+#: The players "around the ball" for 1v1 pressure: its pressure zone reaches 9 m in front
+#: of the player (``plaiq_engine.analytics.pressure_v2``), with room for defenders closing.
+NEAR_BALL_M = 15.0
+#: Metrics that read the players around the ball, and those that read every player.
+NEAR_BALL_METRICS: tuple[str, ...] = ("pressure_1v1",)
 
 #: Providers with a pass completion parameter set fitted on their own data. Mirrors
 #: ``plaiq_engine.analytics.pass_probability.PARAMETER_SETS`` (Matrix does not import Plaiq; a
@@ -101,6 +116,11 @@ class ParityInputs:
         by an event provider.
     has_freeze_frames : bool
         Event-only data carries player snapshots (StatsBomb 360).
+    observed_share : float or None
+        Share of player positions the provider observed rather than estimated; None when
+        the provider does not say (every position is an observation).
+    observed_near_ball_share : float or None
+        The same share within ``NEAR_BALL_M`` of the ball.
     physiological_channels : tuple of str
         Heart rate, IMU and similar channels present. None are ingested today.
     fusion_tier : int
@@ -117,6 +137,8 @@ class ParityInputs:
     has_shot_events: bool = False
     events_derived_from_tracking: bool = False
     has_freeze_frames: bool = False
+    observed_share: float | None = None
+    observed_near_ball_share: float | None = None
     physiological_channels: tuple[str, ...] = ()
     fusion_tier: int = 1
 
@@ -306,11 +328,29 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
             reasons.append(f"{_pct(drop)} of player observations are missing")
         if not both_teams:
             reasons.append("only one team is tracked")
-        pos_state: State = "degraded" if reasons else "full"
-        pos_reason = ("Positions are " + "; ".join(reasons) + ".") if reasons else "Both teams are tracked throughout."
-        pos_unlock = "Use a higher-rate or more complete tracking export." if reasons else None
+
+        def positions(observed: float | None, where: str) -> tuple[State, str, str, str | None]:
+            """State, reason, measure and unlock for metrics reading the positions ``where``."""
+            r, meas = list(reasons), measure
+            if observed is not None:
+                est = 1.0 - observed
+                meas = f"{measure}; {_pct(est)} of positions {where} estimated by the provider"
+                if est > MAX_ESTIMATED_SHARE:
+                    r.append(f"{_pct(est)} of player positions {where} are the provider's estimates, not observations "
+                             "(players off camera)")
+            if not r:
+                return "full", "Both teams are tracked throughout.", meas, None
+            unlock = "Use a higher-rate or more complete tracking export."
+            if observed is not None and 1.0 - observed > MAX_ESTIMATED_SHARE:
+                unlock = "Use full-pitch tracking (optical or wearable) for this match."
+            return "degraded", "Positions are " + "; ".join(r) + ".", meas, unlock
+
+        near = positions(inputs.observed_near_ball_share, f"within {NEAR_BALL_M:g} m of the ball")
+        wide = positions(inputs.observed_share, "on the pitch")
         for mid in ("pressure_1v1", "pressure_zonal", "control_zones", "movement_value"):
-            put(mid, pos_state, pos_reason, measure=measure, unlock=pos_unlock)
+            st, why, meas, unl = near if mid in NEAR_BALL_METRICS else wide
+            put(mid, st, why, measure=meas, unlock=unl)
+        pos_state, pos_reason, measure, pos_unlock = wide
 
         if not inputs.has_events:
             for mid in ("pass_option_value", "decision_quality", "pass_completion", "decision_quality_v2", "event_delta_v"):
@@ -358,8 +398,11 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
                     unlock="Add a logged event feed for this match.")
             else:
                 put("shot_quality", "blocked", "No shot events in this feed.", unlock="Add an event feed that includes shots.")
+        est_note = ""
+        if inputs.observed_share is not None and 1.0 - inputs.observed_share > MAX_ESTIMATED_SHARE:
+            est_note = f" {_pct(1.0 - inputs.observed_share)} of positions are the provider's estimates (players off camera)."
         put("physical_summary", "degraded",
-            "Distance and speed derived from optical positions, not measured by a wearable.",
+            "Distance and speed derived from optical positions, not measured by a wearable." + est_note,
             measure=f"{rate:g} Hz", unlock="Add a wearable export for the same match.")
 
     # Load and fatigue: no physiological ingestion exists, so always Blocked.
@@ -379,6 +422,9 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
     coverage = {
         "ball_detected_share": inputs.ball_detected_share,
         "player_observation_share": None if inputs.player_dropout is None else 1.0 - inputs.player_dropout,
+        # Present only when the provider flags estimated positions (schema 1.1).
+        **({"observed_position_share": inputs.observed_share,
+            "observed_near_ball_share": inputs.observed_near_ball_share} if inputs.observed_share is not None else {}),
     }
     return AnalyticsParityReport(
         provider=inputs.provider,
@@ -428,6 +474,8 @@ def inputs_from_match(
         player_dropout=round(player_dropout(match), 4),
         has_events=not ev.empty,
         has_shot_events=bool(np.any(types.str.contains("SHOT"))),
+        observed_share=None if (o := match.observed_share()) is None else round(o, 4),
+        observed_near_ball_share=None if (n := match.observed_near_ball_share(NEAR_BALL_M)) is None else round(n, 4),
         events_derived_from_tracking=match.provider == "skillcorner",
         physiological_channels=physiological_channels,
         fusion_tier=fusion_tier,

@@ -105,6 +105,31 @@ class NormalisedMatch:
         """Share of frames in which the ball was detected."""
         return 0.0 if self.frames.empty else len(self.ball) / len(self.frames)
 
+    def observed_share(self) -> float | None:
+        """
+        Share of player positions the source observed rather than estimated, or None when the
+        source does not say (no ``observed`` column: every row is an observation).
+        """
+        if "observed" not in self.tracking.columns or self.tracking.empty:
+            return None
+        return float(self.tracking["observed"].mean())
+
+    def observed_near_ball_share(self, radius_m: float) -> float | None:
+        """
+        The same share over positions within ``radius_m`` of the ball, at frames with a ball
+        position; None when the source does not say or no position is near a located ball.
+        """
+        if "observed" not in self.tracking.columns or self.tracking.empty or self.ball.empty:
+            return None
+        ball = self.ball.drop_duplicates("frame").set_index("frame")
+        tr = self.tracking.loc[self.tracking["frame"].isin(ball.index), ["frame", "x", "y", "observed"]]
+        if tr.empty:
+            return None
+        bx = ball["x"].reindex(tr["frame"]).to_numpy(dtype=float)
+        by = ball["y"].reindex(tr["frame"]).to_numpy(dtype=float)
+        near = np.hypot(tr["x"].to_numpy(dtype=float) - bx, tr["y"].to_numpy(dtype=float) - by) <= radius_m
+        return float(tr["observed"].to_numpy()[near].mean()) if near.any() else None
+
 
 # ---------------------------------------------------------------------------
 # Loaders
@@ -168,7 +193,23 @@ def load_skillcorner_match(match_dir: str, match_id: int) -> NormalisedMatch:
     m = from_wide_frames(
         home, away, events, provider="skillcorner", match_id=str(match_id), fps=SC_FPS, pitch=pitch,
     )
+    m = with_observed(m, meta.get("estimated_positions"))
     return with_skillcorner_metadata(m, match_dir, match_id)
+
+
+def with_observed(m: NormalisedMatch, estimated: pd.DataFrame | None) -> NormalisedMatch:
+    """
+    Mark each tracking row ``observed`` (schema optional column): False where the provider
+    estimated the position (``estimated``: ``frame``, ``player_id``). Positions are unchanged.
+    """
+    import dataclasses
+
+    if estimated is None:
+        return m
+    key = pd.MultiIndex.from_frame(estimated[["frame", "player_id"]])
+    rows = pd.MultiIndex.from_arrays([m.tracking["frame"].to_numpy(), m.tracking["player_id"].to_numpy()])
+    tracking = m.tracking.assign(observed=~rows.isin(key))
+    return dataclasses.replace(m, tracking=validate_schema(coerce_schema(tracking), name=m.provider))
 
 
 def with_skillcorner_metadata(m: NormalisedMatch, match_dir: str, match_id: int) -> NormalisedMatch:
