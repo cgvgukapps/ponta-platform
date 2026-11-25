@@ -307,3 +307,11 @@ At the founder's request, the adjusted score again with the cost term scaled by 
 - Agree P4v's thresholds or keep them proposed (the engagement radius, closing speed, counter-press window, press gap, the press/pressure depth and carrier pressure 6 for opposed build-up). FIFA's five block values are published; adopting them as agreed is a vocabulary choice.
 - The counter-press type is moderate (recall about 52%): a better loss moment (P1's change of possession against SkillCorner's) is the next lever, measured before any rule moves.
 - The FIFA view is analysts-only and estimated, as every context field is until Gate 2b.
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.
+- **The German league's open data (IDSSE)** (7 matches): CC BY 4.0. Data from the DFL (Deutsche Fußball Liga), published by Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195.

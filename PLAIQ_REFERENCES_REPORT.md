@@ -620,3 +620,12 @@ Paired resamples of the 20 matches (300), one-model Gain minus version 1: shot +
 - **Bands, measured:** version 1's cut-offs and names. On the held-out half the shot rate on completed passes rises 0.2% [0.1, 0.8], 3.3% [2.4, 4.6], 7.0% [5.3, 9.2], 10.9% [9.7, 12.2] from Low gain to Full gain, in 97 to 98% of match resamples (three seeds). A grid fit on the even matches picks 0.55 / 0.75 / 1.15 (rises in 100%, top band 15.5% shots), but its top band would mean beating the best option by 15%; one scale and one set of names is kept for both versions. Shares (all passes, held out): 34 / 17 / 11 / 38%, failed passes in Low gain.
 - **Checked end to end:** the measurement tool now reads the shipped property (`gain`, `execution`) beside its own computation (`gain_tool`). On SkillCorner's 20 matches the two are identical on all 12,095 scored passes (largest difference 0), and every Gain measure in the earlier section is unchanged.
 - **To cite carefully:** most of its link to shots is where the ball arrived; Choice describes the decision.
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.
+- **The German league's open data (IDSSE)** (7 matches): CC BY 4.0. Data from the DFL (Deutsche Fußball Liga), published by Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195.
+- **Wyscout open events**: CC BY 4.0. Pappalardo et al. (2019), *A public data set of spatio-temporal match events in soccer competitions*, Scientific Data.

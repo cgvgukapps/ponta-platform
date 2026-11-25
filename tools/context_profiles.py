@@ -223,6 +223,18 @@ def analyse(args) -> None:
             out[f"stability_{src}"] = stability(part, cfg, rng)
             out[f"baseline_vs_set_mean_{src}"] = baseline_help(part)
     _agreement(pr, sc, out)
+    # Raw values beside rank agreement for every published and common measure (review AN-01): a level error (PPDA at 71)
+    # is invisible to a rank correlation.
+    out["value_ranges"] = {}
+    for src, part in pr.groupby(pr["match_id"].str.split("_").str[0]):
+        rows = {}
+        for meas in CATALOGUE:
+            if meas.basis not in ("published", "common"):
+                continue
+            v = part.loc[(part["measure"] == meas.name) & part["value"].notna(), "value"].astype(float)
+            rows[meas.name] = ({"n": int(len(v)), "p10": round(float(v.quantile(0.1)), 3), "median": round(float(v.median()), 3),
+                                "p90": round(float(v.quantile(0.9)), 3)} if len(v) else {"n": 0})
+        out["value_ranges"][src] = rows
     out["checks"] = {"rows": int(len(pr)), "missing_label_or_basis": int(pr[["label", "basis", "data_check"]].isna().any(axis=1).sum()),
                      "blocked_share": round(float((pr["data_check"] == "blocked").mean()), 3),
                      "blocked_share_by_source": {src: round(float((g["data_check"] == "blocked").mean()), 3)

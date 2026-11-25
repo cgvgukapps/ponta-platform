@@ -625,7 +625,20 @@ def load_skillcorner_events(
             "End Y":          ey,
         })
 
-    for _, row in df.iterrows():
+    # A restart counts only when SkillCorner records the stoppage at both ends: the possession before it ends with
+    # ``game_interruption_after`` naming the same kind of restart (review backlog A, 25 November 2026). Where the two
+    # disagree, an unrecorded restart and some open play lie between them, so the gap is not all dead ball.
+    after_col = _find_col(df, ["game_interruption_after"]) if interruption_col else None
+    if frame_start_col:
+        df = df.sort_values(frame_start_col, kind="stable")
+    prev_after: dict = {}
+    if after_col:
+        last = None
+        for i, row in df.iterrows():
+            prev_after[i] = last
+            last = (row.get(period_col), row.get(after_col))
+
+    for i_row, row in df.iterrows():
         start_frame = _int_or_none(row.get(frame_start_col))
         end_frame   = _int_or_none(row.get(frame_end_col))
         period_id   = _int_or_none(row.get(period_col))
@@ -657,6 +670,11 @@ def load_skillcorner_events(
         # context packages see the stoppage. SkillCorner logs the restart's receiver, not its taker, so the row sits one
         # frame before the reception (the restart is taken before it) and never shares a frame with the receiver's action.
         restart = _restart_of(row.get(interruption_col)) if interruption_col else None
+        if restart is not None and after_col:
+            before = prev_after.get(i_row)
+            stop = _restart_of(before[1]) if before is not None and before[0] == row.get(period_col) else None
+            if stop is None or stop[0] != restart[0]:
+                restart = None
         if restart is not None and team in ("Home", "Away"):
             sub, taker_is_this_team = restart
             taker = team if taker_is_this_team else ("Away" if team == "Home" else "Home")

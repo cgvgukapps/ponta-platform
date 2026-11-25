@@ -142,3 +142,10 @@ Still open (questions in the report, not proposals), with the engineer's recomme
 3. One control radius, or one per provider (broadcast tracking agrees better at 2.0 to 2.5 m).
 4. Whether a small hand-labelled possession sample is worth doing before Stage B, to measure accuracy rather than consistency.
 5. Whether to add movement-based inference for detection gaps now or when a feed with in-play gaps appears.
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.

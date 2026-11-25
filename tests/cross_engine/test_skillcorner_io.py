@@ -247,6 +247,22 @@ class TestLoadSkillcornerEvents:
         passes = df[df["Type"].isin(["PASS", "BALL LOST"])]
         assert not (set(sp["Start Frame"]) - {P1_START, P2_START}) & set(passes["Start Frame"])
 
+    def test_a_restart_needs_the_stoppage_recorded_at_both_ends(self, tmp_path):
+        """With game_interruption_after, a restart counts only when the possession before names the same restart."""
+        csv = make_dynamic_events_csv().splitlines()
+        width = len(csv[0].split(","))
+        header = csv[0] + ",game_interruption_before,game_interruption_after"
+        vals = (("", "corner_for"), ("corner_against", "throw_in_for"), ("goal_for", ""), ("", ""))
+        rows = [r + "," * (width - len(r.split(","))) + "," + b + "," + a for r, (b, a) in zip(csv[1:], vals, strict=True)]
+        p = tmp_path / "pairs.csv"
+        p.write_text("\n".join([header, *rows]))
+        df = load_skillcorner_events(str(p), home_team_id=HOME_ID, away_team_id=AWAY_ID, periods=_periods(), fps=SC_FPS,
+                                     pitch_length=104.0, pitch_width=68.0, h1_home_sign=-1)
+        sp = df[df["Type"] == "SET PIECE"]
+        # The corner is recorded at both ends; the kick-off is not: the possession before it ended in a throw-in (and in
+        # the other period), so the gap holds an unrecorded restart and open play, and it is not taken as a restart.
+        assert sp["Subtype"].tolist() == ["CORNER KICK"] and sp["Team"].tolist() == ["Away"]
+
     def test_passing_option_skipped(self, tmp_path):
         """passing_option events must not appear in PLAIQ events."""
         df = self._load(tmp_path)

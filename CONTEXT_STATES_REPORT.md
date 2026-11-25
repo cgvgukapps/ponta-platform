@@ -113,3 +113,11 @@ The founder's decision order (published definitions, then professional reference
 2. *(Done in 0.2.0, above.)* **The summary, after the review:** add how the episode started (P1's `start_type`: regain, set piece, restart, period start) and an end reason "cleared" when the last logged action is a clearance; fix the wording for contested and set-play spells; measure how often transitions and progressions end in a logged clearance on Metrica and the German league before changing anything upstream.
 4. **P4's set-play window** (upstream, agreed earlier): whether play after the kick stays a set play (SkillCorner's convention) or the phase ends once the ball is moving (the founder's reading); measure against SkillCorner's set-play phases first.
 3. **The thresholds** (`p8_min_state_s`, the three switches): agree, or keep proposed.
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.
+- **The German league's open data (IDSSE)** (7 matches): CC BY 4.0. Data from the DFL (Deutsche Fußball Liga), published by Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195.

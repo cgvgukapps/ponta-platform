@@ -1,6 +1,6 @@
 # Team Identity, Match Profiles and Baselines — Report (Stage E)
 
-Stage E of `ponta-blueprint/context-packages.md`, built to `ponta-blueprint/context-profiles-task.md` (23 November 2026). Decisions follow the founder's order (published definitions, then professional reference data on held-out matches, then outcomes; his view only to break a tie).
+Stage E of `ponta-blueprint/context-packages.md`, built to `ponta-blueprint/context-profiles-task.md` (23 November 2026). Decisions follow the founder's order (published definitions, then professional reference data, then outcomes; the founder's view only to break a tie). *(25 November 2026: "held-out" halves here are halves of one development set used across tuning rounds, not an independent confirmation; see section 10.)*
 
 ## 1. What was built
 
@@ -59,7 +59,7 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
 
 ## 6. Checks
 
-- Every profile row has a label, a basis and a Data check state; no value is shown for a Blocked row; no name, provider id, coordinate or cell in any column (tested).
+- Every profile row has a label, a basis and a Data check state; no name, coordinate or cell in any column (tested). *(Corrected 25 November 2026, review AI-05 and AI-04: as first written this also said "no value is shown for a Blocked row" and "no provider id in any column". The first was false (28 of 71 Blocked rows kept a value); it is true since profiles 0.2.0 and tested both ways. The second is still false: `match_id` and `competition` carry the provider's ids. Opaque match and competition keys are backlog B, before the AI layer.)*
 - The cache holds one set of versions; baselines refuse mixed versions (tested).
 - Golden outputs recaptured for thresholds 0.25.0; a second run matches.
 
@@ -134,3 +134,12 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
    - **Gate:** the revised values derive from PFF's data, so before they govern anything a customer, pilot or demo sees, PFF's written approval is needed or they are re-measured on licensed data (a design partner's season).
 2. **`pf_verdict_sd`** (1.0 within-team standard deviation for "above / below your usual"): an engineering choice; to be measured on a design partner's season.
 3. **More data:** a design partner's season is what makes baselines useful. PFF's set is now read (section 8); StatsBomb's open events are next once the founder has registered.
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.
+- **The German league's open data (IDSSE)** (7 matches): CC BY 4.0. Data from the DFL (Deutsche Fußball Liga), published by Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195.
+- **PFF FC's FIFA World Cup 2022 data**: no licence; internal development and measurement only. Nothing derived from it reaches a customer, pilot, demo, the website or a public claim before PFF's written approval (`DERIVED_DATA_INVENTORY.md`).

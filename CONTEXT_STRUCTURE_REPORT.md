@@ -888,3 +888,29 @@ The founder asked that decisions rest on published definitions and professional 
 - **The break-end rule has no measurable effect** on SkillCorner's labels (switched off, the lowest match half rises from 0.524 to 0.546). It rests on the founder's review, so its basis is now `judgement`. Switching it off is a decision for the founder; nothing was changed.
 
 **Decided by the founder on 23 November 2026:** the break-end rule is switched off (`p4_break_end_depth_share` 0; thresholds 0.24.0, P4 0.5.0). Breaks now end by the recovery rule (enough defenders goal-side), the end of the chain or `p4_break_max_s` (both engineering choices, not published values). Measured as shipped on SkillCorner's 20 matches: pooled phase κ 0.672 / 0.640 by half (was 0.670 / 0.638), against the phases-of-play file 0.652 (held out 0.639), lowest match half 0.546 (was 0.524); the Gate 2a bars still hold (18 of 20 matches at κ 0.55 on both halves, none below 0.50).
+
+## Re-measured after the review's backlog A (25 November 2026)
+
+The independent review of 25 November 2026 (`ponta-blueprint/work-review.md`) found three faults that reach Stage B: SkillCorner frames with no period were labelled period 1 on five matches (DE-01), the out-of-possession block was copied from the attacking phase (AN-02, P4 0.6.0), and SkillCorner's recorded stoppages were ignored (AN-03, P1 0.6.0). After the fixes, `tools/context_reference_set.py` on the same 20 matches, nothing tuned:
+
+| Gate 2a reading | 23 November 2026 | 25 November 2026 |
+|---|---|---|
+| Phases, pooled κ by half (event spans) | 0.672 / 0.640 | **0.664 / 0.626** |
+| Phases against the phases-of-play file, pooled | 0.652 | **0.661** |
+| Lowest match half (floor 0.50) | 0.546 | **0.523** (2017461) |
+| Matches at κ 0.55 on both halves | 18 of 20 | **16 of 20** |
+| Roles, pooled grouped / merged | 84.1% / 89.0% | **83.4% / 90.2%** |
+| Formations, changes at most 2 | 20 of 20 | 20 of 20 |
+
+**Gate 2a is still met across the set** (every bar holds). The four matches below κ 0.55 on a half are all among the five the period fault touched: with the break no longer counted as play, those matches are scored on their real playing time, and they score lower. The phase vocabulary itself did not change; P4's in-possession labels are unchanged by the block fix, which changes only the defending team's label.
+
+**What "held out" means here** (review ST-01, ST-02): the even/odd halves of these 20 matches served as fit and held-out halves for every tuning round, and the Gate 2a bars were met after a sweep on all 20. They are a **development set**, not an independent confirmation. Externally the figures are described as "measured on a development set of 20 matches" (founder decision, 25 November 2026) until a pre-registered confirmation on matches never used has been run (backlog B).
+
+## Data sources and licences
+
+*(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:
+
+- **SkillCorner open data** (20 matches): MIT licence; credit SkillCorner.
+- **Metrica Sports sample data** (games 1 to 3): published by Metrica for research; licence not stated (`ponta-blueprint/legal-compliance.md`). Never copied into a repository.
+- **The German league's open data (IDSSE)** (7 matches): CC BY 4.0. Data from the DFL (Deutsche Fußball Liga), published by Bassek, Rein, Weber and Memmert (2025), *An integrated dataset of spatiotemporal and event data in elite soccer*, Scientific Data 12, 195.
+- **Wyscout open events**: CC BY 4.0. Pappalardo et al. (2019), *A public data set of spatio-temporal match events in soccer competitions*, Scientific Data.
