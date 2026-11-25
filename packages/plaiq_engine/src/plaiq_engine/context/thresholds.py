@@ -27,6 +27,8 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.26.0 adds ``p8_restart_before_s`` and ``p8_restart_after_s`` (P8 0.3.0, review backlog A, 25 November 2026;
+proposed): an episode starts at a restart found from player positions when P1 has no logged restart for it.
 Version 0.25.0 adds Stage E's comparison thresholds (``pf_verdict_sd``, ``pf_reliability_target``; proposed; no package output changes).
 Version 0.24.0 switches ``p4_break_end_depth_share`` off (0.667 to 0), agreed by the founder on 23 November 2026: on
 SkillCorner's 20 matches alone the rule had no measurable effect and its weakest match half improved without it (P4 0.5.0).
@@ -67,7 +69,7 @@ Status = Literal["proposed", "measured", "agreed"]
 #: modelling judgement or the founder's calls, with no reference behind it yet.
 Basis = Literal["published", "reference", "engineering", "judgement"]
 
-THRESHOLDS_VERSION = "0.25.0"
+THRESHOLDS_VERSION = "0.26.0"
 
 
 @dataclass(frozen=True)
@@ -248,6 +250,12 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("p8_split_formation", 1.0, "switch", "proposed",
               "1: an episode also ends where either team's formation changes (P2); 0: phases only.",
               "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),
+    Threshold("p8_restart_before_s", 3.0, "s", "proposed",
+              "An episode whose chain P1 could not start at a restart starts at a restart P4 found from player positions (a corner or throw-in set-up) when that restart, by the same team, is at most this long before the episode's start.",
+              "Review backlog A (AN-03, 25 November 2026): the reviewer's join window, -3 to +5 s; to be measured"),
+    Threshold("p8_restart_after_s", 5.0, "s", "proposed",
+              "As p8_restart_before_s, for a restart at most this long after the episode's start (P4's set-up times end about when the restart is taken).",
+              "Review backlog A (AN-03, 25 November 2026): the reviewer's join window, -3 to +5 s; to be measured"),
     Threshold("p8_split_fifa_phase", 0.0, "switch", "proposed",
               "1: episodes split on P4v's FIFA phase (build-up opposed and unopposed), a finer cut; 0: on P4's phase.",
               "Stage D, P8 0.1.0: ponta-blueprint/context-states-task.md; measured against SkillCorner's phases of play in CONTEXT_STATES_REPORT.md"),

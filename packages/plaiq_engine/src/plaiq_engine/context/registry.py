@@ -21,6 +21,8 @@ from typing import Literal
 import pandas as pd
 from matrix_engine.match import NormalisedMatch
 from matrix_engine.parity import (
+    MAX_ESTIMATED_SHARE,
+    NEAR_BALL_M,
     AnalyticsParityReport,
     PackageEntry,
     with_package_entries,
@@ -65,6 +67,47 @@ class PackageOutput:
     entries: list[PackageEntry] = field(default_factory=list)
     segments: dict[str, pd.DataFrame] = field(default_factory=dict)
     measurements: dict = field(default_factory=dict)
+
+
+#: Data check 1.1 in the context packages (review GC-01, 25 November 2026): where the provider flags estimated
+#: positions (the schema's ``observed`` column), a Full entry built from player positions is Degraded when more than
+#: MAX_ESTIMATED_SHARE of the positions it reads were estimated, as in the Matrix Data check. Entries about play near
+#: the ball read the share within NEAR_BALL_M of it; the rest the whole pitch; entries not built from positions are kept.
+NEAR_BALL_ENTRIES = frozenset({("p1", "possession"), ("p1", "possession_state"), ("p5", "relationships"), ("p4v", "engagements")})
+NOT_POSITIONAL = frozenset({("p1", "game_state"), ("probe", "ball_detected")})
+
+
+class _EstimatedShares:
+    """The match's estimated-position shares (whole pitch, near the ball), computed once and only when asked."""
+
+    def __init__(self, match: NormalisedMatch):
+        self._m, self._wide, self._near, self._done = match, None, None, set()
+
+    def estimated(self, near: bool) -> float | None:
+        key = "near" if near else "wide"
+        if key not in self._done:
+            obs = self._m.observed_near_ball_share(NEAR_BALL_M) if near else self._m.observed_share()
+            setattr(self, f"_{key}", None if obs is None else 1.0 - obs)
+            self._done.add(key)
+        return self._near if near else self._wide
+
+
+def cap_for_estimated(entries: list[PackageEntry], shares: _EstimatedShares) -> list[PackageEntry]:
+    """Data check 1.1 for context entries: a Full positional entry is Degraded above MAX_ESTIMATED_SHARE estimated."""
+    import dataclasses
+
+    out = []
+    for e in entries:
+        key = (e.package, e.metric)
+        if e.state == "full" and key not in NOT_POSITIONAL:
+            near = key in NEAR_BALL_ENTRIES
+            est = shares.estimated(near)
+            if est is not None and est > MAX_ESTIMATED_SHARE:
+                where = f" within {NEAR_BALL_M:.0f} m of the ball" if near else ""
+                e = dataclasses.replace(e, state="degraded", reason=f"{e.reason} {est:.0%} of player positions{where} were estimated by "
+                                        f"the provider (off camera), above the Data check's {MAX_ESTIMATED_SHARE:.0%}.")
+        out.append(e)
+    return out
 
 
 class ContextPackage(ABC):
@@ -156,6 +199,7 @@ class Registry:
         grid = build_grid(match, cfg["context_grid_rate_hz"])
         outputs: dict[str, PackageOutput] = {}
         frames = grid.copy()
+        shares = _EstimatedShares(match)
         for name in self.order():
             pkg = self._pkgs[name]
             ctx = ContextInput(match=match, grid=grid, config=cfg,
@@ -166,6 +210,7 @@ class Registry:
                 raise ValueError(f"{name}: columns {list(out.frames.columns)} do not match declared fields {declared}")
             if len(out.frames) != len(grid):
                 raise ValueError(f"{name}: {len(out.frames)} rows for a grid of {len(grid)}")
+            out.entries = cap_for_estimated(out.entries, shares)  # before any package downstream reads them
             outputs[name] = out
             block = out.frames.reset_index(drop=True)
             block[f"{name}_version"] = pkg.version

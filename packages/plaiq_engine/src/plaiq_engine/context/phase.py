@@ -36,9 +36,12 @@ Within each P1 possession chain, in priority order:
    the founder's decision of 23 November 2026, after the rule showed no effect against SkillCorner).
 
 Runs shorter than ``p4_min_phase_s`` merge into the run before them in the same chain. The
-team out of possession gets the paired label (``low_block``, ``defending_transition`` …).
-``p4_block`` is the defending team's block on every possession grid point, whatever the
-phase. Phases are estimated (rules on positions), not yet validated.
+team out of possession gets the paired label (``defending_transition`` …), except in established
+play (build-up, create, finish), where its label is its own block: ``high_block``, ``medium_block``
+or ``low_block`` from ``p4_block`` (version 0.6.0, 25 November 2026, review finding AN-02: before,
+the label was copied from the attacking phase, so a build-up forced by the ball's depth read as a
+high block when the block was medium). ``p4_block`` is the defending team's block on every
+possession grid point, whatever the phase. Phases are estimated (rules on positions), not yet validated.
 
 Without a logged feed (version 0.3.0): no phase is labelled while a throw-in set-up found from
 positions is under way (the ball is dead), and a corner set-up is ``set_play`` for the taking
@@ -85,6 +88,7 @@ PAIRED = {"build_up": "high_block", "create": "medium_block", "finish": "low_blo
           "quick_break": "defending_quick_break", "transition": "defending_transition",
           "set_play": "defending_set_play", "chaotic": "chaotic"}
 BLOCK_PHASE = {"low": "finish", "medium": "create", "high": "build_up"}
+BLOCK_OUT = {"low": "low_block", "medium": "medium_block", "high": "high_block"}
 SET_PLAY_STARTS = ("corner_kick", "free_kick")
 
 
@@ -154,7 +158,7 @@ class _Fields:
         ContextField("p4_phase", "label", "estimated",
                      "Phase of play of the team in possession: build_up, create, finish, direct, quick_break, transition, set_play, chaotic. Ponta's rules after SkillCorner's published vocabulary. Estimated, not yet validated."),
         ContextField("p4_out_phase", "label", "estimated",
-                     "The paired phase of the team out of possession: high_block, medium_block, low_block, defending_direct, defending_quick_break, defending_transition, defending_set_play, chaotic."),
+                     "The phase of the team out of possession: in established play its own block (high_block, medium_block, low_block, from p4_block); otherwise the paired label (defending_direct, defending_quick_break, defending_transition, defending_set_play, chaotic)."),
         ContextField("p4_block", "label", "estimated",
                      "The defending team's block from its three deepest outfield players' mean depth: low, medium or high (boundaries are Ponta's measured thresholds)."),
         ContextField("p4_defending_depth_m", "m", "observed", "Mean distance of the defending team's three deepest outfield players from their own goal line."),
@@ -164,7 +168,7 @@ class _Fields:
 
 class PhasePackage(ContextPackage):
     name = "p4"
-    version = "0.5.0"
+    version = "0.6.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -345,7 +349,9 @@ class PhasePackage(ContextPackage):
             span = (ts >= a) & (ts < b)
             phase[span & (team == t)] = "set_play"
             phase[span & (team != t)] = None
-        out_phase = np.array([PAIRED.get(v) if v is not None else None for v in phase], dtype=object)
+        # In established play the defending team's label is its own block (AN-02); elsewhere the paired label.
+        out_phase = np.array([BLOCK_OUT.get(b, PAIRED[v]) if v in BLOCK_PHASE.values() else PAIRED.get(v) if v is not None else None
+                              for v, b in zip(phase, block, strict=True)], dtype=object)
 
         pid = np.full(n, -1, dtype=np.int64)
         rows, cur = [], -1

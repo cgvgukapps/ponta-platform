@@ -199,6 +199,15 @@ def test_established_play_against_a_medium_block(standard):
     assert len(phases) >= 1 and (phases["phase"] == "create").all()
 
 
+def test_build_up_forced_by_the_ball_keeps_the_defenders_own_block():
+    """The ball in the own quarter makes it build-up, but the defending label is the defenders' block (AN-02)."""
+    f = _run(eleven_a_side(ball_holder="Home_1", seconds=60)).frames
+    held = f["p4_team"] == "home"
+    assert set(f.loc[held, "p4_phase"]) == {"build_up"}
+    assert set(f.loc[held, "p4_block"]) == {"medium"}
+    assert set(f.loc[held, "p4_out_phase"]) == {"medium_block"}  # was high_block, copied from build-up
+
+
 def test_package_entries_and_versions(standard):
     metrics = {(e.package, e.metric): e.state for e in standard.entries}
     assert metrics[("p2", "team_shape")] == "full"

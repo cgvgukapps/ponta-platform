@@ -55,3 +55,16 @@ def test_skillcorner_estimated_positions_use_the_tracking_ids():
     ]
     est = estimated_positions(records, home, away)
     assert list(zip(est["frame"], est["player_id"], strict=True)) == [(10, "away_4"), (11, "home_9")]
+
+
+def test_resampling_keeps_the_nearest_samples_flag():
+    """The flag rides through resampling as the nearest native sample's, never interpolated (review DE-05)."""
+    from matrix_engine.sync import _resample_source
+
+    t = np.arange(6) / 10.0
+    df = pd.DataFrame({"timestamp": t, "frame": np.arange(6), "player_id": "home_9", "team": "home", "x": t, "y": 0.0,
+                       "source": "skillcorner", "sample_rate_hz": 10.0, "observed": [True, True, False, False, True, True]})
+    grid = np.arange(0, 0.51, 0.04)
+    out = _resample_source(df, grid, 25.0, 0.2)
+    nearest = np.rint(out["timestamp"].to_numpy() * 10).astype(int)
+    assert out["observed"].tolist() == df["observed"].to_numpy()[nearest].tolist()

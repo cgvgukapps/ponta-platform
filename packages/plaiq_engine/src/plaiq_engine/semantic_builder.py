@@ -66,7 +66,10 @@ from plaiq_engine.teams import TeamRegistry
 #: on ``semantic_states``. Earlier columns are unchanged.
 #: 1.9 (25 November 2026, review backlog A): values change, columns do not. A lost pass no longer carries version 1's
 #: failed-pass score: ``dq_score`` is null and ``dq_band`` ``not_scored``, with ``not_scored_reason`` saying why
-#: (Choice and Gain version 2 still score it).
+#: (Choice and Gain version 2 still score it). ``semantic_states``' ``first_event_id`` and ``last_event_id`` are the first
+#: and last semantic events inside the episode, so each resolves in ``semantic_events`` (before, P8's logged-event index).
+#: ``players_observed`` counts only positions the provider observed where it flags estimates (before, any position), and
+#: ``trajectories`` gains ``observed`` (null for the ball and where the provider does not say).
 SCHEMA_VERSION = "1.9"
 
 #: Why a lost pass has no version 1 score.
@@ -319,6 +322,14 @@ class SemanticBuilder:
         j = clean_jersey(jersey)
         return f"{team.lower()}_{j}" if j else None
 
+    def _observed_by_frame(self) -> pd.Series | None:
+        """Players observed (not estimated) per native frame, where the provider flags estimates; None otherwise."""
+        if not hasattr(self, "_obs_cache"):
+            tr = self.a.match.tracking
+            self._obs_cache = (tr.loc[tr["observed"].astype(bool) & tr["x"].notna()].groupby("frame").size()
+                               if "observed" in tr.columns else None)
+        return self._obs_cache
+
     def _set_piece_frames(self) -> set[int]:
         ev = self.a.events
         sp = ev.loc[ev["Type"].astype(str).str.upper() == "SET PIECE", "Start Frame"]
@@ -328,7 +339,10 @@ class SemanticBuilder:
         start = ev.get("Start Frame")
         frame = int(start) if pd.notna(start) else None
         ball = self.a.away.loc[frame, "ball_x"] if frame is not None and frame in self.a.away.index else np.nan
-        if frame is not None and frame in self.a.home.index:
+        observed = self._observed_by_frame()
+        if frame is not None and observed is not None:
+            obs = int(observed.get(frame, 0))  # the provider's own observations only (review AI-03, DE-05)
+        elif frame is not None and frame in self.a.home.index:
             obs = int(self.a.home.loc[frame].filter(like="_x").drop(["ball_x"], errors="ignore").notna().sum()
                       + self.a.away.loc[frame].filter(like="_x").drop(["ball_x"], errors="ignore").notna().sum())
         else:
@@ -566,6 +580,15 @@ class SemanticBuilder:
                 "vx": np.nan, "vy": np.nan, "speed": np.nan,
             }))
         out = pd.concat(parts, ignore_index=True)
+        # Whether the provider observed each player position or estimated it (null for the ball, and where the provider
+        # does not say), so the replay can show estimated players apart (schema 1.9, review DE-05).
+        tr = self.a.match.tracking
+        if "observed" in tr.columns:
+            flag = tr.assign(player_ref=tr["player_id"].astype(str))[["frame", "player_ref", "observed"]]
+            out = out.merge(flag, on=["frame", "player_ref"], how="left")
+            out["observed"] = out["observed"].astype("boolean")
+        else:
+            out["observed"] = pd.array([pd.NA] * len(out), dtype="boolean")
         out["source_attribution"] = self.a.match.provider
         out["match_id"] = self.match_id
         out["schema_version"] = SCHEMA_VERSION
@@ -585,11 +608,12 @@ class SemanticBuilder:
         st = ctx.outputs["p8"].segments["states"].copy()
         ev = self.semantic_events() if events is None else events
 
-        def eid(i):
-            return None if i is None or pd.isna(i) else f"evt_{self.match_id}_{int(i):05d}"
-
-        st["first_event_id"] = [eid(i) for i in st["first_event_idx"]]
-        st["last_event_id"] = [eid(i) for i in st["last_event_idx"]]
+        # The first and last semantic events in each episode, from the table the AI reads, so every id resolves
+        # (schema 1.9, review AI-10: P8's logged-event indexes also counted events that are not semantic rows).
+        inside = ev.loc[ev["state_id"].notna()].sort_values(["timestamp_s", "event_idx"], kind="stable") if len(ev) else ev
+        ends = inside.groupby("state_id")["event_id"].agg(["first", "last"]) if len(inside) else pd.DataFrame(columns=["first", "last"])
+        st["first_event_id"] = st["state_id"].map(ends["first"]).astype(object).where(lambda x: x.notna(), None)
+        st["last_event_id"] = st["state_id"].map(ends["last"]).astype(object).where(lambda x: x.notna(), None)
         passes = ev.loc[ev["action_type"] == "pass"]
         by_state = {k: g for k, g in passes.groupby("state_id")}
         for col, src in (("gain_median", "dq_score"), ("choice_median", "dq_v2_score"), ("adjusted_choice_median", "adjusted_choice")):

@@ -28,6 +28,13 @@ ends ``cleared``. The defending side of contested and set-play spells is no long
 **Version 0.2.1** (23 November 2026): P4's ``set_play`` is summarised as "play from a set piece". SkillCorner's published
 convention, which P4 follows, keeps the play after the kick in the set-play phase (its set-play phases last a median
 4.8 s, up to 20 s), so the words now say that rather than suggesting a still ball.
+
+**Version 0.3.0** (25 November 2026, review backlog A: AI-01, AN-03): an episode continues the one before when both
+belong to the same P1 chain in the same period, whether or not the grid points between them have a phase; only a
+chain's last episode takes the chain's end (lost, shot, goal, dead ball), and an episode followed by the same chain
+after a stretch with no phase ends ``phase_unknown``. Where P1 has no logged restart for an episode's chain, a restart
+P4 found from player positions by the same team within ``p8_restart_before_s`` / ``p8_restart_after_s`` starts it as
+a set piece.
 """
 
 from __future__ import annotations
@@ -56,7 +63,7 @@ from plaiq_engine.context.thresholds import THRESHOLDS_VERSION
 THIRDS = ("defensive", "middle", "attacking")
 LINE_ORDER = {"first": 1, "second_last": 2, "last": 3}
 #: How an episode ended (``end_reason``).
-END_REASONS = ("phase_changed", "formation_changed", "possession_lost", "cleared", "shot", "goal", "ball_out_of_play",
+END_REASONS = ("phase_changed", "formation_changed", "phase_unknown", "possession_lost", "cleared", "shot", "goal", "ball_out_of_play",
                "foul_or_set_piece", "dead_ball", "end_of_period")
 #: How an episode started (``start_reason``; 0.2.0). ``start_detail`` names the set piece.
 START_REASONS = ("continued", "won_the_ball", "goalkeeper", "set_piece", "restart", "kick_off", "unknown")
@@ -75,7 +82,8 @@ PHASE_TEXT = {"build_up_opposed": "build-up (opposed)", "build_up_unopposed": "b
 OUT_TEXT = {"high_block": "a high block", "mid_block": "a mid-block", "low_block": "a low block", "high_press": "a high press",
             "mid_press": "a mid press", "low_press": "a low press", "counter_press": "a counter-press",
             "defensive_transition": "a defence in transition"}
-END_TEXT = {"phase_changed": "the phase changed", "formation_changed": "a formation changed", "possession_lost": "possession lost",
+END_TEXT = {"phase_changed": "the phase changed", "formation_changed": "a formation changed",
+            "phase_unknown": "the phase could not be read for a while; the same team kept the ball", "possession_lost": "possession lost",
             "cleared": "the ball was cleared",
             "shot": "a shot", "goal": "a goal", "ball_out_of_play": "the ball went out of play",
             "foul_or_set_piece": "a foul or set piece", "dead_ball": "a stoppage", "end_of_period": "the end of the period"}
@@ -243,7 +251,7 @@ class _Fields:
 
 class StatesPackage(ContextPackage):
     name = "p8"
-    version = "0.2.1"
+    version = "0.3.0"
     depends_on = ("p1", "p2", "p3", "p4", "p4v", "p5", "p6", "p7")
     fields = _Fields().items
 
@@ -304,6 +312,10 @@ class StatesPackage(ContextPackage):
         dc_state = {(e.package, e.metric): e.state for k in up for e in up[k].entries}
         dc_cols = {f"data_check_{p}_{m}": dc_state.get((p, m)) for p, m in DC_METRICS if p != "p8"}
         set_piece = f1["p1_set_piece"].astype(object).to_numpy() if "p1_set_piece" in f1 else np.full(n, None, dtype=object)
+        rs = up["p4"].segments.get("restarts", pd.DataFrame(columns=["type", "team", "period", "ts", "source"]))
+        rs = rs.loc[rs["source"] == "tracking"] if len(rs) else rs
+        rs_ts, rs_team = rs["ts"].to_numpy(float), rs["team"].astype(object).to_numpy()
+        rs_per, rs_type = rs["period"].to_numpy(), rs["type"].astype(object).to_numpy()
 
         allf = pd.concat([f1, f2, f3, f4, f4v, f5, f7], axis=1)
         O = _Cache(lambda c: allf[c].astype(object).to_numpy())
@@ -340,8 +352,13 @@ class StatesPackage(ContextPackage):
             # How it ended.
             nxt = spans[idx + 1] if idx + 1 < len(spans) else None
             cid = chain[a]
-            if nxt is not None and np.isfinite(cid) and chain[nxt[0]] == cid and nxt[0] == b + 1:
-                end_reason = "phase_changed" if pid[nxt[0]] != pid[b] else "formation_changed"
+            # 0.3.0 (review AI-01): the chain continues when the next episode has the same chain id in the same period,
+            # contiguous or not; only the chain's last episode takes its end (lost, shot, goal, dead ball).
+            if nxt is not None and np.isfinite(cid) and chain[nxt[0]] == cid and per[nxt[0]] == per[b]:
+                if nxt[0] == b + 1:
+                    end_reason = "phase_changed" if pid[nxt[0]] != pid[b] else "formation_changed"
+                else:
+                    end_reason = "phase_unknown"
             else:
                 c_end = chains.at[int(cid), "end_type"] if np.isfinite(cid) and int(cid) in chains.index else None
                 if c_end == "lost":
@@ -364,7 +381,7 @@ class StatesPackage(ContextPackage):
                 end_reason = "cleared"
             prev = spans[idx - 1] if idx > 0 else None
             start_detail = None
-            if prev is not None and np.isfinite(cid) and chain[prev[0]] == cid and prev[1] == a - 1:
+            if prev is not None and np.isfinite(cid) and chain[prev[0]] == cid and per[prev[1]] == per[a]:
                 start_reason = "continued"
             else:
                 s_type = str(chains.at[int(cid), "start_type"]) if np.isfinite(cid) and int(cid) in chains.index else "unknown"
@@ -382,6 +399,12 @@ class StatesPackage(ContextPackage):
                     start_reason = "restart"
                 else:
                     start_reason = "unknown"
+                # 0.3.0 (review AN-03): without a logged restart, one P4 found from positions by this team.
+                if start_reason in ("won_the_ball", "restart", "unknown") and len(rs_ts):
+                    near = np.flatnonzero((rs_team == t) & (rs_per == per[a]) & (rs_ts >= t0 - cfg["p8_restart_before_s"])
+                                          & (rs_ts <= t0 + cfg["p8_restart_after_s"]))
+                    if len(near):
+                        start_reason, start_detail = "set_piece", str(rs_type[near[0]])
 
             row = {
                 "state_id": sid, "match_id": match_id, "period": int(per[a]), "start_s": round(t0, 2), "end_s": round(t1 + step, 2),

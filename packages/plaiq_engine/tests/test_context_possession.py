@@ -140,8 +140,12 @@ def test_dead_ball_and_set_piece_from_logged_events_only():
     f = Registry([PossessionPackage()]).run(tiny_match(evs, seconds=10.0, ball=lambda t: (0.5, 0.0))).frames
     dead = f.loc[f["p1_dead_ball"].fillna(False)]
     assert len(dead) and dead["native_frame"].between(60, 149).all() and dead["p1_set_piece"].eq("throw_in").all()
-    sc = Registry([PossessionPackage()]).run(tiny_match(evs, seconds=10.0, provider="skillcorner")).frames
-    assert sc["p1_dead_ball"].isna().all()  # derived feed: dead ball unknown, not false
+    # Since P1 0.6.0 (review AN-03) SkillCorner's stoppages, mapped to SET PIECE rows by its loader, count too.
+    sc = Registry([PossessionPackage()]).run(tiny_match(evs, seconds=10.0, provider="skillcorner", ball=lambda t: (0.5, 0.0))).frames
+    assert sc.loc[sc["p1_dead_ball"].fillna(False), "native_frame"].between(60, 149).all() and sc["p1_dead_ball"].any()
+    no_restarts = [e for e in evs if e["Type"] != "SET PIECE"]
+    sc = Registry([PossessionPackage()]).run(tiny_match(no_restarts, seconds=10.0, provider="skillcorner")).frames
+    assert sc["p1_dead_ball"].isna().all()  # no logged restarts: dead ball unknown, not false
 
 
 def test_chains_start_and_end_types():

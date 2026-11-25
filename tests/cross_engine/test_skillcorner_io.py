@@ -227,6 +227,26 @@ class TestLoadSkillcornerEvents:
             h1_home_sign=-1,
         )
 
+    def test_restarts_become_set_piece_rows_for_the_taking_team(self, tmp_path):
+        """game_interruption_before -> SET PIECE one frame before the reception, team = taker (review DE-11, AN-03)."""
+        csv = make_dynamic_events_csv().splitlines()
+        header = csv[0] + ",game_interruption_before"
+        width = len(csv[0].split(","))
+        rows = [r + "," * (width - len(r.split(","))) + "," + v
+                for r, v in zip(csv[1:], ("throw_in_for", "corner_against", "goal_for", ""), strict=True)]
+        p = tmp_path / "restarts.csv"
+        p.write_text("\n".join([header, *rows]))
+        df = load_skillcorner_events(str(p), home_team_id=HOME_ID, away_team_id=AWAY_ID, periods=_periods(), fps=SC_FPS,
+                                     pitch_length=104.0, pitch_width=68.0, h1_home_sign=-1)
+        sp = df[df["Type"] == "SET PIECE"].reset_index(drop=True)
+        assert sp["Subtype"].tolist() == ["THROW IN", "CORNER KICK", "KICK OFF"]
+        # ev_1 home throw_in_for -> home; ev_2 home corner_against -> away; ev_3 away goal_for -> home kicks off.
+        assert sp["Team"].tolist() == ["Home", "Away", "Home"]
+        assert sp["Start Frame"].tolist() == [P1_START, P1_START + 2, P2_START]  # one frame before; never before the period
+        # Never on the receiver's own pass, so that pass is not taken for the set piece (unless clamped to a period start).
+        passes = df[df["Type"].isin(["PASS", "BALL LOST"])]
+        assert not (set(sp["Start Frame"]) - {P1_START, P2_START}) & set(passes["Start Frame"])
+
     def test_passing_option_skipped(self, tmp_path):
         """passing_option events must not appear in PLAIQ events."""
         df = self._load(tmp_path)

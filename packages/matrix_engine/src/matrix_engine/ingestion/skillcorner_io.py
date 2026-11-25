@@ -587,6 +587,7 @@ def load_skillcorner_events(
     target_x_pass_col    = _find_col(df, ["player_targeted_x_pass"])
     target_y_pass_col    = _find_col(df, ["player_targeted_y_pass"])
     high_pass_col        = _find_col(df, ["high_pass"])
+    interruption_col     = _find_col(df, ["game_interruption_before"])
 
     def _to_jersey(pid_int):
         if pid_int is None:
@@ -650,6 +651,19 @@ def load_skillcorner_events(
 
         start_t = _period_time_seconds(start_frame, period_id, periods, fps)
         end_t   = _period_time_seconds(end_frame,   period_id, periods, fps)
+
+        # The restart before this possession (review DE-11, AN-03): a SET PIECE row for the team that took it, so the
+        # context packages see the stoppage. SkillCorner logs the restart's receiver, not its taker, so the row sits one
+        # frame before the reception (the restart is taken before it) and never shares a frame with the receiver's action.
+        restart = _restart_of(row.get(interruption_col)) if interruption_col else None
+        if restart is not None and team in ("Home", "Away"):
+            sub, taker_is_this_team = restart
+            taker = team if taker_is_this_team else ("Away" if team == "Home" else "Home")
+            rf = max(start_frame - 1, periods.get(period_id, (start_frame, start_frame))[0])
+            rx, ry = _apply_team_rotation(_float_or_nan(row.get(x_start_col)) * scale_x,
+                                          _float_or_nan(row.get(y_start_col)) * scale_y, team)
+            _append_event("SET PIECE", sub, period_id, np.nan, np.nan, taker, rf, _period_time_seconds(rf, period_id, periods, fps),
+                          rx, ry, rf, _period_time_seconds(rf, period_id, periods, fps), rx, ry)
 
         from_id   = _to_jersey(player_id)
         to_id_raw = _int_or_none(row.get(targeted_id_col))
@@ -743,6 +757,28 @@ def load_skillcorner_events(
             ["Start Frame", "Period"], kind="stable"
         ).reset_index(drop=True)
     return result
+
+
+#: SkillCorner's ``game_interruption_before`` values: the restart's subtype and whether this possession's team took it.
+#: ``goal_for`` (this team scored before it) means the other team kicks off.
+_INTERRUPTION_RESTART = {
+    "throw_in": "THROW IN", "free_kick": "FREE KICK", "corner": "CORNER KICK", "goal_kick": "GOAL KICK",
+}
+
+
+def _restart_of(value) -> tuple[str, bool] | None:
+    """(subtype, taken by this possession's team) for a ``game_interruption_before`` value; None when there is none."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    v = str(value).strip().lower()
+    if v in ("goal_for", "goal_against"):
+        return "KICK OFF", v == "goal_against"
+    for key, sub in _INTERRUPTION_RESTART.items():
+        if v == f"{key}_for":
+            return sub, True
+        if v == f"{key}_against":
+            return sub, False
+    return None
 
 
 def _map_sc_event(

@@ -18,8 +18,10 @@ Possession on every grid point (``ponta-blueprint/context-packages.md``, P1):
 * ``unknown`` — nothing supports a label.
 
 ``dead_ball`` comes from the event feed only: the time between the last action and a set
-piece restart. Without logged set pieces (SkillCorner's feed is derived from tracking) dead
-ball is unknown, never guessed.
+piece restart. Without logged set pieces dead ball is unknown, never guessed. Since version
+0.6.0 (25 November 2026, review AN-03) SkillCorner's dynamic events count: the loader maps the
+stoppages SkillCorner records (``game_interruption_before``) to SET PIECE rows, so a restart
+ends the chain before it as a dead ball instead of a loss and starts the next as a set piece.
 
 Game state on every grid point: score and red cards per team, from a logged event feed
 (goals are confirmed by the other team's kick-off), from an uploaded game-state file, or
@@ -152,6 +154,15 @@ def logged_events(match: NormalisedMatch) -> bool:
     return not match.events.empty and match.provider != "skillcorner"
 
 
+def restarts_logged(match: NormalisedMatch) -> bool:
+    """
+    True when the feed logs restarts (SET PIECE rows): every logged event feed, and since P1 0.6.0 SkillCorner's
+    dynamic events, whose stoppages the loader maps to SET PIECE rows (review AN-03, 25 November 2026).
+    """
+    ev = match.events
+    return not ev.empty and "Type" in ev.columns and bool((ev["Type"].astype(str) == "SET PIECE").any())
+
+
 def ball_on_grid(match: NormalisedMatch, grid: pd.DataFrame) -> pd.DataFrame:
     """Ball position and speed at each grid point's native frame; NaN where undetected."""
     b = match.ball.sort_values("frame", kind="stable").reset_index(drop=True)
@@ -208,7 +219,7 @@ def dead_ball_on_grid(match: NormalisedMatch, grid: pd.DataFrame, cfg: dict, *, 
     ev = match.events
     setp = np.full(len(grid), None, dtype=object)
     setp_team = np.full(len(grid), None, dtype=object)
-    if not logged_events(match) or "Type" not in ev.columns or not (ev["Type"].astype(str) == "SET PIECE").any():
+    if not restarts_logged(match):
         return (None, setp, setp_team) if teams else (None, setp)
     ev = ev.sort_values(["Start Frame"], kind="stable").reset_index(drop=True)
     dead = np.zeros(len(grid), dtype=bool)
@@ -614,7 +625,7 @@ class _Fields:
 
 class PossessionPackage(ContextPackage):
     name = "p1"
-    version = "0.5.0"
+    version = "0.6.0"
     fields = _Fields().items
 
     def compute(self, ctx: ContextInput) -> PackageOutput:

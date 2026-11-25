@@ -191,6 +191,17 @@ def test_context_columns_and_states_from_every_package(built):
         assert check_quoted_numbers(r["summary"], r) == [], r["summary"]
         assert resolve_state_citation(st, r["match_id"], r["state_id"], r["start_s"], r["end_s"]).ok
     assert set(sem["state_id"].dropna()) <= set(st["state_id"])
+    # Schema 1.9 (review AI-10): an episode's end ids are semantic events inside it, so each resolves.
+    from plaiq_engine.citations import resolve_event_citation
+
+    ts_of = sem.set_index("event_id")["timestamp_s"]
+    for col in ("first_event_id", "last_event_id"):
+        ids = st[col].dropna()
+        assert len(ids) >= 1
+        for i in ids:
+            assert resolve_event_citation(sem, "synthetic_1", i, float(ts_of[i])).ok
+    inside = sem.loc[sem["state_id"].notna()]
+    assert set(st["first_event_id"].dropna()) <= set(inside["event_id"])
 
 
 def test_team_keys_are_opaque_and_stable(built):
@@ -333,3 +344,29 @@ def test_gain_v2_is_zero_for_a_failed_pass():
     ev.loc[2, "Type"] = "BALL LOST"
     g = MatchAnalysis(replace(m, events=ev)).gain_v2.set_index("event_idx")
     assert g.at[2, "gain_v2"] == 0.0 and g.at[2, "realised_value"] == 0.0
+
+
+def test_estimated_positions_are_not_counted_as_observed():
+    """Where the provider flags estimates, players_observed counts observations only and trajectories carry the flag
+    (schema 1.9, review AI-03, DE-05); the context Data check degrades positional entries (GC-01)."""
+    from matrix_engine.match import with_observed
+    from plaiq_engine.context.possession import PossessionPackage
+    from plaiq_engine.context.registry import Registry
+    from plaiq_engine.context.structure import StructurePackage
+
+    m = synthetic_match()
+    away = sorted({p for p in m.tracking["player_id"] if p.startswith("away_")})
+    est = pd.DataFrame([(f, p) for f in m.frames["frame"] for p in away], columns=["frame", "player_id"])  # away all estimated
+    m2 = with_observed(m, est)
+    analysis = MatchAnalysis(m2)
+    parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
+                                   player_dropout=0.0, has_events=True, has_shot_events=False))
+    b = SemanticBuilder(analysis, parity)
+    sem = b.semantic_events()
+    assert sem["players_observed"].dropna().eq(11).all()  # the home eleven only
+    tr = b.trajectories()
+    assert tr.loc[tr["team"] == "away", "observed"].eq(False).all() and tr.loc[tr["team"] == "home", "observed"].eq(True).all()
+    assert tr.loc[tr["team"] == "ball", "observed"].isna().all()
+    res = Registry([PossessionPackage(), StructurePackage()]).run(m2)
+    shape = next(e for e in res.entries if e.package == "p2" and e.metric == "team_shape")
+    assert shape.state != "full" and "estimated by the provider" in shape.reason

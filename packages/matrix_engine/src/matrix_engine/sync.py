@@ -749,6 +749,13 @@ def _resample_source(
                 "gap_s": gap[keep],
             }
         )
+        if "observed" in block.columns:
+            # The provider's observed/estimated flag (schema optional column) is the nearest native sample's, never
+            # interpolated (review DE-05, 25 November 2026).
+            flags = block["observed"].to_numpy(dtype=bool)
+            right = np.clip(np.searchsorted(t, g), 1, len(t) - 1)
+            nearest = np.where(np.abs(g - t[right - 1]) <= np.abs(t[right] - g), right - 1, right)
+            resampled["observed"] = flags[nearest][keep]
         if carry_quality:
             quality = block["native_quality"].to_numpy(dtype=float)
             observed = np.isfinite(quality)

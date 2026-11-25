@@ -21,7 +21,9 @@ Stage C (``ponta-blueprint/context-relationships-task.md``, deliverable 4). Thre
   cell is worth ``U = p × value − w × λ × (1 − p) × cost``, where ``cost`` is the other team's threat at that cell (what
   losing the ball there gives away) and ``w`` is ``p7_cost_weight`` (0.5 proposed; at 1 the score leans hard to safe
   passes, at 0 it is Choice). An option is its best cell; the score is the chosen option's ``U`` over the best
-  option's, when that is positive. The weight is named in the segment row.
+  option's, when that is positive. The weight is named in the segment row. Since 0.3.0 (25 November 2026, review
+  SM-06) the score stays on its 0 to 1 scale: where the chosen option's ``U`` is negative (worth less than its risk)
+  it is 0 with that reason in the segment row; before, the ratio went negative (to about -50 on one match).
 
 Estimated, not yet validated (Gate 3b, the expert study, decides whether the adjusted score is ever shown first).
 """
@@ -57,6 +59,10 @@ def game_state_weight(goal_diff: float, minute: float, cfg: dict) -> float:
     return 1.0
 
 
+#: Why an adjusted Choice is 0 (P7 0.3.0).
+CHOSEN_BELOW_RISK = "the chosen option was worth less than its risk: adjusted Choice is 0"
+
+
 def adjusted_choice(opts: dict, cost_surface: np.ndarray, lam: float, cost_weight: float = 1.0) -> dict:
     """
     Context-adjusted Choice for one pass from Choice's options: each cell's ``U = p × value − w × λ × (1 − p) × cost``; an
@@ -71,7 +77,11 @@ def adjusted_choice(opts: dict, cost_surface: np.ndarray, lam: float, cost_weigh
     best, chosen = float(us.max()), float(us[opts["chosen"]])
     if best <= 0:
         return {"adjusted": np.nan, "u_chosen": chosen, "u_best": best, "reason": "no option is worth more than its risk"}
-    return {"adjusted": chosen / best, "u_chosen": chosen, "u_best": best, "reason": None}
+    if chosen < 0:
+        # P7 0.3.0 (review SM-06): a ratio of a negative to a positive utility is not on the 0 to 1 scale; the chosen
+        # option was worth less than its risk, so the score is 0 and the row says why.
+        return {"adjusted": 0.0, "u_chosen": chosen, "u_best": best, "reason": CHOSEN_BELOW_RISK}
+    return {"adjusted": min(chosen / best, 1.0), "u_chosen": chosen, "u_best": best, "reason": None}
 
 
 @dataclass
@@ -85,13 +95,13 @@ class _Fields:
         ContextField("p7_game_state_weight", "weight", "estimated",
                      "The game-state risk weight for the team with the ball (a versioned lookup by goal difference and time; a judgement, not yet measured). 1 when the score is unknown. Null when no team has the ball."),
         ContextField("p7_adjusted_choice", "0 to 1", "estimated",
-                     "At the grid point where a pass starts: context-adjusted Choice, beside Choice (the default). Null elsewhere, or when no option is worth more than its risk."),
+                     "At the grid point where a pass starts: context-adjusted Choice, 0 to 1, beside Choice (the default); 0 when the chosen option was worth less than its risk. Null elsewhere, or when no option is worth more than its risk."),
     ))
 
 
 class SpaceValuePackage(ContextPackage):
     name = "p7"
-    version = "0.2.0"
+    version = "0.3.0"
     depends_on = ("p1", "p2")
     fields = _Fields().items
 
@@ -184,6 +194,7 @@ class SpaceValuePackage(ContextPackage):
             "space_points": int(sampled.sum()),
             "high_value_open_median": {t: float(np.nanmedian(hv_ctl[t])) if sampled.any() else None for t in TEAMS},
             "passes_adjusted": int(segs["adjusted"].notna().sum()), "passes": int(len(segs)),
+            "passes_chosen_below_risk": int((segs["reason"] == CHOSEN_BELOW_RISK).sum()),
             "adjusted_minus_choice_median": float((segs["adjusted"].astype(float) - segs["choice"].astype(float)).median()) if len(segs) else None,
             "game_state": "known" if known else "unknown",
         }

@@ -42,6 +42,7 @@ def test_profile_has_every_catalogue_measure_for_both_teams(match_and_result):
     assert pr["basis"].isin(["published", "common", "ponta"]).all() and pr["label"].isin(["observed", "estimated"]).all()
     assert pr["data_check"].isin(["full", "degraded", "blocked"]).all()
     assert pr.loc[pr["value"].isna(), "data_check"].eq("blocked").all()  # no value is never shown as a usable value
+    assert pr.loc[pr["data_check"] == "blocked", "value"].isna().all()  # and a Blocked row never carries one (AI-05)
     shares = pr.loc[pr["measure"].str.contains("share") & pr["value"].notna(), "value"]
     assert shares.between(0, 1).all()
     assert not pr.loc[pr["measure"] == "ppda", "value"].notna().any()  # no event feed: PPDA is unknown, not zero
@@ -96,3 +97,54 @@ def test_profile_citations(monkeypatch):
     assert not resolve_profile_citation(pr, "t_a", "possession_share", ids[:2]).ok
     assert not resolve_profile_citation(pr, "t_a", "not_a_measure", ids).ok
     assert not resolve_profile_citation(pr, "t_b", "possession_share", ids).ok  # those matches are not t_b's
+
+
+def test_ppda_counts_only_the_defending_teams_actions():
+    """Duels logged for both players, or for their winner, count only for the team without the ball (AN-01)."""
+    typ = np.array(["CHALLENGE", "CHALLENGE", "CHALLENGE", "RECOVERY", "RECOVERY", "FAULT RECEIVED", "FAULT RECEIVED", "PASS"])
+    sub = np.array(["TACKLE-WON", "TACKLE-LOST", "AERIAL-WON", "INTERCEPTION", "", "", "", ""])
+    team = np.array(["home", "away", "home", "home", "home", "away", "home", "away"])
+    poss = np.array(["away", "away", "home", "away", "away", "away", "home", "away"], dtype=object)
+    got = P.defensive_actions(typ, sub, team, poss, "home")
+    # home's tackle while away had the ball; not away's own duel, not home's duel on its own ball; home's interception;
+    # not a plain recovery; home's foul (away fouled while in possession); not a foul home received.
+    assert got.tolist() == [True, False, False, True, False, True, False, False]
+
+
+def test_ppda_is_blocked_for_a_feed_without_defender_actions(match_and_result):
+    """A feed outside PPDA_FEEDS (SkillCorner's dynamic events log no defender-side actions) gives no PPDA, Blocked."""
+    from dataclasses import replace
+
+    from context_fixture import event
+
+    m, res = match_and_result
+    ev = pd.DataFrame([event("PASS", "Away", 10 + i) for i in range(30)] + [event("CHALLENGE", "Home", 50 + i) for i in range(12)])
+    pr = P.match_profiles(replace(m, events=ev, provider="skillcorner"), res, TeamRegistry().keys_for(m))
+    row = pr.loc[pr["measure"] == "ppda"]
+    assert row["value"].isna().all() and row["data_check"].eq("blocked").all()
+    assert "skillcorner" not in P.PPDA_FEEDS
+
+
+def test_chain_measures_are_degraded_without_restarts(match_and_result):
+    """No feed, so no restarts: chain starts and ends are not known to be losses and regains (review AN-03)."""
+    m, res = match_and_result
+    assert res.outputs["p1"].measurements["dead_ball_known"] is False
+    pr = P.match_profiles(m, res, TeamRegistry().keys_for(m)).set_index(["team", "measure"])
+    for name in P.DEAD_BALL_MEASURES:
+        assert pr.loc[("home", name), "data_check"] in ("degraded", "blocked"), name
+
+
+def test_a_blocked_match_gets_no_verdict_and_degraded_is_disclosed(monkeypatch):
+    """compare() refuses a Blocked match row; compare, baseline and citations carry the worst Data check state (AI-05)."""
+    pr = _synthetic_profiles()
+    cfg = values()
+    monkeypatch.setitem(P.MIN_MATCHES, "possession_share", 3)
+    high = pr.copy()
+    high.loc[high["match_id"] == "mt_a0", ["value", "data_check"]] = [0.95, "blocked"]
+    out = P.compare(high, "mt_a0", "t_a", "possession_share", cfg)
+    assert out["verdict"] is None and out["data_check"] == "blocked"
+    deg = pr.assign(data_check=np.where(pr["match_id"] == "mt_a1", "degraded", "full"))
+    assert P.baseline(deg, "t_a", "possession_share")["data_check"] == "degraded"
+    assert P.compare(deg, "mt_a0", "t_a", "possession_share", cfg)["data_check"] == "degraded"
+    r = resolve_profile_citation(deg, "t_a", "possession_share", [f"mt_a{i}" for i in range(4)])
+    assert r.ok and r.data_check == "degraded"
