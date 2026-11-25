@@ -894,7 +894,11 @@ class SkillCornerAdapter:
         home_df, away_df, events_df, meta
         """
         meta    = self.load_meta()
-        records = self.load_tracking_raw()
+        # Records with no period are pre-match, half-time and post-match frames. Kept,
+        # they were labelled period 1 with clock 0, which stretched period 1 over the
+        # break and shifted every event time (review finding DE-01, 25 November 2026).
+        # The Matrix provider path already drops them (providers/skillcorner.py).
+        records = [r for r in self.load_tracking_raw() if r.get("period") is not None]
 
         h1_sign = meta["h1_home_sign"] if self.normalize else 1
 

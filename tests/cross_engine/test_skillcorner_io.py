@@ -353,6 +353,26 @@ class TestSkillCornerAdapter:
         _, _, events, _ = SkillCornerAdapter(match_dir, MATCH_ID).load()
         assert not events.empty
 
+    def test_frames_without_a_period_are_dropped(self, tmp_path):
+        """Pre-match, half-time and post-match records (period null) must not become period 1 (DE-01)."""
+        base = make_tracking_records()
+
+        def gap(frames):
+            return [{"frame": f, "timestamp": None, "period": None, "ball_data": None, "player_data": []} for f in frames]
+
+        records = gap(range(0, P1_START)) + [r for r in base if r["period"] == 1] \
+            + gap(range(P1_END + 1, P2_START)) + [r for r in base if r["period"] == 2] + gap(range(P2_END + 1, P2_END + 6))
+        match_dir = write_fixture_dir(str(tmp_path), tracking_records=records)
+        home, _, events, meta = SkillCornerAdapter(match_dir, MATCH_ID).load()
+        expected = {p: (min(r["frame"] for r in base if r["period"] == p), max(r["frame"] for r in base if r["period"] == p))
+                    for p in (1, 2)}
+        assert meta["periods"] == expected
+        assert len(home) == len(base)
+        assert set(home["Period"]) == {1, 2}
+        # Event clocks stay within their own period: none starts after the period-1 frames end.
+        p1 = events[events["Period"] == 1]
+        assert (p1["Start Time [s]"] <= (P1_END - P1_START) / SC_FPS + 1e-6).all()
+
     def test_no_normalisation_flag(self, tmp_path):
         match_dir = write_fixture_dir(str(tmp_path))
         adapter = SkillCornerAdapter(match_dir, MATCH_ID, normalize_playing_direction=False)
