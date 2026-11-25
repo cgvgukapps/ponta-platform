@@ -63,7 +63,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.8").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context; 1.8 teams
+    assert sem["schema_version"].eq("1.9").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context; 1.8 teams; 1.9 review fixes
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].eq("synthetic_1").all()
     assert sem["event_id"].is_unique
@@ -289,6 +289,23 @@ def test_decision_quality_v2_ignores_the_outcome():
     sem = SemanticBuilder(lost, parity).semantic_events()
     row = sem.loc[(sem["event_idx"] == 2) & (sem["action_type"] == "pass")]
     assert len(row) == 1 and row["action_outcome"].iloc[0] == "lost" and row["dq_v2_status"].iloc[0] == "estimated"
+
+
+def test_a_lost_pass_never_carries_a_version_1_score():
+    """Version 1's failed-pass score stays unreported (review SM-02): null score, band not_scored, a reason."""
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    ev.loc[2, "Type"] = "BALL LOST"
+    analysis = MatchAnalysis(replace(m, events=ev))
+    parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
+                                   player_dropout=0.0, has_events=True, has_shot_events=False))
+    sem = SemanticBuilder(analysis, parity).semantic_events()
+    lost = sem.loc[sem["action_outcome"] == "lost"]
+    assert len(lost) >= 1
+    assert lost["dq_score"].isna().all() and lost["dq_band"].eq("not_scored").all() and lost["not_scored"].all()
+    assert lost["not_scored_reason"].str.startswith("lost pass").all()
 
 
 def test_gain_v2_beside_version_1(built):

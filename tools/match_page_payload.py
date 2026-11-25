@@ -106,6 +106,7 @@ def build_payload(match: NormalisedMatch, *, notes: list[str] | None = None, sam
     causes = {
         "goalkeeper": int(decisions["not_scored_reason"].fillna("").str.startswith("goalkeeper").sum()),
         "set_piece": int(decisions["not_scored_reason"].fillna("").str.startswith("set piece").sum()),
+        "lost_pass": int(decisions["not_scored_reason"].fillna("").str.startswith("lost pass").sum()),
         "no_score_from_engine": int((~scored & ~decisions["not_scored"].astype(bool)).sum()),
     }
     coverage = {

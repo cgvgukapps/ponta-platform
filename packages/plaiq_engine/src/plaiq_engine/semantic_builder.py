@@ -64,7 +64,13 @@ from plaiq_engine.teams import TeamRegistry
 #: 1.8 (23 November 2026, Stage E): ``actor_team_key`` and ``opponent_team_key`` (pseudonymous team keys, stable across
 #: matches; ``plaiq_engine.teams``), ``competition`` and ``season`` (the provider's ids, never names), on every row and
 #: on ``semantic_states``. Earlier columns are unchanged.
-SCHEMA_VERSION = "1.8"
+#: 1.9 (25 November 2026, review backlog A): values change, columns do not. A lost pass no longer carries version 1's
+#: failed-pass score: ``dq_score`` is null and ``dq_band`` ``not_scored``, with ``not_scored_reason`` saying why
+#: (Choice and Gain version 2 still score it).
+SCHEMA_VERSION = "1.9"
+
+#: Why a lost pass has no version 1 score.
+LOST_PASS_REASON = "lost pass: Gain version 1 does not charge a pass for failing; see Choice and Gain version 2"
 
 #: The label every pass completion probability carries (measured against provider references, not analysts).
 PASS_COMPLETION_LABEL = "estimated"
@@ -387,10 +393,11 @@ class SemanticBuilder:
                 row = self._row_base(idx, e, team, actor, kind)
                 outcome = "lost" if etype == "BALL LOST" else "completed"
                 dq = None
-                if actor_pov is not None:
+                if actor_pov is not None and etype != "BALL LOST":
+                    # Version 1's failed-pass score (``decision_quality_failed``) is never written:
+                    # version 1 does not charge a pass for failing, so it read as Full gain on most
+                    # lost passes. It stays unreported (PLAIQ_REFERENCES_REPORT.md; review SM-02).
                     dq = actor_pov.get("decision_quality")
-                    if (dq is None or pd.isna(dq)) and etype == "BALL LOST":
-                        dq = actor_pov.get("decision_quality_failed")
                 dq = float(dq) if dq is not None and pd.notna(dq) else None
                 best_ref, best_pov, chosen_pov = None, None, None
                 if g is not None and kind == "pass":
@@ -410,6 +417,8 @@ class SemanticBuilder:
                     not_scored, reason = True, "goalkeeper: the decision model was not designed for goalkeeper distribution"
                 elif pd.notna(start) and int(start) in set_piece_frames:
                     not_scored, reason = True, "set piece: the decision model is built for open play"
+                elif outcome == "lost":
+                    not_scored, reason = True, LOST_PASS_REASON
                 if not_scored:
                     dq = None
 
