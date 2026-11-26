@@ -132,8 +132,40 @@ Leaving one match out, the shrunk team baseline's error against the set mean's, 
    - **Revised by the founder, 24 November 2026: the larger of the two sets, 5, 5, 6, 7** (high block, field tilt, line height with the ball in the middle third, low block), in `MIN_MATCHES`. PFF's set needs more matches for each, and its estimate rests on 32 teams against 12 (section 8).
    - No new measures until a club's own season shows them stable.
    - **Gate:** the revised values derive from PFF's data, so before they govern anything a customer, pilot or demo sees, PFF's written approval is needed or they are re-measured on licensed data (a design partner's season).
-2. **`pf_verdict_sd`** (1.0 within-team standard deviation for "above / below your usual"): an engineering choice; to be measured on a design partner's season.
+2. ~~**`pf_verdict_sd`**~~ *(superseded 25 November 2026)*: replaced by `pf_verdict_false_alarm`, a prediction interval at 10% two-sided, agreed by the founder (section 10).
 3. **More data:** a design partner's season is what makes baselines useful. PFF's set is now read (section 8); StatsBomb's open events are next once the founder has registered.
+
+## 10. Re-measured after the review's backlog A (25 and 26 November 2026)
+
+The independent review of 25 November 2026 (`ponta-blueprint/work-review.md`) found faults that reach Stage E. They are fixed (`ponta-platform` commits `5505657` to `860e937`) and every Stage E figure was rebuilt from the raw files with the fixed code: SkillCorner's 20 matches, the German league's 7 and PFF's 64 (`~/ponta-reference-data/cache/rerun-2026-11-25`, outside the repositories). One set of versions across all profiles.
+
+**What changed in the profiles**
+
+| | Before | After |
+|---|---|---|
+| SkillCorner chains ending lost / dead ball (median) | 0.97 / 0.00 | **0.66 / 0.31** (German league 0.60 / 0.35, PFF 0.59 / 0.37): SkillCorner's recorded stoppages now end chains, when both ends are recorded |
+| SkillCorner per-90 rates | per 90 minutes of the whole match | per 90 minutes of play, as on the other sources (receptions behind midfield 45 to 75 a match) |
+| `out_share_high_block` | P4v's label copied from the attacking phase | the team's own block in established play, pressing included (median 0.17 on all three sources) |
+| PPDA | the wrong events: SkillCorner 71, German league 3.3, PFF 2.8 | challenges and fouls only while the other team had the ball, interceptions, at least 10 actions; **Blocked on SkillCorner and PFF**; Metrica 5.1 to 8.0 (games 1 to 3) and the German league 5.2 to 18.8 (three of its matches) a team-match, within the usual published range; measured with P1 alone, the cached German league profiles predate this rule |
+| Positional measures on broadcast tracking | Full on PFF with 62% of positions estimated | **Degraded** on SkillCorner and PFF (Data check 1.1 in the context packages) |
+| Blocked rows | 28 of 71 kept a value | none do (tested both ways) |
+
+**Stability, re-derived** (ICC(1); 90% intervals from 5,000 seeded team resamples and from the F distribution, Shrout and Fleiss 1979; a measure is eligible only where **both** lower ends are above 0.1; matches for reliability 0.7 by Spearman-Brown, with the range across the interval):
+
+| Measure | SkillCorner, 12 teams (licensed) | PFF, 32 teams (internal only) |
+|---|---|---|
+| Time in a high block (Ponta, redefined) | 0.45 (0.17 to 0.73): **3** (1 to 11) | 0.40 (0.21 to 0.57): 4 (2 to 7) |
+| Line height, ball in the middle third (FIFA EFI) | 0.41 (0.13 to 0.70): **4** (2 to 16) | 0.30, lower end 0.06: not eligible |
+| Line height, ball in the attacking third (FIFA EFI) | 0.39 (0.11 to 0.68): **4** (2 to 20) | 0.33 (0.12 to 0.50): 5 (3 to 11) |
+| Final-third entries per 90 (FIFA EFI) | 0.39 (0.11 to 0.68): **4** (2 to 19) | not eligible |
+| Time in a low block (Ponta) | 0.38 (0.11 to 0.68): **4** (2 to 20) | 0.26 (0.11 to 0.43): 7 (4 to 18) |
+| Field tilt (common) | 0.42, bootstrap lower end 0.099: not eligible | 0.36 (0.20 to 0.53): 5 (3 to 9) |
+
+- **The minimums in the thresholds config (0.29.0) are these values, status measured,** awaiting the founder's agreement: the SkillCorner column is the default (licensed); the PFF column is used only with `pf_allow_unlicensed_derived` on, each comparison then taking the larger value. Field tilt now has no licensed minimum, so it gives no verdict by default.
+- **The intervals are wide.** Every minimum is a point on a range that runs to 11 to 20 matches at the interval's lower end. Three measures clear the bar on both sets (high block, low block, line height in the attacking third); the others clear it on one. On 12 teams the selection of a few from 46 measures still carries a winner's-curse risk (review ST-04). These are proposals to be re-measured on a design partner's season, not norms.
+- **The verdict rule** is now a prediction interval at a 10% two-sided false-alarm rate (founder decision, 25 November 2026). Leaving each match out in turn on SkillCorner's profiles, 5 of the 47 matches that get a verdict read above or below the team's usual (11%); under the old 1 standard deviation rule about a third did, under pure noise.
+- **Does a baseline help?** On SkillCorner, leaving one match out, the shrunk baseline (now method of moments) beats the set mean by 17% for line height in the attacking third, 14% for receptions behind midfield, 14% for build-up share and 13% for field tilt.
+- **Still not done** (backlog B): opaque match and competition keys (provider ids remain in `match_id` and `competition`); PFF's PPDA mapping; a check of whether ball recovery time should exclude dead-ball time (SkillCorner 16.5 s, the German league 18.0 s, PFF 19.5 s); per-90 rates read about 1.6 times per-match public figures because they are per 90 minutes of play.
 
 ## Data sources and licences
 

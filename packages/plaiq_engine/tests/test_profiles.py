@@ -101,14 +101,15 @@ def test_profile_citations(monkeypatch):
 
 def test_ppda_counts_only_the_defending_teams_actions():
     """Duels logged for both players, or for their winner, count only for the team without the ball (AN-01)."""
-    typ = np.array(["CHALLENGE", "CHALLENGE", "CHALLENGE", "RECOVERY", "RECOVERY", "FAULT RECEIVED", "FAULT RECEIVED", "PASS"])
-    sub = np.array(["TACKLE-WON", "TACKLE-LOST", "AERIAL-WON", "INTERCEPTION", "", "", "", ""])
-    team = np.array(["home", "away", "home", "home", "home", "away", "home", "away"])
-    poss = np.array(["away", "away", "home", "away", "away", "away", "home", "away"], dtype=object)
+    typ = np.array(["CHALLENGE", "CHALLENGE", "CHALLENGE", "RECOVERY", "RECOVERY", "FAULT RECEIVED", "FAULT RECEIVED", "PASS", "CHALLENGE"])
+    sub = np.array(["TACKLE-WON", "TACKLE-LOST", "AERIAL-WON", "INTERCEPTION", "", "", "", "", "GROUND-WON"])
+    team = np.array(["home", "away", "home", "home", "home", "away", "home", "away", "home"])
+    poss = np.array(["away", "away", "home", "away", "away", "away", "home", "away", "contested"], dtype=object)
     got = P.defensive_actions(typ, sub, team, poss, "home")
     # home's tackle while away had the ball; not away's own duel, not home's duel on its own ball; home's interception;
-    # not a plain recovery; home's foul (away fouled while in possession); not a foul home received.
-    assert got.tolist() == [True, False, False, True, False, True, False, False]
+    # not a plain recovery; home's foul (away fouled while in possession); not a foul home received; not a duel while
+    # the ball was contested (both sides' duels would count).
+    assert got.tolist() == [True, False, False, True, False, True, False, False, False]
 
 
 def test_ppda_is_blocked_for_a_feed_without_defender_actions(match_and_result):
@@ -160,9 +161,9 @@ def test_unlicensed_derived_minimums_are_off_by_default():
     assert tagged and all(k.endswith("_pff") for k in tagged)
     for m in P.MIN_MATCHES_UNLICENSED:
         n, src = P.min_matches(m, cfg)
-        assert n == P.MIN_MATCHES[m] and src.startswith("skillcorner")
+        assert n == P.MIN_MATCHES.get(m) and (src is None or src.startswith("skillcorner"))  # no licensed value: no verdict
         n, src = P.min_matches(m, values({"pf_allow_unlicensed_derived": 1.0}))
-        assert n == max(P.MIN_MATCHES[m], P.MIN_MATCHES_UNLICENSED[m])
+        assert n == max(P.MIN_MATCHES.get(m, 0), P.MIN_MATCHES_UNLICENSED[m])
     pr = _synthetic_profiles()
     out = P.compare(pr, "mt_a0", "t_a", "field_tilt", cfg)
     assert "minimum_source" in out or out.get("reason")

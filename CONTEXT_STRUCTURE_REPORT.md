@@ -891,15 +891,15 @@ The founder asked that decisions rest on published definitions and professional 
 
 ## Re-measured after the review's backlog A (25 November 2026)
 
-The independent review of 25 November 2026 (`ponta-blueprint/work-review.md`) found three faults that reach Stage B: SkillCorner frames with no period were labelled period 1 on five matches (DE-01), the out-of-possession block was copied from the attacking phase (AN-02, P4 0.6.0), and SkillCorner's recorded stoppages were ignored (AN-03, P1 0.6.0). After the fixes, `tools/context_reference_set.py` on the same 20 matches, nothing tuned:
+The independent review of 25 November 2026 (`ponta-blueprint/work-review.md`) found three faults that reach Stage B: SkillCorner frames with no period were labelled period 1 on five matches (DE-01), the out-of-possession block was copied from the attacking phase (AN-02, P4 0.6.0), and SkillCorner's recorded stoppages were ignored (AN-03, P1 0.6.0; a stoppage counts when SkillCorner records it at both ends, Matrix 0.2.1). After the fixes, `tools/context_reference_set.py` on the same 20 matches, nothing tuned:
 
 | Gate 2a reading | 23 November 2026 | 25 November 2026 |
 |---|---|---|
 | Phases, pooled κ by half (event spans) | 0.672 / 0.640 | **0.664 / 0.626** |
-| Phases against the phases-of-play file, pooled | 0.652 | **0.661** |
+| Phases against the phases-of-play file, pooled | 0.652 | **0.660** |
 | Lowest match half (floor 0.50) | 0.546 | **0.523** (2017461) |
 | Matches at κ 0.55 on both halves | 18 of 20 | **16 of 20** |
-| Roles, pooled grouped / merged | 84.1% / 89.0% | **83.4% / 90.2%** |
+| Roles, pooled grouped / merged | 84.1% / 89.0% | **82.9% / 89.7%** (19 and 19 of 20 matches) |
 | Formations, changes at most 2 | 20 of 20 | 20 of 20 |
 
 **Gate 2a is still met across the set** (every bar holds). The four matches below κ 0.55 on a half are all among the five the period fault touched: with the break no longer counted as play, those matches are scored on their real playing time, and they score lower. The phase vocabulary itself did not change; P4's in-possession labels are unchanged by the block fix, which changes only the defending team's label.

@@ -114,6 +114,21 @@ The founder's decision order (published definitions, then professional reference
 4. **P4's set-play window** (upstream, agreed earlier): whether play after the kick stays a set play (SkillCorner's convention) or the phase ends once the ball is moving (the founder's reading); measure against SkillCorner's set-play phases first.
 3. **The thresholds** (`p8_min_state_s`, the three switches): agree, or keep proposed.
 
+## Re-measured after the review's backlog A (25 and 26 November 2026)
+
+The review of 25 November 2026 (`ponta-blueprint/work-review.md`, AI-01, AN-03, AI-10) found episode reasons wrong whenever a chain had a gap in the grid: on SkillCorner 1886347, 265 of 677 episodes ended "possession lost" or "shot" while the same team kept the ball, and restarts read as "won the ball". **P8 0.3.0** continues a chain by its id, gives the chain's end only to its last episode, ends an episode split by a brief contest `contested_kept` (a median 0.4 s gap) or else `phase_unknown`, and starts episodes at restarts: SkillCorner's recorded stoppages (P1 0.6.0) and, without a logged restart, those P4 finds from positions. Episode end ids come from the semantic events, so each resolves.
+
+| | Before | After |
+|---|---|---|
+| Episodes a match, SkillCorner | about 680 | **about 545** |
+| Against SkillCorner's phases of play, fit / test half: phase κ | 0.64 (test) | **0.658 / 0.652** |
+| Boundaries found within 2 s, fit / test | 79% | **78.1% / 78.5%** (precision 64%) |
+| Episodes followed by the same chain yet given a terminal end (1886347) | 265 | **0** |
+| Restart starts on 1886347 (set piece) | 0 | **72 of 526** |
+| Summaries failing the number check | 0 (loose check) | **0 (field-bound check)** |
+
+The fit and test halves are halves of one development set used across tuning rounds, not an independent confirmation (review ST-01).
+
 ## Data sources and licences
 
 *(Added 25 November 2026, review GC-14.)* Reference data this report measures against, all kept outside every repository:

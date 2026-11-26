@@ -32,7 +32,8 @@ convention, which P4 follows, keeps the play after the kick in the set-play phas
 **Version 0.3.0** (25 November 2026, review backlog A: AI-01, AN-03): an episode continues the one before when both
 belong to the same P1 chain in the same period, whether or not the grid points between them have a phase; only a
 chain's last episode takes the chain's end (lost, shot, goal, dead ball), and an episode followed by the same chain
-after a stretch with no phase ends ``phase_unknown``. Where P1 has no logged restart for an episode's chain, a restart
+after a stretch with no phase ends ``contested_kept`` when that stretch is mostly a contest for the ball (P1 contested; a
+median 0.4 s on the reference matches), else ``phase_unknown``. Where P1 has no logged restart for an episode's chain, a restart
 P4 found from player positions by the same team within ``p8_restart_before_s`` / ``p8_restart_after_s`` starts it as
 a set piece.
 """
@@ -63,7 +64,7 @@ from plaiq_engine.context.thresholds import THRESHOLDS_VERSION
 THIRDS = ("defensive", "middle", "attacking")
 LINE_ORDER = {"first": 1, "second_last": 2, "last": 3}
 #: How an episode ended (``end_reason``).
-END_REASONS = ("phase_changed", "formation_changed", "phase_unknown", "possession_lost", "cleared", "shot", "goal", "ball_out_of_play",
+END_REASONS = ("phase_changed", "formation_changed", "contested_kept", "phase_unknown", "possession_lost", "cleared", "shot", "goal", "ball_out_of_play",
                "foul_or_set_piece", "dead_ball", "end_of_period")
 #: How an episode started (``start_reason``; 0.2.0). ``start_detail`` names the set piece.
 START_REASONS = ("continued", "won_the_ball", "goalkeeper", "set_piece", "restart", "kick_off", "unknown")
@@ -83,6 +84,7 @@ OUT_TEXT = {"high_block": "a high block", "mid_block": "a mid-block", "low_block
             "mid_press": "a mid press", "low_press": "a low press", "counter_press": "a counter-press",
             "defensive_transition": "a defence in transition"}
 END_TEXT = {"phase_changed": "the phase changed", "formation_changed": "a formation changed",
+            "contested_kept": "a brief contest for the ball, which the same team kept",
             "phase_unknown": "the phase could not be read for a while; the same team kept the ball", "possession_lost": "possession lost",
             "cleared": "the ball was cleared",
             "shot": "a shot", "goal": "a goal", "ball_out_of_play": "the ball went out of play",
@@ -312,6 +314,7 @@ class StatesPackage(ContextPackage):
         dc_state = {(e.package, e.metric): e.state for k in up for e in up[k].entries}
         dc_cols = {f"data_check_{p}_{m}": dc_state.get((p, m)) for p, m in DC_METRICS if p != "p8"}
         set_piece = f1["p1_set_piece"].astype(object).to_numpy() if "p1_set_piece" in f1 else np.full(n, None, dtype=object)
+        poss_all = f1["p1_possession"].astype(object).to_numpy()
         rs = up["p4"].segments.get("restarts", pd.DataFrame(columns=["type", "team", "period", "ts", "source"]))
         rs = rs.loc[rs["source"] == "tracking"] if len(rs) else rs
         rs_ts, rs_team = rs["ts"].to_numpy(float), rs["team"].astype(object).to_numpy()
@@ -358,7 +361,9 @@ class StatesPackage(ContextPackage):
                 if nxt[0] == b + 1:
                     end_reason = "phase_changed" if pid[nxt[0]] != pid[b] else "formation_changed"
                 else:
-                    end_reason = "phase_unknown"
+                    # The grid points between: mostly a contest for the ball (P1 contested), or no phase for another reason.
+                    between = poss_all[b + 1:nxt[0]]
+                    end_reason = "contested_kept" if len(between) and np.mean(between == "contested") >= 0.5 else "phase_unknown"
             else:
                 c_end = chains.at[int(cid), "end_type"] if np.isfinite(cid) and int(cid) in chains.index else None
                 if c_end == "lost":

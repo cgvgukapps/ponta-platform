@@ -122,10 +122,11 @@ PROFILE_COLUMNS = ("match_id", "team", "team_key", "opp_team_key", "competition"
                    "sample_minutes", "sample_n", "label", "basis", "source", "data_check", "has_feed", "versions")
 
 
-#: Feeds whose defender-side actions are mapped and checked for PPDA (review AN-01, 25 November 2026). Elsewhere PPDA
-#: is Blocked: SkillCorner's dynamic events log no defender-side tackles or interceptions; the StatsBomb and Genius
-#: mappings are not checked (StatsBomb's maps pressures to challenges and both fouls to one type).
-PPDA_FEEDS = ("metrica", "idsse", "pff")
+#: Feeds whose defender-side actions are mapped and checked for PPDA (review AN-01, 25 November 2026): measured levels
+#: within the usual published range (Metrica 5 to 8 on games 1 to 3, the German league 5 to 19 on three of its matches). Elsewhere PPDA is Blocked:
+#: SkillCorner's dynamic events log no defender-side tackles or interceptions; PFF's feed logs far more contests as
+#: challenges (3 to 7 even with the rule below); the StatsBomb and Genius mappings are not checked.
+PPDA_FEEDS = ("metrica", "idsse")
 #: Engineering: with fewer defensive actions in the zone a single match's PPDA is not quoted.
 PPDA_MIN_ACTIONS = 10
 
@@ -134,12 +135,13 @@ def defensive_actions(typ: np.ndarray, sub: np.ndarray, team: np.ndarray, poss: 
     """
     The team's defensive actions for PPDA (Trainor 2014: tackles, interceptions, challenges, fouls), per event row.
 
-    A challenge or a foul counts only while the team did not have the ball (``poss``, P1 at the event): feeds that log a
-    duel for both players (Metrica, PFF) or for its winner (the German league) would otherwise count the team in
-    possession's duels. An interception counts as logged. The team's fouls are the other team's FAULT RECEIVED.
+    A challenge or a foul counts only while the other team had the ball (``poss``, P1 at the event, not contested): feeds
+    that log a duel for both players (Metrica) or for its winner (the German league) would otherwise count the team in
+    possession's duels, and a contested moment would count both sides. An interception counts as logged. The team's
+    fouls are the other team's FAULT RECEIVED.
     """
     o = OTHER[t]
-    off_ball = poss != t
+    off_ball = poss == o
     challenge = (typ == "CHALLENGE") & (team == t) & off_ball
     interception = (typ == "RECOVERY") & (np.char.find(sub.astype(str), "INTERCEPTION") >= 0) & (team == t)
     foul = (typ == "FAULT RECEIVED") & (team == o) & off_ball

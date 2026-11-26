@@ -27,6 +27,10 @@ Version 0.11.0 adds ``p2_template_4_2_2_2`` (a box-midfield template for P2), pr
 package output is unchanged (``CONTEXT_STRUCTURE_REPORT.md``, Gate 2a round).
 Version 0.13.0 adds ``p1_contest_max_s`` for P1 0.3.0's in-contest state (proposed; the state is a new
 field, so earlier outputs are unchanged).
+Version 0.29.0 (26 November 2026) re-derives Stage E's minimum matches after review backlog A, measured and awaiting the
+founder's agreement: on SkillCorner's open data high block 3, line height (ball in the middle third) 4, line height (ball
+in the attacking third) 4, final-third entries 4, low block 4; field tilt no longer clears the bar there. On PFF's set
+(internal only) high block 4, low block 7, line height (attacking third) 5, field tilt 5.
 Version 0.28.0 replaces ``pf_verdict_sd`` with ``pf_verdict_false_alarm`` (10%, agreed by the founder on 25 November
 2026): Stage E's verdict uses a prediction interval set for that false-alarm rate (review ST-05).
 Version 0.27.0 moves Stage E's minimum matches into this config (review GC-03, AI-14, 25 November 2026): each measure's
@@ -75,7 +79,7 @@ Status = Literal["proposed", "measured", "agreed"]
 #: modelling judgement or the founder's calls, with no reference behind it yet.
 Basis = Literal["published", "reference", "engineering", "judgement"]
 
-THRESHOLDS_VERSION = "0.28.0"
+THRESHOLDS_VERSION = "0.29.0"
 
 
 @dataclass(frozen=True)
@@ -316,30 +320,33 @@ _ALL: tuple[Threshold, ...] = (
     Threshold("pf_reliability_target", 0.7, "reliability", "proposed",
               "A measure's minimum number of matches is the number at which a team's mean reaches this split-half reliability (Spearman-Brown). 0.7 is the conventional threshold for acceptable reliability.",
               "Nunnally (1978), Psychometric Theory: 0.7 as acceptable reliability; Stage E, CONTEXT_PROFILES_REPORT.md"),
-    Threshold("pf_min_matches_out_share_high_block", 3.0, "matches", "agreed",
-              "Matches a team needs before a comparison on out_share_high_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
-              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
-    Threshold("pf_min_matches_out_share_high_block_pff", 5.0, "matches", "agreed",
-              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
-              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
-    Threshold("pf_min_matches_field_tilt", 4.0, "matches", "agreed",
-              "Matches a team needs before a comparison on field_tilt gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
-              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
-    Threshold("pf_min_matches_field_tilt_pff", 5.0, "matches", "agreed",
-              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
-              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
-    Threshold("pf_min_matches_efi_def_line_m_out_middle", 4.0, "matches", "agreed",
-              "Matches a team needs before a comparison on efi_def_line_m_out_middle gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
-              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
-    Threshold("pf_min_matches_efi_def_line_m_out_middle_pff", 6.0, "matches", "agreed",
-              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
-              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
-    Threshold("pf_min_matches_out_share_low_block", 5.0, "matches", "agreed",
-              "Matches a team needs before a comparison on out_share_low_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target.",
-              "SkillCorner open data, 12 recurring teams: CONTEXT_PROFILES_REPORT.md (Stage E); agreed by the founder, 23 November 2026", "reference", "skillcorner-opendata (MIT)"),
-    Threshold("pf_min_matches_out_share_low_block_pff", 7.0, "matches", "agreed",
-              "The same, measured on PFF's set; used only with pf_allow_unlicensed_derived on.",
-              "PFF FC World Cup 2022, 32 teams: CONTEXT_PROFILES_REPORT.md section 8; the larger of the two agreed by the founder, 24 November 2026", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_out_share_high_block", 3.0, "matches", "measured",
+              "Matches a team needs before a comparison on out_share_high_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target (1 to 11 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): SkillCorner open data, 12 recurring teams; eligible only where the 90% interval's lower end (5,000 seeded team resamples and the analytic F interval) is above 0.1; measured, awaiting the founder's agreement", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_efi_def_line_m_out_middle", 4.0, "matches", "measured",
+              "Matches a team needs before a comparison on efi_def_line_m_out_middle gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target (2 to 16 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): SkillCorner open data, 12 recurring teams; eligible only where the 90% interval's lower end (5,000 seeded team resamples and the analytic F interval) is above 0.1; measured, awaiting the founder's agreement", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_efi_def_line_m_out_attacking", 4.0, "matches", "measured",
+              "Matches a team needs before a comparison on efi_def_line_m_out_attacking gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target (2 to 20 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): SkillCorner open data, 12 recurring teams; eligible only where the 90% interval's lower end (5,000 seeded team resamples and the analytic F interval) is above 0.1; measured, awaiting the founder's agreement", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_efi_final_third_entries_p90", 4.0, "matches", "measured",
+              "Matches a team needs before a comparison on efi_final_third_entries_p90 gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target (2 to 19 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): SkillCorner open data, 12 recurring teams; eligible only where the 90% interval's lower end (5,000 seeded team resamples and the analytic F interval) is above 0.1; measured, awaiting the founder's agreement", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_out_share_low_block", 4.0, "matches", "measured",
+              "Matches a team needs before a comparison on out_share_low_block gives a verdict: where the intraclass correlation, lifted by Spearman-Brown, reaches pf_reliability_target (2 to 20 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): SkillCorner open data, 12 recurring teams; eligible only where the 90% interval's lower end (5,000 seeded team resamples and the analytic F interval) is above 0.1; measured, awaiting the founder's agreement", "reference", "skillcorner-opendata (MIT)"),
+    Threshold("pf_min_matches_out_share_high_block_pff", 4.0, "matches", "measured",
+              "The same, measured on PFF's set (2 to 7 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): PFF FC World Cup 2022, 32 teams; same rule; used only with pf_allow_unlicensed_derived on, each comparison then taking the larger minimum", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_out_share_low_block_pff", 7.0, "matches", "measured",
+              "The same, measured on PFF's set (4 to 18 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): PFF FC World Cup 2022, 32 teams; same rule; used only with pf_allow_unlicensed_derived on, each comparison then taking the larger minimum", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_efi_def_line_m_out_attacking_pff", 5.0, "matches", "measured",
+              "The same, measured on PFF's set (3 to 11 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): PFF FC World Cup 2022, 32 teams; same rule; used only with pf_allow_unlicensed_derived on, each comparison then taking the larger minimum", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
+    Threshold("pf_min_matches_field_tilt_pff", 5.0, "matches", "measured",
+              "The same, measured on PFF's set (3 to 9 across the interval).",
+              "Re-derived 26 November 2026 after review backlog A (CONTEXT_PROFILES_REPORT.md section 10): PFF FC World Cup 2022, 32 teams; same rule; used only with pf_allow_unlicensed_derived on, each comparison then taking the larger minimum", "reference", "pff-worldcup2022: no licence; internal development only until PFF's written approval (legal-compliance.md)"),
     Threshold("pf_allow_unlicensed_derived", 0.0, "switch", "agreed",
               "1: values measured on unlicensed reference data (PFF's set) may govern outputs, each comparison then taking the larger minimum; 0 (the default, and the only setting for anything a customer, pilot or demo sees): only licensed values.",
               "The data guardrails agreed by the founder, 23 and 24 November 2026 (legal-compliance.md); review backlog A, approved 25 November 2026"),
