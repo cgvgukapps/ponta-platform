@@ -39,6 +39,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from matrix_engine.clock import elapsed_match_time
 from matrix_engine.match import NormalisedMatch
 from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import coerce_schema, validate_schema
@@ -49,7 +50,7 @@ from cache_tag import tag as cache_tag
 FPS = 25.0
 PROVIDER = "idsse"
 #: The reader's version, in its cache key (cache_tag).
-READER_VERSION = "1"
+READER_VERSION = "2"  # 2 (27 November 2026, review DE-09): elapsed match time, not 45:00 at the second half
 PERIODS = {"firstHalf": 1, "secondHalf": 2}
 MATCH_IDS = ("J03WMX", "J03WN1", "J03WOH", "J03WOY", "J03WPY", "J03WQQ", "J03WR9")
 
@@ -310,8 +311,7 @@ def load_idsse_match(data_dir: Path, match_id: str, cache: Path) -> tuple[Normal
     clock = ball[["frame", "period", "t"]].sort_values("frame").reset_index(drop=True)
     frames = clock[["frame", "period"]].copy()
     first = frames.groupby("period")["frame"].transform("min")
-    offset = frames["period"].map({1: 0.0, 2: 45 * 60.0}).fillna(0.0)
-    frames["time_s"] = (frames["frame"] - first) / FPS + offset
+    frames["time_s"] = elapsed_match_time(frames["period"], (frames["frame"] - first) / FPS, 1.0 / FPS)  # review DE-09
     period_of = dict(zip(frames["frame"], frames["period"], strict=True))
 
     t_ns = clock["t"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy().astype("datetime64[ns]").astype("int64")

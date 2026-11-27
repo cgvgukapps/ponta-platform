@@ -108,3 +108,21 @@
 - **The ball at passes and carries.** Over the whole match, ball detection mixes in dead-ball time: 59% to 74% on the sample matches, even Metrica's optical games. At the start of passes and carries it is 99.9% to 100% on Metrica's three games and SkillCorner's match 1886347. The ball-dependent metrics (control zones, movement value, pass option value, decision quality, pass completion, Choice and so Gain version 2) are Degraded when the ball is missing at more than 10% of those starts. This is the player-observation rule's threshold, an engineering choice. Pressure reads players and is not affected. The sample matches are unchanged.
 - `NormalisedMatch.events_derived_from_tracking` is set by the adapter (SkillCorner's loader). Matches cached before the flag existed fall back to the provider name.
 - Reasons read as sentences ("Positions are limited: only one team is tracked.").
+
+### 6c. One clock (DE-09; Matrix 0.2.2)
+
+**The gap.** The Matrix schema had no clock check, so a feed counting each period from its own start would interpolate across the halves on resampling. The reference readers for PFF and the German league put the second half at a fixed 45:00, so a first half's stoppage time overlapped it.
+
+**Found on the way, and worse.** SkillCorner's own timestamps also restart the second half at 45:00. The main SkillCorner loader kept them for tracking but timed events from frame counts on elapsed time, so **every second-half event sat 78.1 s after its own tracking frame** on match 1886347. Episode times come from the tracking clock and event times from the events, so the two AI tables disagreed by 78 s after half time on SkillCorner. Joins by frame (the Data check, the context packages, the measured agreements) were not affected; anything read by time was.
+
+**What changed.**
+
+- `matrix_engine.clock.elapsed_match_time`: each period starts where the previous one ended.
+- The SkillCorner loader rebases its tracking clock to elapsed time, so event and tracking times now agree exactly in both halves. The prototype-equivalence inputs keep the old clock.
+- The PFF reader (version 3) and the German league's reader (version 2) use elapsed time; their caches re-parse on next use.
+- `validate_schema` refuses a timestamp that runs backwards in frame order within a source and player.
+- Matrix is 0.2.2 (an output change), which also re-keys the versioned caches.
+
+**Checked.** On the context goldens only `clock_s` changes, and only on SkillCorner match 1886347; every other field and the three Metrica games are unchanged (recaptured). The full suite passes.
+
+**Not done here.** One shared SkillCorner reader for the Matrix provider and the loader (they now agree on the clock and on dropping null periods, but remain two code paths), a separate football-clock column for display, and `period` as a required schema column.

@@ -231,6 +231,19 @@ def validate_schema(df: pd.DataFrame, *, name: str = "tracking frame") -> pd.Dat
                 "use NaN for 'unknown'"
             )
 
+    # One clock (review DE-09): within each source and player, time never runs backwards in frame order. A feed that
+    # counts each period from its own start overlaps the halves, and resampling would interpolate across them.
+    if len(df):
+        ordered = df.sort_values(["source", "player_id", "frame"], kind="stable")
+        same = (ordered["source"].to_numpy()[1:] == ordered["source"].to_numpy()[:-1]) & \
+               (ordered["player_id"].to_numpy()[1:] == ordered["player_id"].to_numpy()[:-1])
+        back = same & (np.diff(ordered["timestamp"].to_numpy(dtype=float)) < 0)
+        if back.any():
+            raise SchemaError(
+                f"{name}: timestamp runs backwards in frame order for {int(back.sum())} row(s); use elapsed match time "
+                "(matrix_engine.clock.elapsed_match_time), not a clock that restarts each period"
+            )
+
     duplicated = df.duplicated(subset=["source", "player_id", "frame"])
     if duplicated.any():
         n_dup = int(duplicated.sum())

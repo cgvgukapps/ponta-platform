@@ -978,6 +978,17 @@ class SkillCornerAdapter:
             normalize_direction=self.normalize,
         )
 
+        # Elapsed match time (review DE-09, 27 November 2026): SkillCorner's timestamps restart the second half at 45:00,
+        # so its tracking clock overlapped the first half's stoppage time and every second-half event (timed from frame
+        # counts) sat 78.1 s after its own frame on match 1886347. The prototype's inputs keep the old clock.
+        if not self.prototype_inputs:
+            from matrix_engine.clock import elapsed_match_time
+
+            for wide in (home_df, away_df):
+                if len(wide):
+                    into = wide["Time [s]"] - wide.groupby("Period")["Time [s]"].transform("min")
+                    wide["Time [s]"] = elapsed_match_time(wide["Period"], into, 1.0 / SC_FPS).round(4).to_numpy()
+
         # Positions SkillCorner estimated (off camera), for the Data check (schema column ``observed``).
         meta["estimated_positions"] = estimated_positions(records, meta["home_players"], meta["away_players"])
 

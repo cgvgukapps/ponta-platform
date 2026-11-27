@@ -48,6 +48,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from matrix_engine.clock import elapsed_match_time
 from matrix_engine.match import NormalisedMatch
 from matrix_engine.pitch_config import PitchConfig
 from matrix_engine.schema import coerce_schema, validate_schema
@@ -57,9 +58,8 @@ from cache_tag import tag as cache_tag
 
 PROVIDER = "pff"
 #: The reader's version, in its cache key (cache_tag): 2 since the observed flag and the period check.
-READER_VERSION = "2"
+READER_VERSION = "3"  # 3 (27 November 2026, review DE-09): elapsed match time, not 45:00 at the second half
 SOURCE = "PFF FC, FIFA World Cup 2022 (no licence stated; internal development only)"
-PERIOD_OFFSET_S = {1: 0.0, 2: 45 * 60.0, 3: 90 * 60.0, 4: 105 * 60.0}
 #: PFF's set-piece codes (``setpieceType``) as P1's set-piece subtypes. Drop balls (D) are not set pieces for P1.
 SETPIECE = {"K": "KICK OFF", "C": "CORNER KICK", "F": "FREE KICK", "G": "GOAL KICK", "P": "PENALTY", "T": "THROW IN"}
 #: PFF's shot outcomes (``shotOutcomeType``) as P1's shot subtypes.
@@ -441,7 +441,9 @@ def load_pff_match(data_dir: Path, gid: str, cache: Path, ball: str = "tracked",
     roster = read_roster(data_dir, gid, md["teams"])
     tr = read_tracking(data_dir / "Tracking Data" / f"{gid}.jsonl.bz2", ball=ball)
     frames = tr["frames"]
-    frames = frames.assign(time_s=frames["elapsed"] + frames["period"].map(PERIOD_OFFSET_S).fillna(0.0))[["frame", "period", "time_s"]]
+    # Elapsed match time (review DE-09): PFF's elapsed restarts each period, and a fixed 45:00 for the second half made
+    # the first half's stoppage time overlap it.
+    frames = frames.assign(time_s=elapsed_match_time(frames["period"], frames["elapsed"], 1.0 / md["fps"]))[["frame", "period", "time_s"]]
     signs = _signs(tr["players"], frames, roster)
     period_of = pd.Series(frames["period"].to_numpy(), index=frames["frame"].to_numpy())
     pl, bl = tr["players"], tr["ball"]

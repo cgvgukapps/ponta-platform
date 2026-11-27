@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # The distribution name is prefixed so it can never be confused with an unrelated
 # public package of the same name. The import name stays `matrix_engine`.
 name = "ponta-matrix-engine"
-version = "0.2.1"
+version = "0.2.2"
 description = "Ponta Matrix: normalise, reconcile and fuse tracking data into one quality-scored dataset."
 requires-python = ">=3.13"
 dependencies = [
