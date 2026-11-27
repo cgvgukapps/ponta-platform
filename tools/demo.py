@@ -31,6 +31,7 @@ from matrix_engine.sample_data import repo_root, sample_data_dir
 from plaiq_engine.match_analysis import MatchAnalysis
 from plaiq_engine.roster.profiles import roster_profiles
 from plaiq_engine.semantic_builder import SemanticBuilder
+from plaiq_engine.teams import TeamRegistry
 
 
 def log(msg: str) -> None:
@@ -70,7 +71,7 @@ def main() -> int:
     analysis = MatchAnalysis(match, profiles_home=ph, profiles_away=pa)
     log("\nscoring decisions (a few minutes) ...")
     t1 = time.time()
-    builder = SemanticBuilder(analysis, parity)
+    builder = SemanticBuilder(analysis, parity, teams=TeamRegistry.for_reference())
     paths = builder.write(out)
     log(f"done in {time.time() - t1:.0f}s")
 

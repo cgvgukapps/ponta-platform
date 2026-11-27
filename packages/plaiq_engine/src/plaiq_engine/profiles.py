@@ -29,7 +29,9 @@ import pandas as pd
 from plaiq_engine.context.structure import OTHER, TEAMS
 from plaiq_engine.context.thresholds import THRESHOLDS
 
-PROFILE_VERSION = "0.2.0"  # 0.2.0 (25 November 2026, review backlog A): out_share_* from the team's own block (AN-02); PPDA's
+PROFILE_VERSION = "0.3.0"  # 0.3.0 (27 November 2026, review backlog B, AI-04): match, team, competition and season are opaque keys
+#                            from the tenant registry; values unchanged.
+#                            0.2.0 (25 November 2026, review backlog A): out_share_* from the team's own block (AN-02); PPDA's
 #                            mapping (AN-01); Blocked rows null (AI-05); minimums from the thresholds config with source (GC-03)
 PHASES = ("build_up", "create", "finish", "direct", "quick_break", "transition", "set_play", "chaotic")
 BLOCKS = ("high_block", "mid_block", "low_block")
@@ -162,8 +164,17 @@ def possession_at(f: pd.DataFrame, frames: np.ndarray) -> np.ndarray:
     return out
 
 
-def match_profiles(match, res, team_keys: dict[str, str], semantic_events: pd.DataFrame | None = None) -> pd.DataFrame:
-    """One team's match as measures (long form), for both teams. ``res`` is the ContextResult with P1 to P8."""
+def match_profiles(match, res, identity, semantic_events: pd.DataFrame | None = None) -> pd.DataFrame:
+    """
+    One team's match as measures (long form), for both teams. ``res`` is the ContextResult with P1 to P8; ``identity`` the
+    match's opaque keys (``TeamRegistry.identity(match)``, profiles 0.3.0): ``match_id``, team, competition and season in
+    every row are those keys, never the provider's ids.
+    """
+    from plaiq_engine.teams import MatchIdentity, PseudonymError
+
+    if not isinstance(identity, MatchIdentity):
+        raise PseudonymError("match_profiles needs the match's MatchIdentity (TeamRegistry.identity(match))")
+    team_keys = identity.team_keys
     f, out = res.frames, res.outputs
     n = len(f)
     step = float(np.median(np.diff(f["frame_ts"].to_numpy(float)))) if n > 1 else 0.2
@@ -306,9 +317,9 @@ def match_profiles(match, res, team_keys: dict[str, str], semantic_events: pd.Da
             state = min(states, key=lambda s: _STATE_RANK.get(s, 0)) if states else "full"
             if v is None or state == "blocked":
                 v, state = None, "blocked"  # a Blocked row never carries a value (review AI-05)
-            rows.append({"match_id": str(f["match_id"].iloc[0]) if n else "", "team": t, "team_key": team_keys.get(t),
-                         "opp_team_key": team_keys.get(o), "competition": getattr(match, "competition", None),
-                         "season": getattr(match, "season", None), "measure": name, "value": v, "denominator": meas.denominator,
+            rows.append({"match_id": identity.match_key, "team": t, "team_key": team_keys.get(t),
+                         "opp_team_key": team_keys.get(o), "competition": identity.competition_key,
+                         "season": identity.season_key, "measure": name, "value": v, "denominator": meas.denominator,
                          "sample_minutes": mins, "sample_n": cnt, "label": meas.label, "basis": meas.basis, "source": meas.source,
                          "data_check": state, "has_feed": has_feed, "versions": versions})
     return pd.DataFrame(rows, columns=list(PROFILE_COLUMNS))

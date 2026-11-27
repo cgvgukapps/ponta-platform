@@ -12,6 +12,7 @@ from plaiq_engine.semantic_builder import (
     nested_record,
     pitch_zone,
 )
+from plaiq_engine.teams import TeamRegistry
 from synthetic_match import FPS, synthetic_match
 
 
@@ -20,16 +21,16 @@ def built():
     analysis = MatchAnalysis(synthetic_match())
     parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
                                    player_dropout=0.0, has_events=True, has_shot_events=False))
-    builder = SemanticBuilder(analysis, parity)
+    builder = SemanticBuilder(analysis, parity, teams=TeamRegistry.for_reference())
     return analysis, builder, builder.semantic_events()
 
 
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("1.9").all()  # 1.1 P1; 1.2 pass completion; 1.3 DQ v2; 1.4 v2 cells; 1.5 v1 names; 1.6 Gain v2; 1.7 context; 1.8 teams; 1.9 review fixes
+    assert sem["schema_version"].eq("2.0").all()  # ... 1.8 teams; 1.9 review fixes; 2.0 opaque ids
     assert sem["engine_version"].str.startswith("plaiq-").all()
-    assert sem["match_id"].eq("synthetic_1").all()
+    assert sem["match_id"].nunique() == 1 and sem["match_id"].str.fullmatch(r"m1_[0-9a-f]{12}").all()
     assert sem["event_id"].is_unique
 
 
@@ -117,11 +118,11 @@ def test_context_columns_from_p1(built):
 
     analysis, builder, plain = built
     ctx = Registry([PossessionPackage()]).run(analysis.match)
-    sem = SemanticBuilder(analysis, builder.parity, context=ctx).semantic_events()
+    sem = SemanticBuilder(analysis, builder.parity, context=ctx, teams=TeamRegistry.for_reference()).semantic_events()
     base_cols = [c for c in SEMANTIC_COLUMNS if c not in ("possession_chain_id", "possession_source", "score_diff", "red_card_diff")]
     pd.testing.assert_frame_equal(sem[base_cols], plain[base_cols])  # existing columns unchanged
     assert sem["possession_source"].dropna().isin(["observed", "inferred", "events", "unknown"]).all()
-    assert sem["possession_chain_id"].dropna().str.fullmatch(r"synthetic_1_ch\d{4}").all()
+    assert sem["possession_chain_id"].dropna().str.fullmatch(r"m1_[0-9a-f]{12}:ch\d{4}").all()
     assert sem["score_diff"].dropna().eq(0).all()  # no goals in the synthetic match
     rec = nested_record(sem.iloc[0].to_dict())
     assert set(rec["match_context"]) == {"possession_chain_id", "possession_source", "score_diff", "red_card_diff"}
@@ -140,13 +141,13 @@ def test_context_columns_and_states_from_every_package(built):
 
     analysis, builder, plain = built
     ctx = registry().run(analysis.match, extras={"analysis": analysis})
-    b = SemanticBuilder(analysis, builder.parity, context=ctx)
+    b = SemanticBuilder(analysis, builder.parity, context=ctx, teams=TeamRegistry.for_reference())
     sem = b.semantic_events()
     p1 = ("possession_chain_id", "possession_source", "score_diff", "red_card_diff")
     base_cols = [c for c in SEMANTIC_COLUMNS if c not in CONTEXT_COLUMNS and c not in p1]  # team keys are context-independent
     pd.testing.assert_frame_equal(sem[base_cols], plain[base_cols])  # existing columns unchanged
     assert sem["context_versions"].notna().all()
-    assert sem["state_id"].dropna().str.fullmatch(r"synthetic_1:\d:\d{4}").all()
+    assert sem["state_id"].dropna().str.fullmatch(r"m1_[0-9a-f]{12}:\d:\d{4}").all()
     assert sem["zone_third"].dropna().isin(["defensive", "middle", "attacking"]).all()
     assert not [c for c in sem.columns if c.endswith(("_x", "_y", "_cell"))]
     st = b.semantic_states(sem)
@@ -155,6 +156,8 @@ def test_context_columns_and_states_from_every_package(built):
         assert check_quoted_numbers(r["summary"], r) == [], r["summary"]
         assert resolve_state_citation(st, r["match_id"], r["state_id"], r["start_s"], r["end_s"]).ok
     assert set(sem["state_id"].dropna()) <= set(st["state_id"])
+    for frame in (sem, st):  # schema 2.0: no provider id in any value of either AI table
+        assert not any(b.provider_match_id in str(v) for v in frame.to_numpy().ravel())
     # Schema 1.9 (review AI-10): an episode's end ids are semantic events inside it, so each resolves.
     from plaiq_engine.citations import resolve_event_citation
 
@@ -163,7 +166,7 @@ def test_context_columns_and_states_from_every_package(built):
         ids = st[col].dropna()
         assert len(ids) >= 1
         for i in ids:
-            assert resolve_event_citation(sem, "synthetic_1", i, float(ts_of[i])).ok
+            assert resolve_event_citation(sem, b.match_id, i, float(ts_of[i])).ok
     inside = sem.loc[sem["state_id"].notna()]
     assert set(st["first_event_id"].dropna()) <= set(inside["event_id"])
 
@@ -173,11 +176,11 @@ def test_team_keys_are_opaque_and_stable(built):
     from plaiq_engine.teams import TeamRegistry
 
     analysis, builder, sem = built
-    assert sem["actor_team_key"].str.fullmatch(r"t_[0-9a-f]{12}").all()
+    assert sem["actor_team_key"].str.fullmatch(r"t1_[0-9a-f]{12}").all()
     assert (sem["actor_team_key"] != sem["opponent_team_key"]).all()
-    reg = TeamRegistry()
+    reg = TeamRegistry.for_reference()
     assert reg.key("skillcorner", "1802") == reg.key("skillcorner", "1802") != reg.key("skillcorner", "866")
-    assert reg.key("skillcorner", "1802") != TeamRegistry(secret="tenant-a").key("skillcorner", "1802")
+    assert reg.key("skillcorner", "1802") != TeamRegistry(secret="tenant-a-secret-0123").key("skillcorner", "1802")
     assert reg.key("synthetic", None, match_id="1", side="home") != reg.key("synthetic", None, match_id="2", side="home")
     reg.merge("idsse", "DFL-CLU-000008", reg.key("skillcorner", "1802"))
     assert reg.key("idsse", "DFL-CLU-000008") == reg.key("skillcorner", "1802")
@@ -261,7 +264,7 @@ def test_decision_quality_v2_ignores_the_outcome():
     assert lost.decision_quality_v2.at[1, "dq_v2"] == pytest.approx(done.decision_quality_v2.at[1, "dq_v2"], abs=1e-12)
     parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
                                    player_dropout=0.0, has_events=True, has_shot_events=False))
-    sem = SemanticBuilder(lost, parity).semantic_events()
+    sem = SemanticBuilder(lost, parity, teams=TeamRegistry.for_reference()).semantic_events()
     row = sem.loc[(sem["event_idx"] == 2) & (sem["action_type"] == "pass")]
     assert len(row) == 1 and row["action_outcome"].iloc[0] == "lost" and row["dq_v2_status"].iloc[0] == "estimated"
 
@@ -276,7 +279,7 @@ def test_a_lost_pass_never_carries_a_version_1_score():
     analysis = MatchAnalysis(replace(m, events=ev))
     parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
                                    player_dropout=0.0, has_events=True, has_shot_events=False))
-    sem = SemanticBuilder(analysis, parity).semantic_events()
+    sem = SemanticBuilder(analysis, parity, teams=TeamRegistry.for_reference()).semantic_events()
     lost = sem.loc[sem["action_outcome"] == "lost"]
     assert len(lost) >= 1
     assert lost["dq_score"].isna().all() and lost["dq_band"].eq("not_scored").all() and lost["not_scored"].all()
@@ -325,7 +328,7 @@ def test_estimated_positions_are_not_counted_as_observed():
     analysis = MatchAnalysis(m2)
     parity = classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
                                    player_dropout=0.0, has_events=True, has_shot_events=False))
-    b = SemanticBuilder(analysis, parity)
+    b = SemanticBuilder(analysis, parity, teams=TeamRegistry.for_reference())
     sem = b.semantic_events()
     assert sem["players_observed"].dropna().eq(11).all()  # the home eleven only
     tr = b.trajectories()
@@ -334,3 +337,99 @@ def test_estimated_positions_are_not_counted_as_observed():
     res = Registry([PossessionPackage(), StructurePackage()]).run(m2)
     shape = next(e for e in res.entries if e.package == "p2" and e.metric == "team_shape")
     assert shape.state != "full" and "estimated by the provider" in shape.reason
+
+
+# -- schema 2.0: identity fails closed, no provider ids (review backlog B) ------------------------------------------
+
+
+def test_the_registry_fails_closed(monkeypatch):
+    from plaiq_engine.teams import REFERENCE_SECRET, PseudonymError, TeamRegistry
+
+    with pytest.raises(TypeError):
+        SemanticBuilder(MatchAnalysis(synthetic_match()), None)  # no teams: refused
+    for bad in ("", "short"):
+        with pytest.raises(PseudonymError):
+            TeamRegistry(secret=bad)
+    monkeypatch.setenv("PONTA_ENV", "production")
+    with pytest.raises(PseudonymError):
+        TeamRegistry.for_reference()
+    assert TeamRegistry(secret="a-tenant-secret-of-length").secret != REFERENCE_SECRET  # a real secret still works
+
+
+def test_a_name_in_the_feed_fails_the_build():
+    from dataclasses import replace
+
+    from plaiq_engine.teams import PseudonymError, TeamRegistry
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    ev.loc[2, "From"] = "Jane Example"
+    b = SemanticBuilder(MatchAnalysis(replace(m, events=ev)), _parity(), teams=TeamRegistry.for_reference())
+    with pytest.raises(PseudonymError):
+        b.semantic_events()
+
+
+def _parity():
+    return classify(ParityInputs(provider="synthetic", mode="full_tracking", sample_rate_hz=FPS, teams_tracked=("away", "home"),
+                                 player_dropout=0.0, has_events=True, has_shot_events=False))
+
+
+def test_no_provider_id_in_any_ai_facing_value():
+    """A provider match id, team id or competition id never appears in a value (review AI-04: the test checks values)."""
+    from dataclasses import replace
+
+    from plaiq_engine.teams import TeamRegistry
+
+    m = replace(synthetic_match(), provider="skillcorner", match_id="1886347", teams={"home": "4177", "away": "866"},
+                competition="61", season="2024/2025")
+    b = SemanticBuilder(MatchAnalysis(m), _parity(), teams=TeamRegistry.for_reference())
+    sem = b.semantic_events()
+    text = [str(v) for v in sem.to_numpy().ravel()]
+    for token in ("1886347", "4177", "skillcorner_", "skillcorner:", "2024/2025"):
+        assert not any(token in v for v in text), token
+    assert sem["competition"].str.fullmatch(r"c1_[0-9a-f]{10}").all() and sem["season"].str.fullmatch(r"s1_[0-9a-f]{10}").all()
+    prov = b.provenance()  # the provider's ids are kept apart, for audits only
+    assert prov["provider_match_id"].eq("1886347").all() and set(prov["event_id"]) >= set(sem["event_id"].str.split("_run_").str[0])
+
+
+def test_event_ids_survive_an_added_event():
+    """An event added elsewhere in the match changes no other id (review DE-03: the id was the row position)."""
+    from dataclasses import replace
+
+    from plaiq_engine.teams import TeamRegistry
+
+    m = synthetic_match()
+    reg = TeamRegistry.for_reference()
+    before = SemanticBuilder(MatchAnalysis(m), _parity(), teams=reg)._event_ids()
+    ev = m.events.copy()
+    extra = ev.iloc[[2]].assign(**{"Type": "CHALLENGE", "Subtype": "AERIAL-LOST", "Start Frame": 70, "End Frame": 70})
+    ev2 = pd.concat([ev.iloc[:3], extra, ev.iloc[3:]], ignore_index=True)
+    after = SemanticBuilder(MatchAnalysis(replace(m, events=ev2)), _parity(), teams=reg)._event_ids()
+    old = [before[i] for i in range(len(ev))]
+    new = [after[i] for i in range(len(ev2)) if i != 3]
+    assert old == new and len(set(after.values())) == len(ev2)
+
+
+def test_nested_record_carries_every_column(built):
+    """Every flat column reaches the nested view the AI reads, bar a short, named list (review SE-15)."""
+    _, _, sem = built
+    rec = nested_record(sem.iloc[0].to_dict())
+
+    def leaves(d, prefix=""):
+        out = {}
+        for k, v in d.items():
+            out.update(leaves(v, f"{prefix}{k}.") if isinstance(v, dict) else {f"{prefix}{k}": v})
+        return out
+
+    flat = set(leaves(rec))
+    nested_names = {k.rsplit(".", 1)[-1] for k in flat}
+    aliases = {"actor_player_ref": "player_ref", "actor_role": "role", "action_type": "type", "action_outcome": "outcome",
+               "actor_team": "team", "actor_team_key": "team_key", "parity_spatial": "spatial_intelligence",
+               "parity_physiological": "physiological_context", "pass_completion_probability": "probability",
+               "pass_completion_status": "status", "pass_completion_parameters": "parameters",
+               "dq_v2_score": "score", "dq_v2_band": "band", "dq_v2_status": "status", "dq_v2_best_option_ref": "best_option_player_ref",
+               "dq_v2_version": "version", "gain_v2_score": "score", "gain_v2_band": "band", "gain_v2_status": "status",
+               "gain_v2_version": "version"}
+    excluded = {"event_idx"}  # the loader's row position: internal, not for the AI
+    missing = [c for c in SEMANTIC_COLUMNS if c not in excluded and c not in nested_names and aliases.get(c) not in nested_names]
+    assert not missing, missing

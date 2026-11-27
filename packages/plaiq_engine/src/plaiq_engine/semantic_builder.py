@@ -9,9 +9,12 @@ One row per pass, carry, off-ball run and defensive action, written to
 Rules this module enforces:
 
 * **Pure and deterministic.** Same match, same output: ids are derived from the
-  event index, rows are explicitly sorted, nothing depends on engine row order.
-* **No names and no coordinate arrays** in semantic events. Players are pseudonymous
-  references (``home_10``); location is a categorical ``pitch_zone``.
+  event's content (schema 2.0), rows are explicitly sorted, nothing depends on engine row order.
+* **No names, no provider ids and no coordinate arrays** in semantic events. Players are
+  pseudonymous references (``home_10``, a shirt number or the build fails); ``match_id``,
+  team, competition and season are opaque keys (``plaiq_engine.teams``); location is a
+  categorical ``pitch_zone``. The provider's own ids are kept apart in ``provenance()``,
+  which the AI layer never reads.
 * **Conditional sections.** ``physiological_context`` is null unless the match has a
   physiological source and the fields exist. Nothing is zero-filled.
 * **Not scored, with a reason.** Goalkeepers and set pieces carry no decision
@@ -29,7 +32,9 @@ section 7.1).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from importlib import metadata
 from pathlib import Path
 
@@ -41,7 +46,7 @@ from matrix_engine.parity import AnalyticsParityReport
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.context.states import STATE_COLUMNS
 from plaiq_engine.match_analysis import MatchAnalysis
-from plaiq_engine.teams import TeamRegistry
+from plaiq_engine.teams import PseudonymError, TeamRegistry
 
 #: 1.1 (17 November 2026): adds the context columns from package P1 (possession chain and
 #: source, score and red-card difference for the actor's team). Earlier columns are unchanged.
@@ -70,7 +75,15 @@ from plaiq_engine.teams import TeamRegistry
 #: and last semantic events inside the episode, so each resolves in ``semantic_events`` (before, P8's logged-event index).
 #: ``players_observed`` counts only positions the provider observed where it flags estimates (before, any position), and
 #: ``trajectories`` gains ``observed`` (null for the ball and where the provider does not say).
-SCHEMA_VERSION = "1.9"
+#: 2.0 (27 November 2026, review backlog B: AI-04, DE-03, GC-04, SE-15): identifiers change, columns do not. ``match_id``
+#: is the opaque match key (``m1_…``, a keyed hash under the tenant secret) on every row, episode and profile, never the
+#: provider's id; ``competition`` and ``season`` are opaque keys (``c1_…``, ``s1_…``); team keys carry their key version
+#: (``t1_…``). ``event_id`` is derived from the event's content (match key, period, start frame, type, actor and order
+#: among identical ones), so it survives re-ingestion and mapping changes elsewhere in the match; ``state_id`` and
+#: ``possession_chain_id`` are built on the match key. Player refs must be shirt numbers (a name fails the build).
+#: ``nested_record`` gains a ``team`` block. The provider's ids sit in ``provenance()`` (``event_provenance.parquet``),
+#: which is not AI-facing.
+SCHEMA_VERSION = "2.0"
 
 #: Why a lost pass has no version 1 score.
 LOST_PASS_REASON = "lost pass: Gain version 1 does not charge a pass for failing; see Choice and Gain version 2"
@@ -107,7 +120,7 @@ CONTEXT_COLUMNS: tuple[str, ...] = (
     "runs_in_behind", "adjusted_choice", "open_high_value_share", "engaging_defenders", "context_versions",
 )
 MIRROR_THIRD = {"defensive": "attacking", "middle": "middle", "attacking": "defensive"}
-#: Schema 1.8's team identity columns.
+#: Schema 1.8's team identity columns (opaque keys since schema 2.0).
 TEAM_COLUMNS: tuple[str, ...] = ("actor_team_key", "opponent_team_key", "competition", "season")
 #: ``semantic_states`` (schema 1.7): P8's episode row plus the event ids at its ends and the pass decision medians.
 STATE_EXTRA_COLUMNS: tuple[str, ...] = (*STATE_COLUMNS[:STATE_COLUMNS.index("summary")], "first_event_id", "last_event_id",
@@ -130,9 +143,12 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "possession_chain_id", "possession_source", "score_diff", "red_card_diff",
     # Context packages P2 to P8 (schema 1.7; null unless a ContextResult is given): labels and counts, never coordinates.
     *CONTEXT_COLUMNS,
-    # Team identity (schema 1.8): opaque keys, stable across matches; the provider's competition id and season.
+    # Team identity (schema 1.8; opaque keys since 2.0): stable across matches, never the provider's ids.
     *TEAM_COLUMNS,
 )
+
+
+_SHIRT = re.compile(r"\d{1,3}")
 
 
 def dq_band(score: float | None) -> str | None:
@@ -193,22 +209,81 @@ class SemanticBuilder:
     context : ContextResult, optional
         Context package outputs for the same match (``plaiq_engine.context``). When given,
         each row carries the P1 context at its start frame; otherwise those columns are null.
+    teams : TeamRegistry
+        Required (schema 2.0, fails closed): the tenant's pseudonym registry, or
+        ``TeamRegistry.for_reference()`` for tools and tests. Every key in the output comes from it.
     """
 
-    def __init__(self, analysis: MatchAnalysis, parity: AnalyticsParityReport, *, roles: dict[str, str] | None = None,
-                 context=None, teams: TeamRegistry | None = None) -> None:
+    def __init__(self, analysis: MatchAnalysis, parity: AnalyticsParityReport, *, teams: TeamRegistry,
+                 roles: dict[str, str] | None = None, context=None) -> None:
+        if not isinstance(teams, TeamRegistry):
+            raise PseudonymError("SemanticBuilder needs a TeamRegistry (TeamRegistry.for_reference() for tools and tests)")
         self.a = analysis
         self.parity = parity
         self.roles = roles or {}
+        m = analysis.match
+        self.identity = teams.identity(m)
+        self.match_id = self.identity.match_key
+        self.provider_match_id = f"{m.provider}_{m.match_id}"  # provenance only, never in an AI-facing row
+        self.team_keys = self.identity.team_keys
+        self.competition = self.identity.competition_key
+        self.season = self.identity.season_key
+        self._ctx_match_id = (str(context.frames["match_id"].iloc[0])
+                              if context is not None and "match_id" in getattr(context, "frames", pd.DataFrame()).columns
+                              and len(context.frames) else None)
         self._ctx = self._context_lookup(context)
         self._ctx2 = self._context_lookup_17(context)
         self._context = context
-        self.match_id = f"{analysis.match.provider}_{analysis.match.match_id}"
-        self.team_keys = (teams or TeamRegistry()).keys_for(analysis.match)
-        self.competition = getattr(analysis.match, "competition", None)
-        self.season = getattr(analysis.match, "season", None)
         self.engine_version = _engine_version()
         self.goalkeepers = self._goalkeepers()
+        self._ids: dict[int, str] | None = None
+
+    def _state(self, sid):
+        """P8's state id rebased on the match key (P8 builds it on the context grid's provider-form id)."""
+        if sid is None or (not isinstance(sid, str) and pd.isna(sid)):
+            return None
+        sid = str(sid)
+        cm = self._ctx_match_id
+        return self.match_id + sid[len(cm):] if cm and sid.startswith(cm + ":") else sid
+
+    def _event_ids(self) -> dict[int, str]:
+        """
+        ``event_idx -> event_id`` from each event's content (schema 2.0, review DE-03): the match key, period, start
+        frame, type, actor ref and the event's order among identical ones. Adding or removing another event leaves every
+        other id unchanged, which the loader's row position did not.
+        """
+        if self._ids is None:
+            ev = self.a.events
+            seen: dict[tuple, int] = {}
+            ids: dict[int, str] = {}
+            for idx, e in ev.iterrows():
+                team = str(e.get("Team", "")).lower()
+                actor = self._ref(team, e.get("From")) if team in ("home", "away") else None
+                start = e.get("Start Frame")
+                key = (int(e["Period"]) if pd.notna(e.get("Period")) else -1, int(start) if pd.notna(start) else -1,
+                       str(e.get("Type", "")).upper(), team, actor or "")
+                seq = seen.get(key, 0)
+                seen[key] = seq + 1
+                raw = "|".join([self.match_id, *map(str, key), str(seq)])
+                ids[int(idx)] = "ev_" + hashlib.sha256(raw.encode()).hexdigest()[:16]
+            self._ids = ids
+        return self._ids
+
+    def provenance(self) -> pd.DataFrame:
+        """
+        The provider's ids behind each event (``event_provenance.parquet``): for audits, de-duplication and joins back to
+        the vendor's file. **Not AI-facing**: the API keeps it beside Postgres and never puts it in a prompt.
+        """
+        ev = self.a.events
+        pid = next((c for c in ("provider_event_id", "sb_event_id", "event_id", "Event Id") if c in ev.columns), None)
+        ids = self._event_ids()
+        return pd.DataFrame({
+            "event_id": [ids[int(i)] for i in ev.index], "event_idx": ev.index.astype(int),
+            "match_id": self.match_id, "provider": self.a.match.provider, "provider_match_id": str(self.a.match.match_id),
+            "provider_event_id": (ev[pid].astype(object).where(ev[pid].notna(), None).astype(str).where(ev[pid].notna(), None)
+                                  if pid else None),
+            "schema_version": SCHEMA_VERSION,
+        })
 
     # -- helpers ---------------------------------------------------------------
 
@@ -241,7 +316,7 @@ class SemanticBuilder:
 
         chain = c["chain"][i]
         return {
-            "possession_chain_id": None if chain is None or pd.isna(chain) else f"{self.match_id}_ch{int(chain):04d}",
+            "possession_chain_id": None if chain is None or pd.isna(chain) else f"{self.match_id}:ch{int(chain):04d}",
             "possession_source": None if c["source"][i] is None else str(c["source"][i]),
             "score_diff": diff(c["score"]),
             "red_card_diff": diff(c["red"]),
@@ -294,7 +369,7 @@ class SemanticBuilder:
         p = c["passes"].get(idx)
         adj = c["adjusted"].get(idx)
         return {
-            "state_id": c["p8_state_id"][i], "phase_team": c["p4_team"][i], "phase": c["p4_phase"][i], "out_phase": c["p4_out_phase"][i],
+            "state_id": self._state(c["p8_state_id"][i]), "phase_team": c["p4_team"][i], "phase": c["p4_phase"][i], "out_phase": c["p4_out_phase"][i],
             "fifa_phase": c["p4v_phase"][i], "fifa_out_phase": c["p4v_out_phase"][i], "block": c["p4_block"][i],
             "formation_in": c[f"p2_{team}_formation_in"][i], "formation_out": c[f"p2_{other}_formation_out"][i],
             "zone_lane": lane, "zone_third": third, "zone_band": band,
@@ -320,8 +395,13 @@ class SemanticBuilder:
         return out
 
     def _ref(self, team: str, jersey) -> str | None:
+        """``home_10``: the side and a shirt number. Anything else (a name, a provider id) fails the build (review GC-04)."""
         j = clean_jersey(jersey)
-        return f"{team.lower()}_{j}" if j else None
+        if not j:
+            return None
+        if not _SHIRT.fullmatch(j):
+            raise PseudonymError(f"a player ref must be a shirt number; the feed gave a non-numeric value for {team.lower()}")
+        return f"{team.lower()}_{j}"
 
     def _observed_by_frame(self) -> pd.Series | None:
         """Players observed (not estimated) per native frame, where the provider flags estimates; None otherwise."""
@@ -352,7 +432,7 @@ class SemanticBuilder:
         return {
             "schema_version": SCHEMA_VERSION,
             "engine_version": self.engine_version,
-            "event_id": f"evt_{self.match_id}_{idx:05d}" + ("" if kind != "run" else f"_run_{ref}"),
+            "event_id": self._event_ids()[int(idx)] + ("" if kind != "run" else f"_run_{ref}"),
             "match_id": self.match_id,
             "event_idx": idx,
             "timestamp_s": round(t, 2),
@@ -607,6 +687,8 @@ class SemanticBuilder:
         if ctx is None or "p8" not in getattr(ctx, "outputs", {}):
             return pd.DataFrame(columns=list(STATE_EXTRA_COLUMNS))
         st = ctx.outputs["p8"].segments["states"].copy()
+        st["state_id"] = st["state_id"].map(self._state)
+        st["match_id"] = self.match_id
         ev = self.semantic_events() if events is None else events
 
         # The first and last semantic events in each episode, from the table the AI reads, so every id resolves
@@ -627,13 +709,18 @@ class SemanticBuilder:
         return st[[c for c in STATE_EXTRA_COLUMNS]]
 
     def write(self, out_dir: str | Path) -> dict[str, Path]:
-        """Write ``semantic_events.parquet``, ``trajectories.parquet`` and, with P8's context, ``semantic_states.parquet``."""
+        """
+        Write ``semantic_events.parquet``, ``trajectories.parquet``, ``event_provenance.parquet`` (not AI-facing) and, with
+        P8's context, ``semantic_states.parquet``.
+        """
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        paths = {"semantic_events": out / "semantic_events.parquet", "trajectories": out / "trajectories.parquet"}
+        paths = {"semantic_events": out / "semantic_events.parquet", "trajectories": out / "trajectories.parquet",
+                 "event_provenance": out / "event_provenance.parquet"}
         events = self.semantic_events()
         events.to_parquet(paths["semantic_events"], index=False)
         self.trajectories().to_parquet(paths["trajectories"], index=False)
+        self.provenance().to_parquet(paths["event_provenance"], index=False)
         states = self.semantic_states(events)
         if len(states):
             paths["semantic_states"] = out / "semantic_states.parquet"
@@ -652,6 +739,8 @@ def nested_record(row: dict) -> dict:
         "minute_display": row["minute_display"],
         "period": row["period"],
         "actor": {"player_ref": row["actor_player_ref"], "role": row["actor_role"]},
+        "team": {"team": row.get("actor_team"), "team_key": row.get("actor_team_key"),  # schema 2.0 (review SE-15)
+                 "opponent_team_key": row.get("opponent_team_key"), "competition": row.get("competition"), "season": row.get("season")},
         "action": {
             "type": row["action_type"], "outcome": row["action_outcome"], "target_player_ref": row["target_player_ref"],
             "inferred_intended_ref": row["inferred_intended_ref"], "inference_confidence": row["inference_confidence"],

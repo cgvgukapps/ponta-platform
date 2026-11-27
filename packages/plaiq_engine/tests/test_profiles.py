@@ -32,13 +32,13 @@ def match_and_result():
 
 def test_profile_has_every_catalogue_measure_for_both_teams(match_and_result):
     m, res = match_and_result
-    keys = TeamRegistry().keys_for(m)
+    keys = TeamRegistry.for_reference().identity(m)
     pr = P.match_profiles(m, res, keys)
     assert list(pr.columns) == list(P.PROFILE_COLUMNS)
     assert len(pr) == 2 * len(P.CATALOGUE)
     for team in ("home", "away"):
         assert set(pr.loc[pr["team"] == team, "measure"]) == set(P.MEASURES)
-    assert pr["team_key"].str.fullmatch(r"t_[0-9a-f]{12}").all()
+    assert pr["team_key"].str.fullmatch(r"t1_[0-9a-f]{12}").all()
     assert pr["basis"].isin(["published", "common", "ponta"]).all() and pr["label"].isin(["observed", "estimated"]).all()
     assert pr["data_check"].isin(["full", "degraded", "blocked"]).all()
     assert pr.loc[pr["value"].isna(), "data_check"].eq("blocked").all()  # no value is never shown as a usable value
@@ -120,7 +120,7 @@ def test_ppda_is_blocked_for_a_feed_without_defender_actions(match_and_result):
 
     m, res = match_and_result
     ev = pd.DataFrame([event("PASS", "Away", 10 + i) for i in range(30)] + [event("CHALLENGE", "Home", 50 + i) for i in range(12)])
-    pr = P.match_profiles(replace(m, events=ev, provider="skillcorner"), res, TeamRegistry().keys_for(m))
+    pr = P.match_profiles(replace(m, events=ev, provider="skillcorner"), res, TeamRegistry.for_reference().identity(m))
     row = pr.loc[pr["measure"] == "ppda"]
     assert row["value"].isna().all() and row["data_check"].eq("blocked").all()
     assert "skillcorner" not in P.PPDA_FEEDS
@@ -130,7 +130,7 @@ def test_chain_measures_are_degraded_without_restarts(match_and_result):
     """No feed, so no restarts: chain starts and ends are not known to be losses and regains (review AN-03)."""
     m, res = match_and_result
     assert res.outputs["p1"].measurements["dead_ball_known"] is False
-    pr = P.match_profiles(m, res, TeamRegistry().keys_for(m)).set_index(["team", "measure"])
+    pr = P.match_profiles(m, res, TeamRegistry.for_reference().identity(m)).set_index(["team", "measure"])
     for name in P.DEAD_BALL_MEASURES:
         assert pr.loc[("home", name), "data_check"] in ("degraded", "blocked"), name
 

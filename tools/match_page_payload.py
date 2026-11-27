@@ -36,6 +36,7 @@ from matrix_engine.sample_data import repo_root, sample_data_dir
 from plaiq_engine.match_analysis import MatchAnalysis
 from plaiq_engine.roster.profiles import roster_profiles
 from plaiq_engine.semantic_builder import SCHEMA_VERSION, SemanticBuilder
+from plaiq_engine.teams import TeamRegistry
 
 #: 1.1 (19 November 2026): version 1's descriptive band names (semantic events schema 1.5); group ids follow them.
 PAYLOAD_VERSION = "1.1"
@@ -98,7 +99,7 @@ def build_payload(match: NormalisedMatch, *, notes: list[str] | None = None, sam
     ph, pa = roster_profiles(match.provider, match.match_id, hj, aj)
     analysis = MatchAnalysis(match, profiles_home=ph, profiles_away=pa)
     parity = parity_for_match(match)
-    builder = SemanticBuilder(analysis, parity)
+    builder = SemanticBuilder(analysis, parity, teams=TeamRegistry.for_reference())
     sem = builder.semantic_events()
 
     decisions = sem.loc[sem["action_type"].isin(["pass", "carry"])]

@@ -166,6 +166,18 @@ def test_player_ids_are_stable_and_collision_free():
     assert len(ids) == 500
 
 
+def test_a_tenant_salt_gives_tenant_specific_ids(monkeypatch):
+    """Review DE-15: the public salt is for the reference sample only; each tenant's ids differ and need its secret."""
+    a, b = anonymize_name("Wibble Fakename", "tenant-a-salt-0123456789"), anonymize_name("Wibble Fakename", "tenant-b-salt-0123456789")
+    assert a != b != anonymize_name("Wibble Fakename") and a.startswith("sp_")
+    with pytest.raises(ValueError):
+        anonymize_name("Wibble Fakename", "short")
+    monkeypatch.setenv("PONTA_ENV", "production")
+    with pytest.raises(ValueError):
+        anonymize_name("Wibble Fakename")
+    assert anonymize_name("Wibble Fakename", "tenant-a-salt-0123456789") == a
+
+
 def test_filtering_by_name_keeps_only_that_player_and_still_anonymises(fake_export_path):
     df = load_statsports_source(fake_export_path, player_names=[FAKE_NAMES[0]])
     assert df["player_id"].nunique() == 1

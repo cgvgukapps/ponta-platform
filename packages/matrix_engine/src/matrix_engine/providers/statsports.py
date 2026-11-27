@@ -87,6 +87,7 @@ not prove.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import io
 import os
 import shutil
@@ -178,9 +179,12 @@ PLAUSIBLE_WIDTH_M: tuple[float, float] = (45.0, 90.0)
 #: are strictly increasing but not consecutive.
 FRAME_GRID_HZ: float = 10.0
 
-#: Salt for player-ID hashing. Fixed rather than random so IDs are stable
-#: across runs and processes, which identity matching needs.
+#: Salt for player-ID hashing on the reference sample: fixed rather than random so IDs are stable across runs and
+#: processes, which identity matching needs. It is public, so it protects nothing: the product passes a per-tenant
+#: ``id_salt`` (review DE-15, 27 November 2026), and this default is refused when ``PONTA_ENV`` is ``production``.
 _ID_SALT = "matrix_engine.providers.statsports"
+#: Shortest per-tenant salt accepted.
+MIN_SALT_CHARS = 16
 
 #: Length of the hash prefix used as an ID. 10 hex characters is 40 bits — far
 #: beyond collision range for a squad, and short enough to read in a test.
@@ -362,7 +366,7 @@ def _read_raw(source: str, max_rows: int | None, cache_dir: str | None) -> pd.Da
 # Anonymisation
 # ---------------------------------------------------------------------------
 
-def anonymize_name(name: str) -> str:
+def anonymize_name(name: str, salt: str | None = None) -> str:
     """
     Map a display name to a stable opaque player ID.
 
@@ -376,8 +380,19 @@ def anonymize_name(name: str) -> str:
     DataFrame, CSV, log line or report produced from this data, which is the
     property that matters for a dataset that should not have been republished
     in the first place.
+
+    With a per-tenant ``salt`` (the product), the id is a keyed hash (HMAC-SHA256) under it, so the same player gets a
+    different id in each tenant and the squad-list attack needs the tenant's secret. Without one, the public reference
+    salt is used, which is refused when ``PONTA_ENV`` is ``production``.
     """
-    digest = hashlib.sha256(f"{_ID_SALT}:{name}".encode()).hexdigest()
+    if salt is None:
+        if os.environ.get("PONTA_ENV", "").strip().lower() in ("production", "prod"):
+            raise ValueError("a per-tenant id_salt is required when PONTA_ENV is production")
+        digest = hashlib.sha256(f"{_ID_SALT}:{name}".encode()).hexdigest()
+    else:
+        if len(salt) < MIN_SALT_CHARS:
+            raise ValueError(f"id_salt must be at least {MIN_SALT_CHARS} characters")
+        digest = hmac.new(salt.encode(), f"statsports:{name}".encode(), hashlib.sha256).hexdigest()
     return f"sp_{digest[:_ID_LENGTH]}"
 
 
@@ -609,6 +624,7 @@ def load_statsports_source(
     orientation: str = "min_area_rect",
     rotation_deg: float | None = None,
     with_raw_quality: bool = False,
+    id_salt: str | None = None,
 ) -> pd.DataFrame:
     """
     Load a raw STATSports Apex export as Matrix-schema tracking.
@@ -646,6 +662,8 @@ def load_statsports_source(
         positions from separate calls are not comparable unless the rotation is
         pinned. Pass the ``rotation_deg`` from a full-session load to put a
         subset into the same frame.
+    id_salt : str, optional
+        The tenant's salt for player ids (required when ``PONTA_ENV`` is ``production``); see :func:`anonymize_name`.
     with_raw_quality : bool
         Also return the vendor's raw diagnostic columns
         (``vendor_speed_m_s``, ``hacc``, ``hdop``, ``quality_of_signal``,
@@ -687,7 +705,7 @@ def load_statsports_source(
 
     # Anonymise before anything else reads the frame, and drop the name column
     # in the same step so nothing downstream can reach it.
-    player_id = raw[COL_NAME].astype(str).map(anonymize_name)
+    player_id = raw[COL_NAME].astype(str).map(lambda n: anonymize_name(n, id_salt))
     quality = compute_native_quality(raw)
 
     work = pd.DataFrame(

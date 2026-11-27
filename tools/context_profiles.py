@@ -64,8 +64,8 @@ def _profiles_for(m, cfg) -> tuple[pd.DataFrame, object]:
 
     ma = MatchAnalysis(m)
     res = registry().run(m, config=cfg, extras={"analysis": ma})
-    sem = SemanticBuilder(ma, parity_for_match(m), context=res, teams=TeamRegistry()).semantic_events()
-    return match_profiles(m, res, TeamRegistry().keys_for(m), sem), res
+    sem = SemanticBuilder(ma, parity_for_match(m), context=res, teams=TeamRegistry.for_reference()).semantic_events()
+    return match_profiles(m, res, TeamRegistry.for_reference().identity(m), sem), res
 
 
 def build(args) -> None:
@@ -112,6 +112,8 @@ def build(args) -> None:
         pr, res = _profiles_for(m, cfg)
         ref = reference_figures(args.source, it, m, res, off)
         pr = pr.merge(ref, on="team", how="left") if len(ref) else pr
+        # The tool's own record of the source (schema 2.0: match_id is an opaque key, so it no longer names the provider).
+        pr = pr.assign(ref_source=args.source)
         pr.to_parquet(out, index=False)
         print(name, len(pr), "profile rows", flush=True)
 
@@ -213,12 +215,15 @@ def analyse(args) -> None:
     cfg = values()
     files = sorted(args.cache.glob("*.parquet"))
     pr = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    # The source of each row: the tool's own column since schema 2.0, the old provider-form match id before it.
+    src_of = pr["ref_source"] if "ref_source" in pr else pd.Series(np.nan, index=pr.index)
+    pr["ref_source"] = src_of.fillna(pr["match_id"].astype(str).str.split("_").str[0])
     out: dict = {"matches": int(pr["match_id"].nunique()), "team_matches": int(pr[["match_id", "team"]].drop_duplicates().shape[0]),
                  "versions_identical": bool(pr["versions"].nunique() == 1)}
     rng = np.random.default_rng(1)
-    sc = pr.loc[pr["match_id"].str.startswith("skillcorner")]
+    sc = pr.loc[pr["ref_source"] == "skillcorner"]
     for src in ("skillcorner", "pff"):
-        part = pr.loc[pr["match_id"].str.startswith(src)]
+        part = pr.loc[pr["ref_source"] == src]
         if part["match_id"].nunique():
             out[f"stability_{src}"] = stability(part, cfg, rng)
             out[f"baseline_vs_set_mean_{src}"] = baseline_help(part)
@@ -226,7 +231,7 @@ def analyse(args) -> None:
     # Raw values beside rank agreement for every published and common measure (review AN-01): a level error (PPDA at 71)
     # is invisible to a rank correlation.
     out["value_ranges"] = {}
-    for src, part in pr.groupby(pr["match_id"].str.split("_").str[0]):
+    for src, part in pr.groupby("ref_source"):
         rows = {}
         for meas in CATALOGUE:
             if meas.basis not in ("published", "common"):
@@ -238,7 +243,7 @@ def analyse(args) -> None:
     out["checks"] = {"rows": int(len(pr)), "missing_label_or_basis": int(pr[["label", "basis", "data_check"]].isna().any(axis=1).sum()),
                      "blocked_share": round(float((pr["data_check"] == "blocked").mean()), 3),
                      "blocked_share_by_source": {src: round(float((g["data_check"] == "blocked").mean()), 3)
-                                                 for src, g in pr.groupby(pr["match_id"].str.split("_").str[0])}}
+                                                 for src, g in pr.groupby("ref_source")}}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps({k: v for k, v in out.items() if not k.startswith(("stability_", "baseline_vs_set_mean"))}, indent=1, default=str))
@@ -292,10 +297,10 @@ def _agreement(pr: pd.DataFrame, sc: pd.DataFrame, out: dict) -> None:
         agree[f"phase_share_{p}"] = {"n": int(len(d)), "spearman": round(float(d["value"].rank().corr(d[f"ref_phase_share_{p}"].rank())), 3) if len(d) > 5 else None}
     d = sc.loc[sc["measure"] == "presses_per_min_out"].assign(count=lambda x: x["value"] * x["sample_minutes"])[["count", "ref_pressing_chains"]].dropna()
     agree["presses_vs_pressing_chains"] = {"n": int(len(d)), "spearman": round(float(d["count"].rank().corr(d["ref_pressing_chains"].rank())), 3) if len(d) > 5 else None}
-    ids = pr.loc[pr["match_id"].str.startswith("idsse") & (pr["measure"] == "possession_share"), ["value", "ref_possession_share"]].dropna()
+    ids = pr.loc[(pr["ref_source"] == "idsse") & (pr["measure"] == "possession_share"), ["value", "ref_possession_share"]].dropna()
     agree["possession_share_vs_official"] = {"n": int(len(ids)), "mean_abs_diff": round(float((ids["value"] - ids["ref_possession_share"]).abs().mean()), 4) if len(ids) else None,
                                              "pearson": round(float(ids["value"].corr(ids["ref_possession_share"])), 3) if len(ids) > 3 else None}
-    pf = pr.loc[pr["match_id"].str.startswith("pff")]
+    pf = pr.loc[pr["ref_source"] == "pff"]
     if len(pf):
         def wide(measure: str, ref: str) -> pd.DataFrame:
             return pf.loc[pf["measure"] == measure, ["value", ref]].rename(columns={"value": measure})
