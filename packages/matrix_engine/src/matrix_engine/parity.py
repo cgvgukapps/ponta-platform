@@ -41,7 +41,8 @@ import pandas as pd
 
 from matrix_engine.match import NormalisedMatch
 
-SCHEMA_VERSION = "1.1"  # 1.1 (24 November 2026): estimated positions in the inputs and coverage
+SCHEMA_VERSION = "1.2"  # 1.2 (27 November 2026, review DE-04): mode inferred from the data; the ball at passes and carries
+#                        1.1 (24 November 2026): estimated positions in the inputs and coverage
 
 State = Literal["full", "degraded", "blocked"]
 Mode = Literal["full_tracking", "event_only", "gps_only"]
@@ -51,6 +52,13 @@ Mode = Literal["full_tracking", "event_only", "gps_only"]
 LOW_RATE_HZ = 10.0
 #: Above this share of missing player observations, position-based metrics are Degraded.
 MAX_PLAYER_DROPOUT = 0.10
+#: Ball-dependent metrics need the ball located at the start of the passes and carries they score: Degraded when it is
+#: missing at more than this share of them (the same 10% rule as player observations; review DE-04). Measured on the
+#: whole match the share mixes in dead-ball time (59% to 74% on the sample matches); at passes and carries it is 99.9%
+#: to 100% on Metrica's three games and SkillCorner's match 1886347.
+MAX_BALL_MISSING_AT_EVENTS = 0.10
+BALL_METRICS: tuple[str, ...] = ("control_zones", "movement_value", "pass_option_value", "decision_quality", "pass_completion",
+                                 "decision_quality_v2")
 #: Above this share of player positions the provider estimated rather than observed,
 #: metrics that read those positions are Degraded. An estimated position counts as a
 #: missing observation, so the bar is the same as for dropout (engineering).
@@ -121,6 +129,8 @@ class ParityInputs:
         the provider does not say (every position is an observation).
     observed_near_ball_share : float or None
         The same share within ``NEAR_BALL_M`` of the ball.
+    ball_at_events_share : float or None
+        Share of passes and carries whose start frame has a ball position (schema 1.2); None without events.
     physiological_channels : tuple of str
         Heart rate, IMU and similar channels present. None are ingested today.
     fusion_tier : int
@@ -141,6 +151,7 @@ class ParityInputs:
     observed_near_ball_share: float | None = None
     physiological_channels: tuple[str, ...] = ()
     fusion_tier: int = 1
+    ball_at_events_share: float | None = None
 
 
 @dataclass(frozen=True)
@@ -343,7 +354,7 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
             unlock = "Use a higher-rate or more complete tracking export."
             if observed is not None and 1.0 - observed > MAX_ESTIMATED_SHARE:
                 unlock = "Use full-pitch tracking (optical or wearable) for this match."
-            return "degraded", "Positions are " + "; ".join(r) + ".", meas, unlock
+            return "degraded", "Positions are limited: " + "; ".join(r) + ".", meas, unlock
 
         near = positions(inputs.observed_near_ball_share, f"within {NEAR_BALL_M:g} m of the ball")
         wide = positions(inputs.observed_share, "on the pitch")
@@ -398,6 +409,16 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
                     unlock="Add a logged event feed for this match.")
             else:
                 put("shot_quality", "blocked", "No shot events in this feed.", unlock="Add an event feed that includes shots.")
+        # The ball at the passes and carries the ball-dependent metrics score (schema 1.2, review DE-04).
+        bat = inputs.ball_at_events_share
+        if bat is not None and 1.0 - bat > MAX_BALL_MISSING_AT_EVENTS:
+            note = f"the ball is not located at {_pct(1.0 - bat)} of passes and carries"
+            for mid in BALL_METRICS:
+                if mid in m and m[mid].state != "blocked":
+                    p = m[mid]
+                    m[mid] = MetricParity(p.family, p.label, "degraded", p.reason.rstrip(".") + f"; {note}.",
+                                          (p.measure + "; " if p.measure else "") + f"ball at {_pct(bat)} of passes and carries",
+                                          p.unlock or "Use a tracking export with the ball tracked throughout play.")
         est_note = ""
         if inputs.observed_share is not None and 1.0 - inputs.observed_share > MAX_ESTIMATED_SHARE:
             est_note = f" {_pct(1.0 - inputs.observed_share)} of positions are the provider's estimates (players off camera)."
@@ -455,14 +476,52 @@ def player_dropout(match: NormalisedMatch, *, per_team: int = 11) -> float:
     return float(1.0 - counts.sum() / (len(counts) * per_team))
 
 
+def infer_mode(match: NormalisedMatch) -> Mode:
+    """
+    The analysis mode the data supports (review DE-04): no positions, ``event_only``; positions with no ball and not both
+    teams (a wearable export), ``gps_only``; otherwise ``full_tracking``.
+    """
+    tr = match.tracking
+    if tr is None or tr.empty:
+        return "event_only"
+    teams = set(tr["team"].dropna().astype(str).unique()) if "team" in tr.columns else set()
+    no_ball = match.ball is None or match.ball.empty or match.ball_detected_share() == 0
+    if no_ball and not {"home", "away"} <= teams:
+        return "gps_only"
+    return "full_tracking"
+
+
+def ball_at_events_share(match: NormalisedMatch) -> float | None:
+    """Share of passes and carries whose start frame has a ball position; None when there are none."""
+    ev = match.events
+    if ev is None or ev.empty or "Type" not in ev.columns or "Start Frame" not in ev.columns:
+        return None
+    t = ev["Type"].astype(str).str.upper()
+    f = pd.to_numeric(ev.loc[t.isin(["PASS", "CARRY", "BALL LOST"]), "Start Frame"], errors="coerce").dropna()
+    if f.empty:
+        return None
+    ball = match.ball
+    have = set(ball.loc[ball["x"].notna(), "frame"].astype(int)) if ball is not None and len(ball) else set()
+    return float(f.astype(int).isin(have).mean())
+
+
 def inputs_from_match(
     match: NormalisedMatch,
     *,
-    mode: Mode = "full_tracking",
+    mode: Mode | None = None,
     physiological_channels: tuple[str, ...] = (),
     fusion_tier: int = 1,
 ) -> ParityInputs:
-    """Measure the parity inputs from a Matrix-normalised match."""
+    """
+    Measure the parity inputs from a Matrix-normalised match. The mode is inferred from the data; a ``mode`` passed that
+    contradicts it raises (schema 1.2, review DE-04: a wearable export passed as optical was described as partly usable
+    for opposition pressure).
+    """
+    inferred = infer_mode(match)
+    if mode is None:
+        mode = inferred
+    elif mode != inferred:
+        raise ValueError(f"mode {mode!r} contradicts the data, which supports {inferred!r}")
     ev = match.events
     types = ev["Type"].astype(str).str.upper() if "Type" in ev.columns else pd.Series(dtype=str)
     return ParityInputs(
@@ -476,9 +535,11 @@ def inputs_from_match(
         has_shot_events=bool(np.any(types.str.contains("SHOT"))),
         observed_share=None if (o := match.observed_share()) is None else round(o, 4),
         observed_near_ball_share=None if (n := match.observed_near_ball_share(NEAR_BALL_M)) is None else round(n, 4),
-        events_derived_from_tracking=match.provider == "skillcorner",
+        events_derived_from_tracking=(match.events_derived_from_tracking if getattr(match, "events_derived_from_tracking", None)
+                                      is not None else match.provider == "skillcorner"),
         physiological_channels=physiological_channels,
         fusion_tier=fusion_tier,
+        ball_at_events_share=None if (b := ball_at_events_share(match)) is None else round(b, 4),
     )
 
 

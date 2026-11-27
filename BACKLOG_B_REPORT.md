@@ -97,3 +97,14 @@
 - **EPTS** needs both halves' bounds from its metadata and refuses extra time, since its metadata gives the direction for the first half only.
 
 **Checked** on synthetic four-period fixtures (`tests/cross_engine/test_extra_time.py`). Under the old rule, extra time's first half was mirrored on SkillCorner and its second half on Metrica; both now hold one end in all four periods.
+
+### 6b. The Data check reads the data, not the caller (DE-04; Data check schema 1.2)
+
+**The gaps.** The mode defaulted to full tracking, so a wearable export run without one was described as optical and as partly usable for opposition pressure ("Positions are only one team is tracked."). Ball detection never entered a rule. Whether events were inferred from tracking was decided by the provider's name.
+
+**What changed.**
+
+- `infer_mode(match)`: no positions gives event-only; positions with no ball and not both teams (a wearable export) give GPS-only; anything else gives full tracking. A `mode` passed that contradicts the data raises.
+- **The ball at passes and carries.** Over the whole match, ball detection mixes in dead-ball time: 59% to 74% on the sample matches, even Metrica's optical games. At the start of passes and carries it is 99.9% to 100% on Metrica's three games and SkillCorner's match 1886347. The ball-dependent metrics (control zones, movement value, pass option value, decision quality, pass completion, Choice and so Gain version 2) are Degraded when the ball is missing at more than 10% of those starts. This is the player-observation rule's threshold, an engineering choice. Pressure reads players and is not affected. The sample matches are unchanged.
+- `NormalisedMatch.events_derived_from_tracking` is set by the adapter (SkillCorner's loader). Matches cached before the flag existed fall back to the provider name.
+- Reasons read as sentences ("Positions are limited: only one team is tracked.").

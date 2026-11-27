@@ -96,6 +96,9 @@ class NormalisedMatch:
     teams: dict[str, str] | None = None
     competition: str | None = None
     season: str | None = None
+    #: Set by the adapter (review DE-04, 27 November 2026): the events were inferred from tracking, not logged. None on
+    #: matches built before the flag existed; the Data check then falls back to the provider (SkillCorner's are).
+    events_derived_from_tracking: bool | None = None
 
     @property
     def n_frames(self) -> int:
@@ -233,6 +236,7 @@ def with_skillcorner_metadata(m: NormalisedMatch, match_dir: str, match_id: int)
         teams={"home": str(meta["home_team"]["id"]), "away": str(meta["away_team"]["id"])},
         competition=f"skillcorner:{comp['id']}" if comp.get("id") is not None else None,
         season=season.get("name"),
+        events_derived_from_tracking=True,  # SkillCorner's dynamic events are inferred from its tracking
     )
 
 

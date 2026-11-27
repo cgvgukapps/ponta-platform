@@ -197,4 +197,4 @@ def test_unflagged_reports_keep_their_coverage_and_reasons():
     assert r.metrics["control_zones"].reason == "Both teams are tracked throughout."
     flagged = classify(_optical(observed_share=0.6, observed_near_ball_share=0.9))
     assert flagged.coverage["observed_position_share"] == 0.6 and flagged.coverage["observed_near_ball_share"] == 0.9
-    assert flagged.to_dict()["schema_version"] == "1.1"
+    assert flagged.to_dict()["schema_version"] == "1.2"
