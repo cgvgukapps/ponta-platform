@@ -171,4 +171,6 @@ Ponta's rule after the definitions FIFA publishes in its Football Language and E
 
 ## In the semantic events (schema 1.1)
 
+> *(27 November 2026: superseded for the AI-facing columns by `docs/ai_fields.md`, the field dictionary generated from `plaiq_engine/field_dictionary.py`, which covers semantic schema 2.1, the episodes, movement values and profiles with each field's validation status. This section is kept as the schema 1.1 record.)*
+
 `possession_chain_id` (`{match_id}_chNNNN`), `possession_source`, `score_diff` and `red_card_diff` for the actor's team, at the action's start frame. All are labels or small integers, never coordinates; all are null without context.

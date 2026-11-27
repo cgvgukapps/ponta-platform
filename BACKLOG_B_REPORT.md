@@ -48,3 +48,22 @@
 **Found on the way.** The match page payload's "Passes that lost the ball" group filtered on the Gain score, which lost passes have not carried since schema 1.9, so it was always empty. It now lists every lost pass (payload 1.2).
 
 **Not done here.** The score difference on SkillCorner (its match file gives only the final score, so `score_diff` stays null) and a validated shot-quality measure. The UI prototype still expects `off_ball_run` in its sample payload.
+
+## 4. One field dictionary for every AI-facing column (AI-08, AN-10)
+
+**The gaps.** No machine-readable definition existed for schema 1.7 onwards or for the 116 episode columns. Event rows carried only decision quality's Data check state. Carrier pressure (weighted kappa 0.76 against SkillCorner) and line-breaking options (kappa at most 0.16) were both just "estimated", and "kept from player-facing views" lived in prose inside definitions. The leak tests checked column names, so a cell index added under a neutral name would have passed.
+
+**What changed.** `plaiq_engine/field_dictionary.py` (version 1.0.0) has one entry for each of 272 columns and measures across `semantic_events`, `semantic_states`, `movement_values`, `profiles` and the 46 profile measures. Each entry gives a definition, unit and scale, kind (observed, estimated, identifier or metadata), a typed validation status with its figure and report, the Data check metric it inherits, and whether it is quotable and player-facing. `tools/field_dictionary.py` writes `docs/ai_fields.json` and `docs/ai_fields.md` from it.
+
+**The rules, tested** (`tests/cross_engine/test_field_dictionary.py`):
+
+- Each AI table has exactly the dictionary's columns. `check_columns` is the allowlist the API will apply, and a column added under a neutral name fails it.
+- Every claimed check names its figure. An estimated field cannot be "not applicable".
+- **Only observed values are player-facing** until an analyst validates an estimated one (Gate 2b). `player_facing_view` applies this.
+- A field that disagrees with reference data is neither quotable nor player-facing. Today that is three profile rates: press, pressure and recovery engagements per minute, which run against PFF's pressure rate. Identifiers are cited, never quoted.
+- No entry claims analyst validation; the test says so if that changes.
+- The generated JSON matches the module.
+
+**Status counts** (160 estimated fields): 28 agree with reference data, 54 agree in part, 3 disagree, 13 are measured against outcomes (Gain, Choice, adjusted Choice and their medians), and 62 are not yet measured. Agreement figures are those reported so far: measured on a development set, with the profile agreements from before backlog A (`CONTEXT_PROFILES_REPORT.md` section 3).
+
+**Not done here.** Typed-tool results are not built yet. When they are, each attaches the state of its fields' `data_check` metric from the match's Data check. The episode summary's quoted fields are not yet checked against the quotable flag; none of the fields it quotes is a disagreeing one.
