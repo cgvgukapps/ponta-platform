@@ -1,6 +1,6 @@
 # Pre-registered confirmation of the context packages
 
-> **Status: written 27 November 2026, before any confirmation data was opened (review backlog B, ST-01, ST-02). The bars are proposed and wait for the founder's agreement; once agreed they are not changed for this confirmation.** Nothing in this document has been run.
+> **Status: written 27 November 2026, before any confirmation data was opened (review backlog B, ST-01, ST-02). Bars agreed by the founder on 27 November 2026; they are not changed for this confirmation. Part A's comparisons were fixed in writing (below) before they were run.**
 
 ## Why
 
@@ -27,7 +27,7 @@ The freeze is the commit that adds this file. Any change to a frozen part after 
 
 All matches in the chosen set are used. None are dropped after looking, except for a load failure, which is reported with its cause.
 
-## Bars (proposed; for the founder to agree before the data is opened)
+## Bars (agreed by the founder, 27 November 2026)
 
 Each bar sits below its development figure, because a confirmation on new data usually reads lower. Where an agreed gate bar exists it is kept unchanged.
 
@@ -44,6 +44,16 @@ Each bar sits below its development figure, because a confirmation on new data u
 | P6 runs | Reference runs found / run type kappa | 75% to 80% / 0.41 | **70% / 0.35** | proposed |
 | P4v engagements | Found / precision | 58% / 65% | **50% / 55%** | proposed |
 | Stage E verdict | Share of ordinary matches called above or below usual | 11% (5 of 47) | **5% to 15%** | the agreed 10% false-alarm rate, with sampling room |
+
+## Part A: how each comparison is made (fixed 27 November 2026, before it was run)
+
+PFF's labels are not the development references' labels, so each Part A measure is stated here in full. The PFF data was opened before for Stage E's team-level figures (pressure rates, lines broken per team, possession shares), never for an event-level comparison with P1 or P5, and none of these definitions was chosen by looking at one. The tool is `tools/confirmation_pff.py`; one match is run first only to check the tool runs, and nothing below changes after that.
+
+- **Data and rate.** All 64 matches through `tools/pff.py` (reader 3): PFF's tracked ball, not its smoothed ball; every third frame (about 10 Hz, the rate of SkillCorner's data, on which P5's development figures were measured, and the rate Stage E used on PFF). Periods the reader drops because players and ball disagree (extra time in 10506 and 10517), and events PFF did not link to a frame, are counted and reported, not used. P1, P2, the zones and P5 run as frozen, at the frozen thresholds, with PFF's events as their event input, as every provider's events are; P1 reads those events, so possession is not independent of PFF in the way a separate feed would be (the same holds for the German league's figure).
+- **P1 possession (bar 80%).** PFF's team in possession on P1's grid: the team of the latest PFF on-the-ball event (a kick-off or an `OTB` event) in the period. A grid point is dead (left out) before the first kick-off, after an `OUT` or `END` event until the next on-the-ball event, and between any event and a set-piece restart that follows it with no `OUT` in between (a foul or offside stoppage). The measure is the German league's: the share of live grid points where PFF names a team at which P1 names the same team, so P1's contested, unknown or dead labels count as misses. Also reported: agreement where both name a team.
+- **P5 carrier pressure (bar 0.60).** PFF's `pressureType` on the acting player's passes, crosses, shots and carries (`PA`, `CR`, `SH`, `BC`), on the frame PFF links each to. PFF does not publish what its four codes mean; following Stage E's existing reading (`tools/context_profiles.py`), `P` and `A` are pressed and `N` and `L` are not. P5's carrier pressure at the nearest grid point is cut at the development cut point between no pressure and low pressure (3 on the 1v1 scale): 3 or more is pressed. With two levels the pre-registered weighted kappa is Cohen's kappa. **This is a coarser measure than the development figure (five SkillCorner levels, quadratic-weighted), so the two are not directly comparable.** Also reported: the kappa with `L` counted as pressed, and P5's median pressure under each PFF code (descriptive, no bar).
+- **P5 line breaks (bar 0.45).** PFF's `linesBrokenType` on passes (`PA`; PFF labels no crosses), matched to P5's pass rows by team and start frame within two frames, where P5 labels the pass. PFF names lines by role (`A` attack, `M` midfield, `D` defence), so the furthest line broken is compared by role: none, attack, midfield or defence (P5's units in the same roles; PFF's furthest is `D` if present, else `M`, else `A`). Cohen's kappa on the four labels. Also reported: whether any line was broken (kappa).
+- **Pooling and intervals.** Each figure is pooled over all matches (points, passes or actions), with a 90% interval from 2,000 resamples of matches, and each match's own figure. Outputs stay outside the repository and name PFF as their source.
 
 ## Analysis plan
 
