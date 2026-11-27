@@ -190,13 +190,19 @@ def _period_time_seconds(
     periods: dict[int, tuple[int, int]],
     fps: float,
 ) -> float:
+    """
+    Elapsed match time of a frame: the earlier periods' lengths plus the time into this one. Periods 3 and 4 (extra time)
+    follow the same rule (review DE-06, 27 November 2026; before, every period after the first was timed as the second).
+    """
     p1_start, p1_end = periods.get(1, (0, 0))
-    p2_start, _ = periods.get(2, (p1_end + 1, p1_end + 1))
-
     if period_id == 1:
         return round((frame_id - p1_start) / fps, 4)
-    p1_duration = (p1_end - p1_start + 1) / fps
-    return round((frame_id - p2_start) / fps + p1_duration, 4)
+    if period_id == 2 and 2 not in periods:  # the old fallback, kept for callers that give period 1 only
+        return round((frame_id - (p1_end + 1)) / fps + (p1_end - p1_start + 1) / fps, 4)
+    if period_id not in periods:
+        raise ValueError(f"no frame bounds for period {period_id}")
+    before = sum((e - b + 1) / fps for p, (b, e) in periods.items() if p < period_id)
+    return round((frame_id - periods[period_id][0]) / fps + before, 4)
 
 
 def tracking_dataset_to_dataframes(

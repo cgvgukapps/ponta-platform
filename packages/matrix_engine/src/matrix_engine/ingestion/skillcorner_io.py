@@ -148,6 +148,9 @@ def load_skillcorner_meta(match_json_path: str) -> dict:
     h1_side = home_team_side[0] if home_team_side else "left_to_right"
     # "right_to_left" means home attacks -x in H1 → need to flip
     h1_home_sign = -1 if h1_side == "right_to_left" else 1
+    # The home team's direction in every period, from the per-period list (review DE-06, 27 November 2026): teams
+    # change ends between the halves of extra time too, so period 3 and 4 are read, never assumed.
+    period_home_signs = {i + 1: (-1 if side == "right_to_left" else 1) for i, side in enumerate(home_team_side)}
 
     return {
         "match_id":       raw["id"],
@@ -164,6 +167,7 @@ def load_skillcorner_meta(match_json_path: str) -> dict:
         "periods":        periods,
         "home_team_side": home_team_side,
         "h1_home_sign":   h1_home_sign,
+        "period_home_signs": period_home_signs,
         # downstream compatibility
         "team_a_id":      home_team_id,
         "team_b_id":      away_team_id,
@@ -326,6 +330,7 @@ def tracking_to_wide(
     away_players: list[dict],
     *,
     h1_home_sign: int = 1,
+    period_signs: dict[int, int] | None = None,
     normalize_direction: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -392,8 +397,11 @@ def tracking_to_wide(
                 except Exception:
                     time_s = 0.0
 
-        # Sign for this period: period 1 uses h1_home_sign; period 2 uses opposite
-        if normalize_direction:
+        # Sign for this period: the per-period list where the match file gives one (review DE-06), else period 1 uses
+        # h1_home_sign and every later period the opposite (the old rule, wrong for the second half of extra time).
+        if normalize_direction and period_signs and period in period_signs:
+            sign = period_signs[period]
+        elif normalize_direction:
             if period == 1:
                 sign = h1_home_sign
             else:
@@ -966,6 +974,7 @@ class SkillCornerAdapter:
             meta["home_players"],
             meta["away_players"],
             h1_home_sign=h1_sign,
+            period_signs=meta.get("period_home_signs") if self.normalize else None,
             normalize_direction=self.normalize,
         )
 

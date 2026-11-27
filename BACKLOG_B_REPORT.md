@@ -82,3 +82,18 @@
 **Measured on SkillCorner match 1886347** (events without context): 1,568 of 1,573 rows have a share (median 1.0, 10th percentile 0.86). The bands are 1,341 `all_observed`, 227 `partly_estimated` and 5 `not_flagged`. `players_observed` now varies (median 16, standard deviation 4).
 
 **Decision recorded.** This closes the open decision on what fills the confidence slot for single-source matches, in the form backlog B named (approved by the founder, 27 November 2026). `ponta-blueprint/ai-layer.md` carries it.
+
+## 6. Data engineering (DE-04, DE-06, DE-08, DE-09, DE-12)
+
+### 6a. Extra time (DE-06)
+
+**The gap.** Three supported loaders flipped every period after the first alike, so in a cup match with extra time one of its halves would be mirrored for every Plaiq metric, and SkillCorner event times after the second half were wrong. EPTS fell back to Sample Game 3's own frame bounds for any match without them. No open sample match goes to extra time, so nothing caught it.
+
+**What changed.**
+
+- **SkillCorner** reads the home team's direction for every period from `home_team_side`. On all 20 open matches that list alternates, so their output is unchanged.
+- **Metrica's CSV** orients periods 3 and 4 by where the home goalkeeper stands against period 1, read from the data (the files give no per-period direction). The load fails when that cannot be read. Periods 1 and 2 are unchanged, as their regression tests require.
+- **The clock helper** times periods 3 and 4 after the earlier periods; the second half's times are unchanged.
+- **EPTS** needs both halves' bounds from its metadata and refuses extra time, since its metadata gives the direction for the first half only.
+
+**Checked** on synthetic four-period fixtures (`tests/cross_engine/test_extra_time.py`). Under the old rule, extra time's first half was mirrored on SkillCorner and its second half on Metrica; both now hold one end in all four periods.

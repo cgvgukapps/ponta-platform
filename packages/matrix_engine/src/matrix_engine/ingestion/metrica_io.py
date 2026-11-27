@@ -118,7 +118,23 @@ def to_single_playing_direction(
     from the tracked ball (``ponta-platform/PLAIQ_REFERENCES_REPORT.md``). Tracking
     output is unchanged: its rows from the first second-half frame on are exactly
     those with ``Period >= 2``.
+
+    *Extra time (review DE-06, 27 November 2026):* teams change ends between the halves of extra time too, so periods 3
+    and 4 are not flipped alike. Each is flipped when the home goalkeeper defends the other end from period 1, read from
+    the data (Metrica's files give no per-period direction); when it cannot be read, the load fails rather than guess.
+    Periods 1 and 2 are unchanged.
     """
+    flip_periods = {2}
+    if "Period" in home.columns:
+        later = sorted(int(p) for p in pd.unique(home["Period"].dropna()) if int(p) >= 3)
+        if later:
+            first = _home_keeper_end(home, 1)
+            for p in later:
+                end = _home_keeper_end(home, p)
+                if first is None or end is None:
+                    raise ValueError(f"cannot tell which way the home team attacks in period {p}: no goalkeeper found")
+                if end != first:
+                    flip_periods.add(p)
     for df in [home, away, events]:
         coord_cols = [c for c in df.columns if c.endswith("_x") or c.endswith("_y")]
         # Events use different column names
@@ -126,9 +142,22 @@ def to_single_playing_direction(
             coord_cols = ["Start X", "Start Y", "End X", "End Y"]
         if "Period" not in df.columns or not coord_cols:
             continue
-        df.loc[df["Period"] >= 2, coord_cols] *= -1
+        df.loc[df["Period"].isin(flip_periods), coord_cols] *= -1
 
     return home, away, events
+
+
+def _home_keeper_end(home: pd.DataFrame, period: int, min_presence: float = 0.5) -> int | None:
+    """+1 or -1: the end (sign of x) the home goalkeeper stands at in ``period``, before any flip; None when unclear."""
+    part = home.loc[home["Period"] == period]
+    x_cols = [c for c in part.columns if c.startswith("Home_") and c.endswith("_x")]
+    if part.empty or not x_cols:
+        return None
+    seen = part[x_cols].notna().mean()
+    means = part[[c for c in x_cols if seen[c] >= min_presence]].mean()
+    if means.empty or not np.isfinite(means.abs().max()) or means.abs().max() < 20.0:
+        return None
+    return 1 if means[means.abs().idxmax()] > 0 else -1
 
 
 def home_attack_sign(home: pd.DataFrame, min_presence: float = 0.5) -> int:

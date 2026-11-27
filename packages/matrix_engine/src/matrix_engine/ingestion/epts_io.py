@@ -146,6 +146,15 @@ def _to_metric(arr: np.ndarray) -> np.ndarray:
     return out
 
 
+def _check_periods(periods: dict) -> None:
+    """Both halves' frame bounds from the metadata, and no extra time (which this format cannot orient)."""
+    missing = [p for p in (1, 2) if p not in periods]
+    if missing:
+        raise ValueError(f"EPTS metadata gives no frame bounds for period(s) {missing}")
+    if any(int(p) > 2 for p in periods):
+        raise NotImplementedError("EPTS extra time: the metadata gives the playing direction for the first half only")
+
+
 def load_epts_tracking(tracking_path: str, meta: dict) -> tuple:
     """
     Parse the EPTS compact tracking file.
@@ -161,9 +170,12 @@ def load_epts_tracking(tracking_path: str, meta: dict) -> tuple:
     periods    = meta['periods']
     attack_h1  = meta['team_a_attack_h1']
 
-    # Build period lookup: frame → (period, time_within_period)
-    p1_start, p1_end = periods.get(1, (1, 69661))
-    p2_start, p2_end = periods.get(2, (p1_end + 1, p1_end + 80000))
+    # Build period lookup: frame → (period, time_within_period). The bounds come from the file's metadata only (review
+    # DE-06, 27 November 2026: the fallback was Sample Game 3's own bounds, wrong for any other match), and extra time
+    # fails loudly: the metadata gives the direction for the first half only, so periods 3 and 4 cannot be oriented.
+    _check_periods(periods)
+    p1_start, p1_end = periods[1]
+    p2_start, p2_end = periods[2]
 
     # Pre-allocate lists
     frames: list      = []
@@ -304,9 +316,9 @@ def load_epts_events(events_path: str, meta: dict,
     attack_h1  = meta['team_a_attack_h1']
     flip_h1    = (attack_h1 == 'right_to_left')
 
-    p1_start   = periods.get(1, (1,))[0]
-    p2_start   = periods.get(2, (1, 69661))[0]
-    p1_end     = periods.get(1, (1, 69661))[1]
+    _check_periods(periods)
+    p1_start, p1_end = periods[1]
+    p2_start = periods[2][0]
 
     def frame_to_time(frame, period):
         if period == 1:
