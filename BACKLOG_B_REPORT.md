@@ -67,3 +67,18 @@
 **Status counts** (160 estimated fields): 28 agree with reference data, 54 agree in part, 3 disagree, 13 are measured against outcomes (Gain, Choice, adjusted Choice and their medians), and 62 are not yet measured. Agreement figures are those reported so far: measured on a development set, with the profile agreements from before backlog A (`CONTEXT_PROFILES_REPORT.md` section 3).
 
 **Not done here.** Typed-tool results are not built yet. When they are, each attaches the state of its fields' `data_check` metric from the match's Data check. The episode summary's quoted fields are not yet checked against the quotable flag; none of the fields it quotes is a disagreeing one.
+
+## 5. The citation's confidence slot is an evidence grade (AI-03)
+
+**The gap.** The open decision proposed filling the confidence slot from `ball_detected` and `players_observed`. On broadcast tracking both were constant (22 players and the ball "detected" on all 8,600 rows of SkillCorner match 1886347), so any number built from them would have printed high confidence on every claim, against the match's own Data check.
+
+**What changed (semantic schema 2.2).**
+
+- The slot is a small categorical object, not a probability: `{field, data_check, label, validation, observed_near_ball}`. It gives the cited field's Data check state in this match, observed or estimated, its validation status from the field dictionary, and a band of the row's observed near-ball share. The band is `all_observed` at 90% or more (the Data check's own rule: no more than 10% of observations missing or estimated), `partly_estimated` below that, and `not_flagged` where the provider does not mark estimates.
+- `citations.match_states(parity)` gives every state by the dictionary's metric names. `evidence_grade(row, field, states)` computes the grade. `check_grade` and `resolve_event_citation(..., grade=, states=)` are the verifier's check that a model's grade is that one.
+- A field that may not be quoted (identifiers, disagreeing fields) cannot be graded, so it cannot be cited as a claim. A state the Data check did not report is never shown as Full.
+- Events gain `observed_near_ball_share`: the share of positions within 15 m of the ball that the provider observed at the action's start.
+
+**Measured on SkillCorner match 1886347** (events without context): 1,568 of 1,573 rows have a share (median 1.0, 10th percentile 0.86). The bands are 1,341 `all_observed`, 227 `partly_estimated` and 5 `not_flagged`. `players_observed` now varies (median 16, standard deviation 4).
+
+**Decision recorded.** This closes the open decision on what fills the confidence slot for single-source matches, in the form backlog B named (approved by the founder, 27 November 2026). `ponta-blueprint/ai-layer.md` carries it.

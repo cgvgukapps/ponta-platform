@@ -28,7 +28,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("2.1").all()  # ... 1.8 teams; 1.9 review fixes; 2.0 opaque ids; 2.1 shots, turnovers, runs
+    assert sem["schema_version"].eq("2.2").all()  # ... 2.0 opaque ids; 2.1 shots, turnovers, runs; 2.2 near-ball share
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].nunique() == 1 and sem["match_id"].str.fullmatch(r"m1_[0-9a-f]{12}").all()
     assert sem["event_id"].is_unique

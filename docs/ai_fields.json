@@ -1,5 +1,5 @@
 {
- "version": "1.0.0",
+ "version": "1.1.0",
  "kinds": [
   "observed",
   "estimated",
@@ -573,6 +573,18 @@
    "name": "players_observed",
    "definition": "Players the provider observed (not estimated) at the action's start.",
    "unit": "players",
+   "kind": "observed",
+   "validation": "not_applicable",
+   "evidence": null,
+   "data_check": null,
+   "quotable": true,
+   "player_facing": true
+  },
+  {
+   "table": "semantic_events",
+   "name": "observed_near_ball_share",
+   "definition": "Share of positions within 15 m of the ball the provider observed at the action's start (null where it does not flag estimates).",
+   "unit": "share",
    "kind": "observed",
    "validation": "not_applicable",
    "evidence": null,

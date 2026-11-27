@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-DICTIONARY_VERSION = "1.0.0"  # 27 November 2026: semantic schema 2.1, profiles 0.3.0
+DICTIONARY_VERSION = "1.1.0"  # 27 November 2026: semantic schema 2.2 (1.0.0: 2.1), profiles 0.3.0
 
 KINDS = ("observed", "estimated", "identifier", "metadata")
 VALIDATION = ("analyst_validated", "reference_agrees", "reference_partial", "reference_disagrees", "outcome_measured",
@@ -170,6 +170,8 @@ _f(T, "run_area", "Where the run ends against the defending units: in_front, in_
 _meta(T, "physiological_context", "Null: no physiological source exists.")
 _obs(T, "ball_detected", "Whether the ball was detected at the action's start.")
 _obs(T, "players_observed", "Players the provider observed (not estimated) at the action's start.", "players")
+_obs(T, "observed_near_ball_share", "Share of positions within 15 m of the ball the provider observed at the action's start "
+     "(null where it does not flag estimates).", "share")
 _meta(T, "parity_spatial", "Data check state of decision quality for this match.", quotable=True)
 _meta(T, "parity_physiological", "Data check state of load and fatigue for this match.", quotable=True)
 _ident(T, "possession_chain_id", "The possession chain (P1), built on the match key.")

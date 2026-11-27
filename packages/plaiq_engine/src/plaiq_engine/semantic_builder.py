@@ -42,7 +42,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from matrix_engine.ingestion.metrica_io import find_goalkeeper
-from matrix_engine.parity import AnalyticsParityReport
+from matrix_engine.parity import NEAR_BALL_M, AnalyticsParityReport
 
 from plaiq_engine.analytics.event_stitch import clean_jersey
 from plaiq_engine.context.states import STATE_COLUMNS
@@ -94,7 +94,10 @@ from plaiq_engine.teams import PseudonymError, TeamRegistry
 #: ``movement_values()``. ``actor_role`` falls back to P2's main role, with ``actor_role_source`` (roster or estimated).
 #: New columns: ``action_detail``, ``actor_role_source``, ``run_type``, ``run_area``; ``semantic_states`` gains ``shots`` and
 #: ``ended_in_shot`` (a shot inside this episode, unlike the chain-level ``led_to_shot``).
-SCHEMA_VERSION = "2.1"
+#: 2.2 (27 November 2026, review AI-03): ``observed_near_ball_share``, the share of player positions within the Data
+#: check's near-ball radius (15 m) the provider observed rather than estimated at the action's start (null where the
+#: provider does not flag estimates). It feeds the citation's evidence grade (``citations.evidence_grade``).
+SCHEMA_VERSION = "2.2"
 
 #: Why a lost pass has no version 1 score.
 LOST_PASS_REASON = "lost pass: Gain version 1 does not charge a pass for failing; see Choice and Gain version 2"
@@ -167,7 +170,7 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
     "not_scored", "not_scored_reason",
     "run_type", "run_area",
     "physiological_context",
-    "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
+    "ball_detected", "players_observed", "observed_near_ball_share", "parity_spatial", "parity_physiological",
     # Context package P1 (null unless a ContextResult is given): labels, never coordinates.
     "possession_chain_id", "possession_source", "score_diff", "red_card_diff",
     # Context packages P2 to P8 (schema 1.7; null unless a ContextResult is given): labels and counts, never coordinates.
@@ -464,6 +467,22 @@ class SemanticBuilder:
                                if "observed" in tr.columns else None)
         return self._obs_cache
 
+    def _near_ball_by_frame(self) -> pd.Series | None:
+        """Share of positions within ``NEAR_BALL_M`` of the ball the provider observed, per native frame (schema 2.2)."""
+        if not hasattr(self, "_near_cache"):
+            m = self.a.match
+            tr, ball = m.tracking, m.ball
+            if "observed" not in tr.columns or tr.empty or ball.empty:
+                self._near_cache = None
+            else:
+                b = ball.drop_duplicates("frame").set_index("frame")
+                t = tr.loc[tr["frame"].isin(b.index) & tr["x"].notna(), ["frame", "x", "y", "observed"]]
+                d = np.hypot(t["x"].to_numpy(float) - b["x"].reindex(t["frame"]).to_numpy(float),
+                             t["y"].to_numpy(float) - b["y"].reindex(t["frame"]).to_numpy(float))
+                near = t.loc[d <= NEAR_BALL_M]
+                self._near_cache = near.groupby("frame")["observed"].mean() if len(near) else None
+        return self._near_cache
+
     def _set_piece_frames(self) -> set[int]:
         ev = self.a.events
         sp = ev.loc[ev["Type"].astype(str).str.upper() == "SET PIECE", "Start Frame"]
@@ -500,6 +519,8 @@ class SemanticBuilder:
             "physiological_context": None,
             "ball_detected": bool(np.isfinite(ball)) if frame is not None else None,
             "players_observed": obs,
+            "observed_near_ball_share": (None if frame is None or (nb := self._near_ball_by_frame()) is None or frame not in nb.index
+                                         else round(float(nb.loc[frame]), 3)),
             "parity_spatial": self.parity.metrics["decision_quality"].state,
             "parity_physiological": self.parity.metrics["load_and_fatigue"].state,
             **self._context_fields(frame, team.lower()),
@@ -898,6 +919,7 @@ def nested_record(row: dict) -> dict:
         "context": {k: row.get(k) for k in CONTEXT_COLUMNS},  # schema 1.7: Stage B to D context, all estimated
         "quality_gate": {
             "ball_detected": row["ball_detected"], "players_observed": row["players_observed"],
+            "observed_near_ball_share": row.get("observed_near_ball_share"),
             "parity": {"spatial_intelligence": row["parity_spatial"], "physiological_context": row["parity_physiological"]},
         },
     }

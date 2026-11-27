@@ -4,10 +4,16 @@ citations.py — resolving the AI layer's citations against the semantic tables.
 Stage D (``ponta-blueprint/context-states-task.md``, deliverable 4; ``ponta-blueprint/ai-layer.md``, "every claim
 cites"). Pure functions the AI layer's verifier calls; nothing here reads a model or a file.
 
-- An **event citation** is ``[event_id, timestamp_s, confidence_score]`` plus ``match_id``; a **state citation** (an
+- An **event citation** is ``[event_id, timestamp_s, evidence_grade]`` plus ``match_id``; a **state citation** (an
   episode) is ``[state_id, start_s, end_s]`` plus ``match_id``. Each resolves only when the row exists in that match and
-  its times agree within ``TIME_TOLERANCE_S``. What fills the confidence slot for single-source matches is still an
-  open decision, so it is not checked here.
+  its times agree within ``TIME_TOLERANCE_S``.
+- **The evidence grade** fills the confidence slot (review AI-03, backlog B, 27 November 2026), in place of a
+  pseudo-probability: ``{field, data_check, label, validation, observed_near_ball}``, the cited field's Data check state
+  in this match, observed or estimated, its validation status from the field dictionary, and the observed share of
+  positions near the ball, banded at the Data check's own 10% rule. On broadcast tracking the old inputs
+  (``ball_detected``, ``players_observed``) were constant, so any number built from them would have printed high
+  confidence on every claim. ``evidence_grade`` computes it from the row; ``check_grade`` is the verifier's check that a
+  model's grade is that one.
 - **Quoted numbers** (field-bound since 25 November 2026, review AI-02, SE-04, GC-02): every number in a sentence about
   a cited row must equal, as the sentence rounds it, the field its own words name ("6 passes" the pass count, "3.8 s" a
   time in seconds, "40%" a percentage or a share, a number after "Choice" a Choice field), never just any field of the
@@ -49,8 +55,12 @@ def _finite(*xs) -> bool:
         return False
 
 
-def resolve_event_citation(events: pd.DataFrame, match_id: str, event_id: str, timestamp_s: float) -> Resolution:
-    """An event citation resolves when the event exists in the match and its time agrees (both times finite)."""
+def resolve_event_citation(events: pd.DataFrame, match_id: str, event_id: str, timestamp_s: float,
+                           grade: dict | None = None, states: dict[str, str] | None = None) -> Resolution:
+    """
+    An event citation resolves when the event exists in the match and its time agrees (both times finite) and, when a
+    ``grade`` is given, the grade is the one the row and the match's Data check states give (``check_grade``).
+    """
     hit = events.loc[(events["match_id"] == match_id) & (events["event_id"] == event_id)]
     if hit.empty:
         return Resolution(False, "no such event in this match")
@@ -59,6 +69,11 @@ def resolve_event_citation(events: pd.DataFrame, match_id: str, event_id: str, t
         return Resolution(False, "the event or the cited time has no time")
     if abs(float(row_t) - float(timestamp_s)) > TIME_TOLERANCE_S:
         return Resolution(False, "the cited time does not match the event")
+    if grade is not None:
+        problems = check_grade(grade, hit.iloc[0], states or {})
+        if problems:
+            return Resolution(False, "the evidence grade does not match: " + "; ".join(problems))
+        return Resolution(True, data_check=grade["data_check"])
     return Resolution(True)
 
 
@@ -73,6 +88,62 @@ def resolve_state_citation(states: pd.DataFrame, match_id: str, state_id: str, s
     if abs(float(r["start_s"]) - float(start_s)) > TIME_TOLERANCE_S or abs(float(r["end_s"]) - float(end_s)) > TIME_TOLERANCE_S:
         return Resolution(False, "the cited times do not match the episode")
     return Resolution(True)
+
+
+#: The observed near-ball share at or above which positions count as observed: the Data check's rule (no more than 10% of
+#: player observations missing or estimated, ``matrix_engine.parity.MAX_PLAYER_DROPOUT``).
+OBSERVED_NEAR_BALL_MIN = 0.90
+_STATE_RANK = {"blocked": 0, "degraded": 1, "full": 2}
+
+
+def match_states(parity_report) -> dict[str, str]:
+    """
+    Every Data check state of one match by metric: the base metrics (``decision_quality``, ``pressure_1v1`` ...) and the
+    context packages' (``p4.phase_of_play``), the names the field dictionary's ``data_check`` uses.
+    """
+    out = {k: m.state for k, m in parity_report.metrics.items()}
+    for name, entries in getattr(parity_report, "packages", {}).items():
+        for e in entries:
+            key = f"{name}.{e.metric}"
+            if key not in out or _STATE_RANK.get(e.state, 0) < _STATE_RANK.get(out[key], 0):
+                out[key] = e.state
+    return out
+
+
+def _band(share) -> str:
+    if share is None or not _finite(share):
+        return "not_flagged"
+    return "all_observed" if float(share) >= OBSERVED_NEAR_BALL_MIN else "partly_estimated"
+
+
+def evidence_grade(row: dict | pd.Series, field: str, states: dict[str, str], table: str = "semantic_events") -> dict:
+    """
+    The evidence grade of a claim about ``field`` of a cited row: the field's Data check state in this match (``states``
+    from ``match_states``), observed or estimated, its validation status, and the observed near-ball band of the row.
+    A field the dictionary does not know, or one that may not be quoted, raises: the AI may not cite it.
+    """
+    from plaiq_engine.field_dictionary import lookup
+
+    f = lookup(table, field)
+    if not f.quotable:
+        raise ValueError(f"{table}.{field} may not be quoted (field dictionary)")
+    r = dict(row)
+    state = states.get(f.data_check, "full") if f.data_check else "full"
+    if f.data_check and f.data_check not in states:
+        state = "degraded"  # a state the Data check did not report is never shown as Full
+    return {"field": field, "data_check": state, "label": "observed" if f.kind == "observed" else "estimated",
+            "validation": f.validation, "observed_near_ball": _band(r.get("observed_near_ball_share"))}
+
+
+def check_grade(grade: dict, row: dict | pd.Series, states: dict[str, str], table: str = "semantic_events") -> list[str]:
+    """The verifier's check: problems with a model's grade against the one computed from the row (empty when it matches)."""
+    if not isinstance(grade, dict) or "field" not in grade:
+        return ["the grade must name the field it grades"]
+    try:
+        want = evidence_grade(row, grade["field"], states, table)
+    except (KeyError, ValueError) as exc:
+        return [str(exc)]
+    return [f"{k}: cited {grade.get(k)!r}, the row gives {v!r}" for k, v in want.items() if grade.get(k) != v]
 
 
 def _is_number(v) -> bool:

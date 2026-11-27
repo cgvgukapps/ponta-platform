@@ -1,4 +1,4 @@
-# AI field dictionary (version 1.0.0)
+# AI field dictionary (version 1.1.0)
 
 > Generated from `packages/plaiq_engine/src/plaiq_engine/field_dictionary.py` by `tools/field_dictionary.py`; do not edit by hand. Figures are measured on a development set, not held out. Only observed values are player-facing until an analyst validates an estimated one (Gate 2b).
 
@@ -53,6 +53,7 @@
 | `physiological_context` | Null: no physiological source exists. |  | metadata |  |  | no | no |
 | `ball_detected` | Whether the ball was detected at the action's start. |  | observed |  |  | yes | yes |
 | `players_observed` | Players the provider observed (not estimated) at the action's start. | players | observed |  |  | yes | yes |
+| `observed_near_ball_share` | Share of positions within 15 m of the ball the provider observed at the action's start (null where it does not flag estimates). | share | observed |  |  | yes | yes |
 | `parity_spatial` | Data check state of decision quality for this match. |  | metadata |  |  | yes | no |
 | `parity_physiological` | Data check state of load and fatigue for this match. |  | metadata |  |  | yes | no |
 | `possession_chain_id` | The possession chain (P1), built on the match key. |  | identifier |  |  | no | no |
