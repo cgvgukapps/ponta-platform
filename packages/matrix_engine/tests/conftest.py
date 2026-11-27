@@ -14,7 +14,7 @@ import pytest
 from matrix_engine import UnifiedTrackingEngine
 from matrix_engine.providers import load_metrica_source
 from matrix_engine.sample_data import sample_data_dir
-from matrix_engine.testing import DegradationParams, degrade
+from matrix_engine.testing import DegradationParams, degrade, synthetic_ground_truth
 
 #: Metrica sample game and window used by every Track B test. 180 s is long
 #: enough for six alignment windows to be meaningful and short enough to keep
@@ -63,22 +63,30 @@ def skillcorner_max_frames():
     return SKILLCORNER_MAX_FRAMES
 
 
-@pytest.fixture(scope="session")
-def metrica_home(data_dir):
-    """One team, one window of real Metrica tracking — the Track B ground truth."""
-    return load_metrica_source(
-        data_dir, GAME_ID, teams=("home",),
-        start_time=WINDOW_START, end_time=WINDOW_END,
-    )
+def _ground_truth(teams):
+    """
+    The Metrica window where the sample data is present; otherwise (a clean CI runner) a seeded synthetic match in its
+    shape (``matrix_engine.testing.synthetic_ground_truth``, review SE-02), so Reconcile and Fuse are tested in CI too.
+    With PONTA_REQUIRE_SAMPLE_DATA set the real window is required.
+    """
+    path = sample_data_dir()
+    if os.path.isdir(path):
+        return load_metrica_source(path, GAME_ID, teams=teams, start_time=WINDOW_START, end_time=WINDOW_END)
+    if os.environ.get("PONTA_REQUIRE_SAMPLE_DATA"):
+        pytest.fail(f"sample data not found at {path} (set PONTA_SAMPLE_DATA)")
+    return synthetic_ground_truth(teams=teams, start_time=WINDOW_START, end_time=WINDOW_END, seed=GAME_ID)
 
 
 @pytest.fixture(scope="session")
-def metrica_both(data_dir):
+def metrica_home():
+    """One team, one window of tracking — the Track B ground truth (Metrica's, or synthetic in CI)."""
+    return _ground_truth(("home",))
+
+
+@pytest.fixture(scope="session")
+def metrica_both():
     """Both teams, for tests that care about team handling."""
-    return load_metrica_source(
-        data_dir, GAME_ID, teams=("home", "away"),
-        start_time=WINDOW_START, end_time=WINDOW_END,
-    )
+    return _ground_truth(("home", "away"))
 
 
 def _params(**overrides):
@@ -217,3 +225,10 @@ def position_rmse():
         return float(np.sqrt(errors.mean())), int(errors.size)
 
     return _rmse
+
+
+def pytest_collection_modifyitems(config, items):
+    """Tests that read the real STATSports export fetch it over the network: marked ``network`` (review SE-12)."""
+    for item in items:
+        if {"real_statsports", "statsports_cache"} & set(getattr(item, "fixturenames", ())):
+            item.add_marker(pytest.mark.network)

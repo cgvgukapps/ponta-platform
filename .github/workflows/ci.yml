@@ -38,7 +38,10 @@ jobs:
 
       # Tests that need the open sample data (Metrica, SkillCorner) are skipped on a clean
       # runner: the data is not redistributed from this repository (licence terms open,
-      # gate G3). The skip count is printed (-rs). The full run, with data and
-      # PONTA_REQUIRE_SAMPLE_DATA=1, is the local gate until that is decided.
+      # gate G3). Matrix's Reconcile and Fuse tests run on a seeded synthetic match instead,
+      # and the engine values are checked against the synthetic golden. Tests that fetch the
+      # third-party STATSports sample are deselected (-m "not network", review SE-12). The skip
+      # count is printed (-rs). The full run, with data and PONTA_REQUIRE_SAMPLE_DATA=1, is the
+      # local gate until that is decided.
       - name: Tests
-        run: pytest -q -rs
+        run: pytest -q -rs -m "not network"

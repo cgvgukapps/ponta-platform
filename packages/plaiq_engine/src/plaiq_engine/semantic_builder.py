@@ -774,9 +774,15 @@ class SemanticBuilder:
         start = e.get("Start Frame")
         if ref is None or pd.isna(start):
             return None
-        fa = self.a.frame_analytics
-        hit = fa.loc[(fa["Frame"] == int(start)) & (fa["team"].str.lower() == team) & (fa["jersey"].astype(str) == ref.split("_", 1)[1]), "pressure"]
-        return float(hit.iloc[0]) if len(hit) and pd.notna(hit.iloc[0]) else None
+        if not hasattr(self, "_press_index"):  # one pass over the frame table, not one per event (27 November 2026)
+            fa = self.a.frame_analytics
+            keys = zip(fa["Frame"].astype(int), fa["team"].str.lower(), fa["jersey"].astype(str), strict=True)
+            idx: dict = {}
+            for k, v in zip(keys, fa["pressure"].to_numpy(), strict=True):
+                idx.setdefault(k, v)  # the first row, as before
+            self._press_index = idx
+        v = self._press_index.get((int(start), team, ref.split("_", 1)[1]))
+        return float(v) if v is not None and pd.notna(v) else None
 
     # -- trajectories ----------------------------------------------------------------
 

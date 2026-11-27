@@ -109,9 +109,15 @@ from matrix_engine.schema import (
 
 #: Raw export this adapter was written against. Fetched on access; see the
 #: module docstring for the handling rules that come with it.
+#: Pinned to the repository's commit of 4 August 2022, never ``main``, and checked against ``REFERENCE_SAMPLE_SHA256``
+#: (review SE-12, 27 November 2026), so a test result cannot change with the upstream repository. For tools and tests
+#: only: the default is refused when ``PONTA_ENV`` is ``production``, where the worker passes the club's uploaded file.
 DEFAULT_STATSPORTS_SOURCE = (
-    "https://raw.githubusercontent.com/bakero08/Statsports-data-analytics-UCD/main/maindata.csv"
+    "https://raw.githubusercontent.com/bakero08/Statsports-data-analytics-UCD/"
+    "48338c1d35e15f8806c5f40de4612f6bf97d195b/maindata.csv"
 )
+#: SHA-256 of the pinned file (50,976,265 bytes).
+REFERENCE_SAMPLE_SHA256 = "8d19bbd0f820777710a9ce38831ff7254a38eba4eea6c6736836c7cdcdd3692f"
 
 #: ``source`` value this adapter stamps on every row.
 SOURCE_NAME = "statsports"
@@ -262,6 +268,8 @@ def resolve_source(source: str | None = None) -> str:
     url = os.environ.get(ENV_SAMPLE_URL, "").strip()
     if url:
         return url
+    if source is None and os.environ.get("PONTA_ENV", "").strip().lower() in ("production", "prod"):
+        raise StatsportsUnavailable("no STATSports source given: the reference sample is not fetched in production")
     return source or DEFAULT_STATSPORTS_SOURCE
 
 
@@ -338,6 +346,14 @@ def _read_raw(source: str, max_rows: int | None, cache_dir: str | None) -> pd.Da
                 f"${ENV_SAMPLE_PATH} to a local copy, ${ENV_SAMPLE_URL} to an "
                 "alternate URL, or leave both unset to fetch the default."
             )
+        if source == DEFAULT_STATSPORTS_SOURCE:
+            if isinstance(target, io.BytesIO):
+                body = target.getvalue()
+            else:
+                with open(target, "rb") as fh:
+                    body = fh.read()
+            if hashlib.sha256(body).hexdigest() != REFERENCE_SAMPLE_SHA256:
+                raise StatsportsUnavailable("the reference STATSports sample does not match its pinned SHA-256")
         raw = pd.read_csv(target, nrows=max_rows)
     except StatsportsUnavailable:
         raise
@@ -615,7 +631,7 @@ def _pitch_estimate(
 # ---------------------------------------------------------------------------
 
 def load_statsports_source(
-    source: str = DEFAULT_STATSPORTS_SOURCE,
+    source: str | None = None,
     *,
     player_names: list[str] | None = None,
     anonymize: bool = True,

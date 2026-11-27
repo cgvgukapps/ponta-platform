@@ -65,19 +65,103 @@ def column_hash(s: pd.Series) -> str:
     return hashlib.sha256(pd.util.hash_pandas_object(s.astype(object).where(s.notna(), None).astype(str), index=False).values.tobytes()).hexdigest()[:16]
 
 
-def summarise(res, seconds: float, sizes: dict) -> dict:
+#: Columns that only label versions: compared through ``versions``, never as values (a version bump is not a value change).
+_LABELS = ("_version", "versions", "thresholds_version")
+
+
+def _is_label(c: str) -> bool:
+    return str(c).endswith(_LABELS)
+
+
+def _frame_hash(df: pd.DataFrame) -> str:
+    keep = df[[c for c in df.columns if not _is_label(c)]]
+    return hashlib.sha256(pd.util.hash_pandas_object(keep.astype(object).where(keep.notna(), None).astype(str),
+                                                     index=False).values.tobytes()).hexdigest()[:16]
+
+
+def package_of(name: str) -> str:
+    """The package a field, segment or threshold belongs to (``p4v_engaging_defenders`` is ``p4v``); grid columns are ``grid``."""
+    head = str(name).split("_", 1)[0]
+    return head if head.startswith("p") and head[1:2].isdigit() or head == "probe" else "grid"
+
+
+def threshold_values() -> dict:
+    from plaiq_engine.context.thresholds import THRESHOLDS
+
+    return {name: t.value for name, t in THRESHOLDS.items()}
+
+
+def summarise(res, seconds: float, sizes: dict, semantic: dict | None = None) -> dict:
+    """
+    A per-match summary, compared package by package (review SE-03): fields, segments and Data check entries, hashed
+    without their version labels; the threshold values; and, when given, hashes of the semantic events and episodes.
+    """
     f = res.frames
     return {
         "versions": res.versions,
         "thresholds_version": res.thresholds_version,
+        "threshold_values": threshold_values(),
         "grid_points": int(len(f)),
-        "fields": {c: {"hash": column_hash(f[c]), "nulls": int(f[c].isna().sum())} for c in f.columns},
-        "segments": {f"{p}_{n}": {"rows": int(len(s)), "hash": hashlib.sha256(pd.util.hash_pandas_object(s, index=False).values.tobytes()).hexdigest()[:16]}
-                     for p, o in res.outputs.items() for n, s in o.segments.items()},
-        "entries": [dataclasses.asdict(e) for e in res.entries],
+        "fields": {c: {"hash": column_hash(f[c]), "nulls": int(f[c].isna().sum())} for c in f.columns if not _is_label(c)},
+        "segments": {f"{p}_{n}": {"rows": int(len(s)), "hash": _frame_hash(s)} for p, o in res.outputs.items() for n, s in o.segments.items()},
+        "entries": [{k: v for k, v in dataclasses.asdict(e).items() if not _is_label(k)} for e in res.entries],
+        "semantic": semantic or {},
         "runtime_s": round(seconds, 1),
         "storage_bytes": sizes,
     }
+
+
+def semantic_hashes(match, res) -> dict:
+    """Hashes of the semantic events and episodes built on this context (the tables the AI reads)."""
+    from plaiq_engine.match_analysis import MatchAnalysis
+    from plaiq_engine.semantic_builder import SemanticBuilder
+    from plaiq_engine.teams import TeamRegistry
+
+    b = SemanticBuilder(MatchAnalysis(match), parity_for_match(match), teams=TeamRegistry.for_reference(), context=res)
+    ev = b.semantic_events()
+    st = b.semantic_states(ev)
+    return {"semantic_events": {"rows": int(len(ev)), "hash": _frame_hash(ev.drop(columns=["engine_version"]))},
+            "semantic_states": {"rows": int(len(st)), "hash": _frame_hash(st)}}
+
+
+def compare(gold: dict, new: dict) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """
+    Differences by package, and the packages skipped with the reason. A package is skipped only when its own version or
+    one of its own threshold values changed (an intended change); every other package must match.
+    """
+    skipped: dict[str, str] = {}
+    for pkg in set(gold["versions"]) | set(new["versions"]):
+        if gold["versions"].get(pkg) != new["versions"].get(pkg):
+            skipped[pkg] = f"version {gold['versions'].get(pkg)} -> {new['versions'].get(pkg)}"
+    gt, nt = gold.get("threshold_values", {}), new.get("threshold_values", {})
+    for name in set(gt) | set(nt):
+        if gt.get(name) != nt.get(name):
+            pkg = package_of(name)
+            pkg = pkg if pkg != "grid" else ("grid" if name.startswith("context_") else name.split("_", 1)[0])  # pf_: profiles
+            skipped.setdefault(pkg, f"threshold {name} {gt.get(name)} -> {nt.get(name)}")
+    diffs: dict[str, list[str]] = {}
+
+    def note(name: str, what: str) -> None:
+        pkg = package_of(name)
+        if pkg not in skipped:
+            diffs.setdefault(pkg, []).append(what)
+
+    for c in sorted(set(gold["fields"]) | set(new["fields"])):
+        if gold["fields"].get(c) != new["fields"].get(c):
+            note(c, f"field {c}")
+    for s_ in sorted(set(gold["segments"]) | set(new["segments"])):
+        if gold["segments"].get(s_) != new["segments"].get(s_):
+            note(s_, f"segment {s_}")
+    ge = {(e["package"], e["metric"]): e for e in gold["entries"]}
+    ne = {(e["package"], e["metric"]): e for e in json.loads(json.dumps(new["entries"], default=str))}
+    for k in sorted(set(ge) | set(ne)):
+        if ge.get(k) != ne.get(k):
+            note(k[0] + "_entry", f"Data check entry {k[0]}.{k[1]}")
+    if gold.get("semantic") and new.get("semantic") and not skipped:
+        for t in sorted(set(gold["semantic"]) | set(new["semantic"])):
+            if gold["semantic"].get(t) != new["semantic"].get(t):
+                diffs.setdefault("semantic", []).append(t)
+    return diffs, skipped
 
 
 def main() -> int:
@@ -106,7 +190,7 @@ def main() -> int:
         paths = res.write(out / key)
         (out / key / "data_check.json").write_text(json.dumps(report.to_dict(), indent=1, default=str))
         sizes = {k: os.path.getsize(p) for k, p in paths.items()}
-        summary = summarise(res, seconds, sizes)
+        summary = summarise(res, seconds, sizes, semantic_hashes(m, res))
         target = GOLDEN / f"{key}.json"
         if args.capture:
             target.write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -117,16 +201,17 @@ def main() -> int:
             failures += 1
             continue
         gold = json.loads(target.read_text())
-        diffs = [c for c in sorted(set(gold["fields"]) | set(summary["fields"]))
-                 if gold["fields"].get(c) != summary["fields"].get(c)]
-        diffs += [s for s in sorted(set(gold["segments"]) | set(summary["segments"])) if gold["segments"].get(s) != summary["segments"].get(s)]
-        if json.loads(json.dumps(summary["entries"], default=str)) != gold["entries"]:
-            diffs.append("data check entries")
-        print(f"{key}: {'OK' if not diffs else 'DIFFERS: ' + ', '.join(diffs)}")
-        failures += bool(diffs)
+        diffs, skipped = compare(gold, json.loads(json.dumps(summary, default=str)))
+        flat = [d for pkg in sorted(diffs) for d in diffs[pkg]]
+        note = f" (skipped, intended changes: {', '.join(f'{k}: {v}' for k, v in sorted(skipped.items()))})" if skipped else ""
+        print(f"{key}: {'OK' if not flat else 'DIFFERS: ' + ', '.join(flat)}{note}")
+        failures += bool(flat)
     if args.capture:
-        manifest = {"matches": list(args.matches), "packages": reg.order(), "versions": {n: v for n, v in res.versions.items()},
-                    "thresholds_version": THRESHOLDS_VERSION}
+        # The tracked manifest records each summary's hash, so a local summary that drifted from the captured one is
+        # visible (review SE-03): the summaries themselves stay out of the repository (derived from sample data).
+        hashes = {k: hashlib.sha256((GOLDEN / f"{k}.json").read_bytes()).hexdigest() for k in MATCHES if (GOLDEN / f"{k}.json").exists()}
+        manifest = {"matches": list(MATCHES), "packages": reg.order(), "versions": {n: v for n, v in res.versions.items()},
+                    "thresholds_version": THRESHOLDS_VERSION, "summary_sha256": hashes}
         (GOLDEN / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return 1 if failures else 0
 

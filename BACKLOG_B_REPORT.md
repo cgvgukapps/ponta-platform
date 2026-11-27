@@ -1,6 +1,6 @@
 # Review backlog B: before Phase 2
 
-> **Status: in progress (started 27 November 2026).** Backlog B of the independent review (`ponta-blueprint/work-review.md`, section 5) is the work before the AI layer. This report records each step as it lands: what changed, what it fixes and how it was checked. Measured figures are not expected to move in steps 1 to 3; any that do are reported here.
+> **Status: done except running the pre-registered confirmation (27 November 2026).** Backlog B of the independent review (`ponta-blueprint/work-review.md`, section 5) is the work before the AI layer. This report records each step as it lands: what changed, what it fixes and how it was checked. Measured figures are not expected to move in steps 1 to 3; any that do are reported here.
 
 ## 1. A synthetic engine golden in CI (SE-01)
 
@@ -144,3 +144,39 @@
 `SemanticBuilder.write` writes through the schemas and adds `manifest.json`, which lists every file with its rows and SHA-256 hash, plus the match key, schema version, engine version and field dictionary version. Trajectories are written in about eight row groups for the replay's range reads. DuckDB 2.0.0 is pinned as a development dependency (2.0.1 was a week old).
 
 **Checked.** Two matches' files read together in DuckDB without `union_by_name` (`tests/cross_engine/test_parquet_schemas.py`), and each manifest hash matches its file.
+
+## 7. Tests that run where they matter (SE-02, SE-03, SE-12, DE-13)
+
+**Reconcile and Fuse in CI (SE-02).** Every Matrix fixture started from a real Metrica window, so on a clean runner 135 of 275 tests skipped, and sync, fusion and identity ran at 8% to 12% line coverage. Where the sample data is absent, `matrix_engine.testing.synthetic_ground_truth` now gives a seeded synthetic match in the window's shape. The ball wanders on a scale of seconds, each team's block shifts with it, and each player moves about a formation slot (median speed about 2 m/s, 99th percentile about 7.5). A first version that moved too smoothly left the clock alignment with too little team-level signal to lock onto, and failed six tests; with block shifts that follow the ball, they pass. In CI mode 220 Matrix tests pass and 16 skip (those that read real provider files), against 140 and 135 before. The Metrica window stays the local, data-required run.
+
+**Context goldens that fail rather than skip (SE-03).** The golden test skipped whenever any package or threshold version changed, so a recapture blessed intended and unintended changes together. It now compares package by package. A package is skipped only when its own version or one of its own threshold values changed; every other package must match, or the test fails and names it. The comparison covers grid fields, segments, Data check entries and, new, hashes of the semantic events and episodes. Version labels are left out of the hashes, so a bump is not mistaken for a value change. Under `PONTA_REQUIRE_SAMPLE_DATA` a missing summary fails, as does one whose hash differs from the one the tracked manifest records. `PONTA_GOLDEN_ALL=1` checks all four matches. The rules have their own data-free tests (`tests/test_context_golden_compare.py`).
+
+**A pinned STATSports sample (SE-12).** CI fetched a 51 MB unlicensed file from a third party's `main` branch with no hash. The reference sample is now pinned to the repository's commit of 4 August 2022 and checked against its SHA-256; a copy that differs is refused. The default is refused in production, where the worker passes the club's upload. The 17 tests that fetch it are marked `network`, and CI runs `-m "not network"`.
+
+**Edge-case fixtures (DE-13).** Added, beside the existing null-period and estimated-position ones: extra time (step 6a), clocks that restart each period (6c), several identical events on one frame (distinct, stable ids), and an event with no frame.
+
+**Found on the way.** The engine's possession pass failed on an event with no start frame. Such an event is now left out at `MatchAnalysis.events`, keeping every other event's label, and counted in `events_without_frame`. The supported loaders already drop them, so the sample outputs and the engine golden are unchanged.
+
+## 8. A pre-registered confirmation (ST-01, ST-02)
+
+**The gap.** One even/odd split of the same 20 SkillCorner matches was the "held-out" half for every tuning round. The Gate 2a bars were restated after the first reading, and at least one rule changed after a held-out reading.
+
+**What changed.** `CONFIRMATION_PREREGISTRATION.md` is written before any confirmation data is opened. It records:
+
+- The frozen versions: Matrix 0.2.2, Plaiq 0.2.0, the package versions, thresholds 0.30.0, semantic schema 2.2.
+- The data, chosen in advance:
+  - **Part A, internal, can run now:** PFF's World Cup set, which never set or tuned a P1 to P8 rule. It confirms possession, line breaks and carrier pressure against PFF's own labels.
+  - **Part B, when a licensed, never-used set exists:** phases, roles, formations, episodes, runs and engagements.
+- The bars. Gate 2a's agreed bars are kept unchanged; the others are proposed below each development figure, and they wait for the founder's agreement.
+- An analysis plan: one run, every figure reported, nothing tuned after looking.
+
+**Meanwhile, leave one team out.** The frozen rules were scored on SkillCorner's 20 matches leaving out each of the 13 teams in turn. Pooled phase kappa stays between 0.637 and 0.654 (0.647 on all 20). Each team's own matches range from 0.595 to 0.678. Roles grouped stay between 86% and 89%. No team carries the headline figures. This is not re-tuned cross-validation: the rules were tuned on all 20 matches, so it shows dependence on single teams, not performance on new data.
+
+**Not done here.** Running Part A (it needs the founder's agreement on the bars first) and Part B (it needs data).
+
+## Where the tests stand (27 November 2026)
+
+- **Local, with sample data** (`PONTA_REQUIRE_SAMPLE_DATA=1 pytest -q`): 1,243 pass, plus the 12 opt-in equivalence tests (1,193 before backlog B).
+- **CI mode** (no sample data, `-m "not network"`): 1,206 pass and 32 skip (tests that read real provider or sample files). The 17 tests that fetch the pinned STATSports sample are deselected.
+- **Slow opt-in checks:** `PONTA_GOLDEN_ALL=1` runs the context golden on all four matches, `PONTA_GOLDEN_SEMANTIC=1` compares the semantic tables too (about 5 minutes a match), and `PONTA_EQUIVALENCE=1` runs the prototype equivalence test.
+- The builder's pressure lookup now indexes the frame table once instead of filtering it per event (values unchanged). Building a full match's semantic events took about 4 minutes before this change.

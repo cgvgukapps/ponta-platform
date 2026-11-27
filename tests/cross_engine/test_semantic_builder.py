@@ -509,3 +509,24 @@ def test_runs_and_estimated_roles_from_the_context():
     assert r.at["home_9", "actor_role"] == "ST" and r.at["home_9", "actor_role_source"] == "estimated"
     h4 = sem.loc[sem["actor_player_ref"] == "home_4"].iloc[0]
     assert h4["actor_role"] == "Captain's role" and h4["actor_role_source"] == "roster"  # the roster wins
+
+
+def test_several_events_on_one_frame_and_an_event_without_a_frame():
+    """Review DE-13 edge cases: identical events on one frame get distinct, stable ids; an event with no frame is left out
+    and counted rather than breaking the engine (it did)."""
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    twin = ev.iloc[[2]].copy()  # the same pass logged twice on one frame
+    orphan = ev.iloc[[3]].assign(**{"Start Frame": np.nan, "End Frame": np.nan})
+    ev2 = pd.concat([ev, twin, orphan], ignore_index=True)
+    b = SemanticBuilder(MatchAnalysis(replace(m, events=ev2)), _parity(), teams=TeamRegistry.for_reference())
+    ids = b._event_ids()
+    assert len(set(ids.values())) == len(ids) and ids[2] != ids[len(ev)]
+    sem = b.semantic_events()
+    assert sem["event_id"].is_unique
+    assert b.a.events_without_frame == 1 and (len(ev) + 1) not in set(sem["event_idx"])  # left out, and counted
+    assert len(ids) == len(ev2) - 1  # every other event keeps its id
+    again = SemanticBuilder(MatchAnalysis(replace(m, events=ev2)), _parity(), teams=TeamRegistry.for_reference())._event_ids()
+    assert again == ids

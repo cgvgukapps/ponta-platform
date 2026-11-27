@@ -157,8 +157,15 @@ class MatchAnalysis:
 
     @cached_property
     def events(self) -> pd.DataFrame:
-        """The event feed tagged with event ΔV."""
-        return tag_events_delta_v(self.match.events.copy(), self.xt_home, self.xt_away, self.hex_centers, self.R)
+        """
+        The event feed tagged with event ΔV. An event with no start frame cannot be placed on the tracking, and the
+        engine's possession pass failed on one (review DE-13, 27 November 2026): such events are left out, keeping every
+        other event's row label, and counted in ``events_without_frame``. The supported loaders already drop them.
+        """
+        ev = self.match.events
+        keep = ev["Start Frame"].notna() if "Start Frame" in ev.columns else pd.Series(True, index=ev.index)
+        self.events_without_frame = int((~keep).sum())
+        return tag_events_delta_v(ev.loc[keep].copy(), self.xt_home, self.xt_away, self.hex_centers, self.R)
 
     @cached_property
     def possession(self) -> pd.Series:

@@ -875,3 +875,20 @@ def test_no_stray_bytesio_or_name_column_survives_a_real_load(real_statsports):
     assert COL_NAME not in real_statsports.columns
     assert isinstance(real_statsports, pd.DataFrame)
     assert not isinstance(real_statsports.attrs["statsports"]["source"], io.IOBase)
+
+
+def test_the_reference_sample_is_pinned_and_hashed(tmp_path, monkeypatch):
+    """Review SE-12: a commit, not main; a cached copy that is not the pinned file is refused; no fetch in production."""
+    from matrix_engine.providers.statsports import REFERENCE_SAMPLE_SHA256, _cached_path
+
+    monkeypatch.delenv("MATRIX_STATSPORTS_SAMPLE_PATH", raising=False)
+    monkeypatch.delenv("MATRIX_STATSPORTS_SAMPLE_URL", raising=False)
+    assert "/main/" not in DEFAULT_STATSPORTS_SOURCE and len(REFERENCE_SAMPLE_SHA256) == 64
+    fake = _cached_path(DEFAULT_STATSPORTS_SOURCE, str(tmp_path))
+    with open(fake, "w") as fh:
+        fh.write("Player Display Name,Time,Lat,Lon\nx,00:00:00,0,0\n")
+    with pytest.raises(StatsportsUnavailable, match="SHA-256"):
+        load_statsports_source(cache_dir=str(tmp_path))
+    monkeypatch.setenv("PONTA_ENV", "production")
+    with pytest.raises(StatsportsUnavailable, match="production"):
+        resolve_source()
