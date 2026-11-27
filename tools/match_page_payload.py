@@ -39,7 +39,7 @@ from plaiq_engine.semantic_builder import SCHEMA_VERSION, SemanticBuilder
 from plaiq_engine.teams import TeamRegistry
 
 #: 1.1 (19 November 2026): version 1's descriptive band names (semantic events schema 1.5); group ids follow them.
-PAYLOAD_VERSION = "1.1"
+PAYLOAD_VERSION = "1.2"  # 1.2 (27 November 2026): semantic schema 2.1; movement moments from movement_values; every lost pass
 #: Moments per group on the page.
 PER_GROUP = 4
 #: 1v1 pressure (engine scale 1 to 10) treated as "under pressure" for selection only.
@@ -94,6 +94,22 @@ def _snapshot(match: NormalisedMatch, analysis: MatchAnalysis, event_idx: int) -
     }
 
 
+def _movement_rows(builder: SemanticBuilder, sem: pd.DataFrame) -> pd.DataFrame:
+    """Schema 2.1: movement values are their own table; each moment is the source event seen from the moving player."""
+    mv = builder.movement_values().sort_values(["movement_value", "timestamp_s"], ascending=[False, True], kind="stable").head(PER_GROUP)
+    src = sem.drop_duplicates("event_id").set_index("event_id")
+    rows = []
+    for r in mv.itertuples():
+        e = src.loc[r.source_event_id].to_dict() if r.source_event_id in src.index else {}
+        rows.append({**{k: e.get(k) for k in MOMENT_FIELDS}, "event_id": r.event_id, "event_idx": e.get("event_idx"),
+                     "actor_player_ref": r.player_ref, "actor_team": r.team, "action_type": "movement_value", "action_outcome": None,
+                     "target_player_ref": None, "inferred_intended_ref": None, "inference_confidence": None, "dq_score": None,
+                     "dq_band": None, "chosen_option_pov": None, "best_option_player_ref": None, "best_option_pov": None,
+                     "xt_delta": r.xt_delta, "movement_value": r.movement_value, "opposition_pressure": r.opposition_pressure,
+                     "pitch_zone": None})
+    return pd.DataFrame(rows, columns=list(MOMENT_FIELDS))
+
+
 def build_payload(match: NormalisedMatch, *, notes: list[str] | None = None, sample: bool = True) -> dict:
     hj, aj = list(match.slots["home"]), list(match.slots["away"])
     ph, pa = roster_profiles(match.provider, match.match_id, hj, aj)
@@ -127,15 +143,17 @@ def build_payload(match: NormalisedMatch, *, notes: list[str] | None = None, sam
         {"id": "low_gain_under_pressure", "title": "Lowest-gain decisions under pressure",
          "rule": f"Passes and carries with Low gain or Partial gain under 1v1 pressure of {SELECTION_PRESSURE:g} or more, lowest gain first.",
          "rows": pick(s.loc[(s["opposition_pressure"].fillna(0) >= SELECTION_PRESSURE) & s["dq_band"].isin(["low_gain", "partial_gain"])], ["dq_score"], [True])},
+        # Every lost pass, scored or not: since schema 1.9 a lost pass has no Gain score, so filtering on Gain left this
+        # group empty (found 27 November 2026, review backlog B).
         {"id": "losses", "title": "Passes that lost the ball",
-         "rule": "Failed passes the engine scored, highest pressure first.",
-         "rows": pick(s.loc[s["action_outcome"] == "lost"], ["opposition_pressure"], [False])},
+         "rule": "Failed passes, highest pressure first.",
+         "rows": pick(sem.loc[(sem["action_type"] == "pass") & (sem["action_outcome"] == "lost")], ["opposition_pressure"], [False])},
         {"id": "best_progressive", "title": "Best decisions that moved the ball forward in value",
          "rule": "Completed passes and carries with Full gain, largest value change first.",
          "rows": pick(s.loc[(s["dq_band"] == "full_gain") & (s["action_outcome"] == "completed") & (s["xt_delta"].fillna(0) > 0)], ["xt_delta"], [False])},
-        {"id": "off_ball_runs", "title": "Most valuable off-ball runs",
-         "rule": "Movements the engine rewarded, highest movement value first.",
-         "rows": pick(sem.loc[sem["action_type"] == "off_ball_run"], ["movement_value"], [False])},
+        {"id": "off_ball_runs", "title": "Most valuable off-ball movement",
+         "rule": "Team-mates' movements the engine rewarded at an event, highest movement value first.",
+         "rows": _movement_rows(builder, sem)},
     ]
     moment_groups = []
     for g in groups:

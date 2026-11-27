@@ -27,3 +27,24 @@
 **Checked.** A value-level test builds the synthetic match as SkillCorner match 1886347 with real-looking team, competition and season ids and finds none of them in any value of the semantic events or episodes; the provenance table holds them. Values are unchanged: the synthetic engine golden and the context goldens pass.
 
 **Still to do in the product.** Keep tenant secrets in Supabase Vault; treat the registry's merges file as tenant-confidential; the API never returns `event_provenance` to a model.
+
+## 3. Rows the AI needed (AI-06, AI-07): semantic schema 2.1
+
+**The gaps.** Of 21 realistic coach questions the review tried, 8 could not be answered or would be answered misleadingly. There were no shot rows, a lost ball that was not a scored pass vanished (28% of turnovers on SkillCorner match 1886347, every dispossession among them), roles were always null, and `off_ball_run` rows (one per team-mate the engine rewarded at every event) made up 84% of the table at about 8 times P6's run count, under a name that said runs.
+
+**What changed.**
+
+- **Shots:** one row per shot, with the outcome where the feed gives it (goal, saved, blocked, off target; SkillCorner gives none) and `action_detail` `head` for headers. No shot-quality figure is claimed.
+- **Turnovers:** every lost ball that is not a failed pass, with `action_detail` dispossessed, clearance, offside or other. **Every failed pass** now gets a lost-pass row, scored or not. The end of a half is not a turnover.
+- **Context rows:** set pieces (`set_piece`, the kind in `action_detail`), fouls won (`foul_won`) and cards (`card`, yellow or red). None carries a score.
+- **Runs:** P6's runs, one row each (`run`), with SkillCorner's run type in `run_type` and FIFA's area at the end in `run_area`. "Runs in behind by `home_9`" now has one meaning.
+- **Movement values** leave the event table for `movement_values()` (`movement_values.parquet`): Plaiq's off-ball movement value per team-mate and event, each tied to its source event by `source_event_id`.
+- **Roles:** `actor_role` falls back to P2's main role, with `actor_role_source` saying `roster` or `estimated`; a roster role wins.
+- **Episodes:** `shots` and `ended_in_shot` (a shot inside this episode), beside the chain-level `led_to_shot`.
+- Rows are ordered by time, then by the event's position.
+
+**Measured on SkillCorner match 1886347** (raw feed: 735 passes, 487 carries, 215 lost balls, 98 set pieces, 23 shots, 15 fouls won). Schema 2.1 gives 4,348 rows (before, 9,296, of which 7,223 were `off_ball_run`): 735 completed and 167 lost passes (before 155: twelve unscored failed passes were missing), 48 turnovers, all dispossessions (before none), 487 carries, 23 shots (before none), 98 set pieces, 15 fouls won and 2,775 runs, one per P6 run of both teams in and out of possession. The 7,223 movement values sit in their own table. 96% of rows carry an estimated role; the rest are players P2 gave no main role. Of 526 episodes, 14 contain a shot, against 19 with the chain-level `led_to_shot`; 9 of the 23 shots fall outside any episode (P8 cuts episodes within possessions, and a shot from a set piece may not open one), which is a question for P8, not fixed here.
+
+**Found on the way.** The match page payload's "Passes that lost the ball" group filtered on the Gain score, which lost passes have not carried since schema 1.9, so it was always empty. It now lists every lost pass (payload 1.2).
+
+**Not done here.** The score difference on SkillCorner (its match file gives only the final score, so `score_diff` stays null) and a validated shot-quality measure. The UI prototype still expects `off_ball_run` in its sample payload.

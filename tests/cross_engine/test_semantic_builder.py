@@ -28,7 +28,7 @@ def built():
 def test_schema_columns_and_versions(built):
     _, _, sem = built
     assert list(sem.columns) == list(SEMANTIC_COLUMNS)
-    assert sem["schema_version"].eq("2.0").all()  # ... 1.8 teams; 1.9 review fixes; 2.0 opaque ids
+    assert sem["schema_version"].eq("2.1").all()  # ... 1.8 teams; 1.9 review fixes; 2.0 opaque ids; 2.1 shots, turnovers, runs
     assert sem["engine_version"].str.startswith("plaiq-").all()
     assert sem["match_id"].nunique() == 1 and sem["match_id"].str.fullmatch(r"m1_[0-9a-f]{12}").all()
     assert sem["event_id"].is_unique
@@ -158,6 +158,15 @@ def test_context_columns_and_states_from_every_package(built):
     assert set(sem["state_id"].dropna()) <= set(st["state_id"])
     for frame in (sem, st):  # schema 2.0: no provider id in any value of either AI table
         assert not any(b.provider_match_id in str(v) for v in frame.to_numpy().ravel())
+    # Schema 2.1: one row per P6 run, typed; roles from P2 where no roster; movement values in their own table.
+    p6 = ctx.outputs["p6"].segments["runs"]
+    runs = sem.loc[sem["action_type"] == "run"]
+    assert len(runs) == len(p6) and runs["event_idx"].isna().all() and runs["event_id"].is_unique
+    assert runs["run_type"].notna().all() or not len(runs)
+    assert "off_ball_run" not in set(sem["action_type"])
+    mv = b.movement_values()
+    assert len(mv) and set(mv["source_event_id"]) <= set(sem["event_id"]) and mv["event_id"].is_unique
+    assert {"shots", "ended_in_shot"} <= set(st.columns) and st["shots"].eq(0).all() and not st["ended_in_shot"].any()
     # Schema 1.9 (review AI-10): an episode's end ids are semantic events inside it, so each resolves.
     from plaiq_engine.citations import resolve_event_citation
 
@@ -423,7 +432,7 @@ def test_nested_record_carries_every_column(built):
 
     flat = set(leaves(rec))
     nested_names = {k.rsplit(".", 1)[-1] for k in flat}
-    aliases = {"actor_player_ref": "player_ref", "actor_role": "role", "action_type": "type", "action_outcome": "outcome",
+    aliases = {"actor_player_ref": "player_ref", "actor_role": "role", "actor_role_source": "role_source", "action_detail": "detail", "action_type": "type", "action_outcome": "outcome",
                "actor_team": "team", "actor_team_key": "team_key", "parity_spatial": "spatial_intelligence",
                "parity_physiological": "physiological_context", "pass_completion_probability": "probability",
                "pass_completion_status": "status", "pass_completion_parameters": "parameters",
@@ -433,3 +442,70 @@ def test_nested_record_carries_every_column(built):
     excluded = {"event_idx"}  # the loader's row position: internal, not for the AI
     missing = [c for c in SEMANTIC_COLUMNS if c not in excluded and c not in nested_names and aliases.get(c) not in nested_names]
     assert not missing, missing
+
+
+def test_shots_turnovers_set_pieces_fouls_and_cards_get_rows():
+    """Schema 2.1 (review AI-06): every shot, every lost ball and the context rows; the end of a half is not a turnover."""
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    base = ev.iloc[5].to_dict()  # the away recovery at frame 230
+    extra = [
+        {**base, "Type": "SHOT", "Subtype": "HEAD-ON TARGET-GOAL", "Team": "Away", "From": "Player 9", "Start Frame": 240, "End Frame": 240},
+        {**base, "Type": "BALL LOST", "Subtype": "THEFT", "Team": "Home", "From": "Player 6", "Start Frame": 150, "End Frame": 150},
+        {**base, "Type": "BALL LOST", "Subtype": "END HALF", "Team": "Home", "From": "Player 2", "Start Frame": 249, "End Frame": 249},
+        {**base, "Type": "FAULT RECEIVED", "Subtype": np.nan, "Team": "Home", "From": "Player 4", "Start Frame": 100, "End Frame": 100},
+        {**base, "Type": "CARD", "Subtype": "YELLOW", "Team": "Away", "From": "Player 7", "Start Frame": 101, "End Frame": 101},
+    ]
+    ev = pd.concat([ev, pd.DataFrame(extra)], ignore_index=True)
+    sem = SemanticBuilder(MatchAnalysis(replace(m, events=ev)), _parity(), teams=TeamRegistry.for_reference()).semantic_events()
+    by = sem.set_index("action_type")
+    shot = sem.loc[sem["action_type"] == "shot"].iloc[0]
+    assert shot["action_outcome"] == "goal" and shot["action_detail"] == "head" and shot["actor_player_ref"] == "away_9"
+    assert shot["dq_score"] is None or pd.isna(shot["dq_score"])  # no decision or shot-quality score on a shot
+    t = sem.loc[sem["action_type"] == "turnover"]
+    assert len(t) == 1 and t["action_detail"].iloc[0] == "dispossessed" and t["actor_player_ref"].iloc[0] == "home_6"
+    sp = sem.loc[sem["action_type"] == "set_piece"]
+    assert len(sp) == 1 and sp["action_detail"].iloc[0] == "throw_in"
+    assert sem.loc[sem["action_type"] == "card", "action_detail"].tolist() == ["yellow"]
+    assert sem.loc[sem["action_type"] == "foul_won", "actor_player_ref"].tolist() == ["home_4"]
+    assert "home_2" not in set(sem.loc[sem["action_type"] == "turnover", "actor_player_ref"])  # END HALF: no row
+    assert sem["timestamp_s"].is_monotonic_increasing and len(by)
+
+
+def test_every_failed_pass_gets_a_row_scored_or_not():
+    """Schema 2.1: a failed pass no model scores (here a goalkeeper's) still gets a lost-pass row (before, it vanished)."""
+    from dataclasses import replace
+
+    m = synthetic_match()
+    ev = m.events.copy()
+    ev.loc[4, "Type"] = "BALL LOST"  # the goalkeeper's pass, which no model scores
+    sem = SemanticBuilder(MatchAnalysis(replace(m, events=ev)), _parity(), teams=TeamRegistry.for_reference()).semantic_events()
+    row = sem.loc[sem["event_idx"] == 4]
+    assert len(row) == 1 and row["action_type"].iloc[0] == "pass" and row["action_outcome"].iloc[0] == "lost"
+    assert row["dq_band"].iloc[0] == "not_scored"
+
+
+def test_runs_and_estimated_roles_from_the_context():
+    """Schema 2.1: P6's runs become one row each, and P2's main role fills actor_role where no roster gives one."""
+    from types import SimpleNamespace
+
+    m = synthetic_match()
+    frames = pd.DataFrame({"match_id": "synthetic_1", "frame_ts": np.arange(0, 10, 0.2), "native_frame": np.arange(1, 251, 5)})
+    runs = pd.DataFrame([{"team": "home", "player_id": "home_9", "period": 1, "start_ts": 2.0, "end_ts": 3.4, "duration_s": 1.4,
+                          "in_possession": True, "type": "run_in_behind", "area_end": "in_behind"},
+                         {"team": "away", "player_id": "away_4", "period": 1, "start_ts": 6.0, "end_ts": 7.0, "duration_s": 1.0,
+                          "in_possession": False, "type": "recovery_run", "area_end": None}])
+    roles = pd.DataFrame([{"team": "home", "player_id": "home_9", "role": "ST", "state": "out", "role_s": 300.0, "share": 0.9},
+                          {"team": "home", "player_id": "home_4", "role": "CM", "state": "out", "role_s": 300.0, "share": 0.9}])
+    ctx = SimpleNamespace(frames=frames, outputs={"p2": SimpleNamespace(segments={"main_roles": roles}),
+                                                  "p6": SimpleNamespace(segments={"runs": runs})}, thresholds_version="x")
+    sem = SemanticBuilder(MatchAnalysis(m), _parity(), teams=TeamRegistry.for_reference(), context=ctx,
+                          roles={"home_4": "Captain's role"}).semantic_events()
+    r = sem.loc[sem["action_type"] == "run"].set_index("actor_player_ref")
+    assert set(r.index) == {"home_9", "away_4"} and r.at["home_9", "run_type"] == "run_in_behind" and r.at["home_9", "run_area"] == "in_behind"
+    assert r.at["home_9", "timestamp_s"] == pytest.approx(2.0, abs=0.05) and r["event_idx"].isna().all()
+    assert r.at["home_9", "actor_role"] == "ST" and r.at["home_9", "actor_role_source"] == "estimated"
+    h4 = sem.loc[sem["actor_player_ref"] == "home_4"].iloc[0]
+    assert h4["actor_role"] == "Captain's role" and h4["actor_role_source"] == "roster"  # the roster wins

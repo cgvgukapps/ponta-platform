@@ -1,8 +1,9 @@
 """
 semantic_builder.py — compile a match into semantic football events.
 
-One row per pass, carry, off-ball run and defensive action, written to
-``semantic_events.parquet``. This is the only thing the AI layer reads for evidence
+One row per pass, carry, shot, turnover, defensive action, run (P6) and set piece, foul won
+or card, written to ``semantic_events.parquet`` (schema 2.1). Plaiq's per-event movement values for
+team-mates are a table of their own (``movement_values.parquet``). This is the only thing the AI layer reads for evidence
 (``ponta-blueprint/ai-layer.md``, "The semantic football event"). It also writes
 ``trajectories.parquet`` for the replay, which the AI layer never reads.
 
@@ -83,7 +84,17 @@ from plaiq_engine.teams import PseudonymError, TeamRegistry
 #: ``possession_chain_id`` are built on the match key. Player refs must be shirt numbers (a name fails the build).
 #: ``nested_record`` gains a ``team`` block. The provider's ids sit in ``provenance()`` (``event_provenance.parquet``),
 #: which is not AI-facing.
-SCHEMA_VERSION = "2.0"
+#: 2.1 (27 November 2026, review backlog B: AI-06, AI-07): rows the AI needed and did not have. **Shots** (``shot``; outcome
+#: goal, saved, blocked or off target where the feed says, ``action_detail`` ``head`` for headers; no shot-quality claim),
+#: **turnovers** (``turnover``, every lost ball that is not a failed pass: ``action_detail`` dispossessed, clearance or
+#: offside), **every failed pass** (before, only those a model scored), **set pieces** (``set_piece``, the kind in
+#: ``action_detail``), **fouls won** (``foul_won``) and **cards** (``card``, yellow or red), and **P6's runs** (``run``, one
+#: row per run with ``run_type`` and ``run_area``, FIFA's in front, in between or in behind). The ``off_ball_run`` rows
+#: (one per team-mate the engine rewarded at each event, about 8 times P6's runs) leave this table for
+#: ``movement_values()``. ``actor_role`` falls back to P2's main role, with ``actor_role_source`` (roster or estimated).
+#: New columns: ``action_detail``, ``actor_role_source``, ``run_type``, ``run_area``; ``semantic_states`` gains ``shots`` and
+#: ``ended_in_shot`` (a shot inside this episode, unlike the chain-level ``led_to_shot``).
+SCHEMA_VERSION = "2.1"
 
 #: Why a lost pass has no version 1 score.
 LOST_PASS_REASON = "lost pass: Gain version 1 does not charge a pass for failing; see Choice and Gain version 2"
@@ -102,10 +113,22 @@ DQ_V2_LABEL = "estimated"
 BAND_CUTS: tuple[tuple[float, str], ...] = ((0.95, "full_gain"), (0.80, "most_gain"), (0.55, "partial_gain"))
 LOWEST_BAND = "low_gain"
 
-#: An off-ball run is a movement the engine rewarded: run_bonus above this.
+#: A movement value is kept for a team-mate the engine rewarded: run_bonus above this.
 RUN_BONUS_MIN = 0.0
 #: Defensive actions taken from the event feed.
 DEFENSIVE_TYPES = {"RECOVERY", "CHALLENGE"}
+#: A shot's outcome from the feed's subtype (first match wins); None where the feed gives none (SkillCorner).
+SHOT_OUTCOMES: tuple[tuple[str, str], ...] = (("GOAL", "goal"), ("SAVED", "saved"), ("BLOCKED", "blocked"),
+                                              ("WOODWORK", "off_target"), ("OFF TARGET", "off_target"))
+#: A lost ball that is not a failed pass, by the feed's subtype (first match wins). Any other lost ball is a failed pass.
+TURNOVER_DETAIL: tuple[tuple[str, str], ...] = (("THEFT", "dispossessed"), ("FORCED", "dispossessed"), ("CHALLENGE", "dispossessed"),
+                                                ("CLEARANCE", "clearance"), ("OFFSIDE", "offside"), ("REFEREE", "other"),
+                                                ("WOODWORK", "other"))
+#: Lost-ball rows that are not a team losing the ball (the end of a half).
+NOT_A_TURNOVER = ("END HALF",)
+#: Set-piece kinds (``action_detail`` of a ``set_piece`` row).
+SET_PIECE_KINDS = {"THROW IN": "throw_in", "FREE KICK": "free_kick", "CORNER KICK": "corner_kick", "GOAL KICK": "goal_kick",
+                   "KICK OFF": "kick_off", "PENALTY": "penalty"}
 #: Pitch length thirds (team frame, metres from the centre line).
 THIRD_EDGE_M = 17.5
 #: Channels across the pitch (team frame, metres from the centre line, positive = left).
@@ -124,19 +147,25 @@ MIRROR_THIRD = {"defensive": "attacking", "middle": "middle", "attacking": "defe
 TEAM_COLUMNS: tuple[str, ...] = ("actor_team_key", "opponent_team_key", "competition", "season")
 #: ``semantic_states`` (schema 1.7): P8's episode row plus the event ids at its ends and the pass decision medians.
 STATE_EXTRA_COLUMNS: tuple[str, ...] = (*STATE_COLUMNS[:STATE_COLUMNS.index("summary")], "first_event_id", "last_event_id",
-                                        "gain_median", "choice_median", "adjusted_choice_median",
+                                        "gain_median", "choice_median", "adjusted_choice_median", "shots", "ended_in_shot",
                                         "team_key", "opp_team_key", "competition", "season", "summary", "schema_version")
+
+#: ``movement_values`` (schema 2.1): Plaiq's off-ball movement value for each team-mate the engine rewarded at an event.
+MOVEMENT_COLUMNS: tuple[str, ...] = ("schema_version", "event_id", "source_event_id", "match_id", "timestamp_s", "minute_display",
+                                     "period", "player_ref", "team", "movement_value", "xt_delta", "opposition_pressure",
+                                     "state_id", "label")
 
 SEMANTIC_COLUMNS: tuple[str, ...] = (
     "schema_version", "engine_version", "event_id", "match_id", "event_idx", "timestamp_s", "minute_display", "period",
-    "actor_player_ref", "actor_team", "actor_role",
-    "action_type", "action_outcome", "target_player_ref", "inferred_intended_ref", "inference_confidence",
+    "actor_player_ref", "actor_team", "actor_role", "actor_role_source",
+    "action_type", "action_outcome", "action_detail", "target_player_ref", "inferred_intended_ref", "inference_confidence",
     "dq_score", "dq_band", "chosen_option_pov", "best_option_player_ref", "best_option_pov",
     "xt_delta", "movement_value", "opposition_pressure", "pitch_zone", "mode",
     "pass_completion_probability", "pass_completion_status", "pass_completion_parameters",
     "dq_v2_score", "dq_v2_band", "dq_v2_status", "dq_v2_best_option_ref", "dq_v2_version",
     "gain_v2_score", "gain_v2_band", "gain_v2_status", "gain_v2_version",
     "not_scored", "not_scored_reason",
+    "run_type", "run_area",
     "physiological_context",
     "ball_detected", "players_observed", "parity_spatial", "parity_physiological",
     # Context package P1 (null unless a ContextResult is given): labels, never coordinates.
@@ -149,6 +178,11 @@ SEMANTIC_COLUMNS: tuple[str, ...] = (
 
 
 _SHIRT = re.compile(r"\d{1,3}")
+
+
+def _first(table: tuple[tuple[str, str], ...], sub: str) -> str | None:
+    """The label of the first keyword found in a feed subtype."""
+    return next((label for key, label in table if key in sub), None)
 
 
 def dq_band(score: float | None) -> str | None:
@@ -237,6 +271,25 @@ class SemanticBuilder:
         self.engine_version = _engine_version()
         self.goalkeepers = self._goalkeepers()
         self._ids: dict[int, str] | None = None
+        self._est_roles = self._estimated_roles(context)
+
+    @staticmethod
+    def _estimated_roles(context) -> dict[str, str]:
+        """P2's main role per player ref (estimated), for rows the roster gives no role for (schema 2.1, review AI-06)."""
+        p2 = getattr(context, "outputs", {}).get("p2") if context is not None else None
+        mr = None if p2 is None else p2.segments.get("main_roles")
+        if mr is None or not len(mr):
+            return {}
+        return {str(r.player_id).lower(): str(r.role) for r in mr.itertuples() if isinstance(r.role, str) and r.role}
+
+    def _role(self, ref: str | None) -> tuple[str | None, str | None]:
+        if not ref:
+            return None, None
+        if ref in self.roles:
+            return self.roles[ref], "roster"
+        if ref in self._est_roles:
+            return self._est_roles[ref], "estimated"
+        return None, None
 
     def _state(self, sid):
         """P8's state id rebased on the match key (P8 builds it on the context grid's provider-form id)."""
@@ -416,7 +469,7 @@ class SemanticBuilder:
         sp = ev.loc[ev["Type"].astype(str).str.upper() == "SET PIECE", "Start Frame"]
         return {int(f) for f in sp.dropna()}
 
-    def _row_base(self, idx: int, ev: pd.Series, team: str, ref: str | None, kind: str) -> dict:
+    def _row_base(self, idx: int, ev: pd.Series, team: str, ref: str | None, kind: str, event_id: str | None = None) -> dict:
         start = ev.get("Start Frame")
         frame = int(start) if pd.notna(start) else None
         ball = self.a.away.loc[frame, "ball_x"] if frame is not None and frame in self.a.away.index else np.nan
@@ -432,15 +485,17 @@ class SemanticBuilder:
         return {
             "schema_version": SCHEMA_VERSION,
             "engine_version": self.engine_version,
-            "event_id": self._event_ids()[int(idx)] + ("" if kind != "run" else f"_run_{ref}"),
+            "event_id": event_id or self._event_ids()[int(idx)],
             "match_id": self.match_id,
-            "event_idx": idx,
+            "event_idx": None if idx < 0 else idx,
             "timestamp_s": round(t, 2),
             "minute_display": _minute(t),
             "period": int(ev["Period"]) if pd.notna(ev.get("Period")) else None,
             "actor_player_ref": ref,
             "actor_team": team.lower(),
-            "actor_role": self.roles.get(ref) if ref else None,
+            "actor_role": self._role(ref)[0],
+            "actor_role_source": self._role(ref)[1],
+            "action_detail": None, "run_type": None, "run_area": None,
             "mode": "full_tracking",
             "physiological_context": None,
             "ball_detected": bool(np.isfinite(ball)) if frame is not None else None,
@@ -462,11 +517,9 @@ class SemanticBuilder:
         ev = a.events
         pov = a.event_pov()
         pov_by_event = {k: g for k, g in pov.groupby("event_idx", sort=False)}
-        mv = a.movement_value
         pc = a.pass_completion.set_index("event_idx")
         dq2 = a.decision_quality_v2.set_index("event_idx")
         g2 = a.gain_v2.set_index("event_idx")
-        dq2_scored = set(dq2.index[dq2["dq_v2"].notna()])
         set_piece_frames = self._set_piece_frames()
         rows: list[dict] = []
 
@@ -482,8 +535,12 @@ class SemanticBuilder:
                 hit = g.loc[(g["team"].str.lower() == team) & (g["jersey"].astype(str) == actor.split("_", 1)[1])]
                 actor_pov = hit.iloc[0] if len(hit) else None
 
-            v1_failed = actor_pov is not None and pd.notna(actor_pov.get("decision_quality_failed"))
-            if etype in ("PASS", "CARRY") or (etype == "BALL LOST" and (v1_failed or idx in dq2_scored)):
+            sub = str(e.get("Subtype", "") if pd.notna(e.get("Subtype")) else "").upper()
+            turnover = _first(TURNOVER_DETAIL, sub) if etype == "BALL LOST" else None
+            if etype == "BALL LOST" and any(k in sub for k in NOT_A_TURNOVER):
+                continue
+            # Every failed pass gets a row (schema 2.1; before, only those Choice or version 1 scored, review AI-06).
+            if etype in ("PASS", "CARRY") or (etype == "BALL LOST" and turnover is None):
                 kind = "pass" if etype in ("PASS", "BALL LOST") else "carry"
                 row = self._row_base(idx, e, team, actor, kind)
                 outcome = "lost" if etype == "BALL LOST" else "completed"
@@ -577,7 +634,6 @@ class SemanticBuilder:
                 rows.append(row)
 
             elif etype in DEFENSIVE_TYPES:
-                sub = str(e.get("Subtype", "")).upper()
                 outcome = "won" if etype == "RECOVERY" or "WON" in sub else "lost" if "LOST" in sub else None
                 row = self._row_base(idx, e, team, actor, "defensive")
                 row.update({
@@ -591,32 +647,102 @@ class SemanticBuilder:
                 })
                 rows.append(row)
 
-        # Off-ball runs: movements the engine rewarded, by players other than the actor.
-        runs = mv.loc[mv["run_bonus"] > RUN_BONUS_MIN]
-        for _, r in runs.iterrows():
+            elif etype == "SHOT" or turnover is not None or etype in ("SET PIECE", "FAULT RECEIVED", "CARD"):
+                kind, outcome, detail = {
+                    "SHOT": ("shot", _first(SHOT_OUTCOMES, sub), "head" if "HEAD" in sub else None),
+                    "BALL LOST": ("turnover", "lost", turnover),
+                    "SET PIECE": ("set_piece", None, next((v for k, v in SET_PIECE_KINDS.items() if k in sub), None)),
+                    "FAULT RECEIVED": ("foul_won", None, None),
+                    "CARD": ("card", None, "red" if "RED" in sub else "yellow" if "YELLOW" in sub else None),
+                }[etype]
+                row = self._row_base(idx, e, team, actor, kind)
+                row.update({
+                    "action_type": kind, "action_outcome": outcome, "action_detail": detail,
+                    "target_player_ref": None, "inferred_intended_ref": None, "inference_confidence": None,
+                    "dq_score": None, "dq_band": None, "chosen_option_pov": None, "best_option_player_ref": None, "best_option_pov": None,
+                    "xt_delta": float(e["delta_v"]) if kind != "card" and pd.notna(e.get("delta_v")) else None, "movement_value": None,
+                    "opposition_pressure": self._pressure(e, team, actor) if kind in ("shot", "turnover") else None,
+                    "pitch_zone": pitch_zone(float(e.get("Start X", np.nan)), float(e.get("Start Y", np.nan)), team),
+                    "not_scored": False, "not_scored_reason": None,
+                })
+                rows.append(row)
+
+        rows += self._run_rows()
+        out = pd.DataFrame(rows, columns=list(SEMANTIC_COLUMNS))
+        return out.sort_values(["timestamp_s", "event_idx", "action_type", "event_id"], kind="stable",
+                               na_position="last").reset_index(drop=True)
+
+    def _run_rows(self) -> list[dict]:
+        """
+        P6's runs, one row each (schema 2.1, review AI-07): the runner, SkillCorner's run type and FIFA's area at the end
+        (in front, in between, in behind), at the run's start. Estimated, like every context field.
+        """
+        ctx = self._context
+        runs = None if ctx is None or "p6" not in getattr(ctx, "outputs", {}) else ctx.outputs["p6"].segments.get("runs")
+        if runs is None or not len(runs):
+            return []
+        f = ctx.frames.sort_values("frame_ts", kind="stable")
+        ts, native = f["frame_ts"].to_numpy(float), f["native_frame"].to_numpy()
+        clock = self.a.away.get("Time [s]", None)
+        out, seen = [], {}
+        for r in runs.sort_values(["start_ts", "team", "player_id"], kind="stable").itertuples():
+            team = str(r.team).lower()
+            jersey = str(r.player_id).split("_", 1)[-1]
+            ref = self._ref(team, jersey)
+            if ref is None:
+                continue
+            i = min(max(int(np.searchsorted(ts, float(r.start_ts), side="left")), 0), len(ts) - 1)
+            nf = int(native[i])
+            t = float(clock.get(nf, np.nan)) if clock is not None else np.nan
+            key = (int(r.period), nf, ref)
+            seq = seen.get(key, 0)
+            seen[key] = seq + 1
+            eid = "ev_" + hashlib.sha256("|".join([self.match_id, "run", *map(str, key), str(seq)]).encode()).hexdigest()[:16]
+            e = pd.Series({"Start Frame": nf, "Start Time [s]": t, "Period": int(r.period), "Start X": np.nan, "Start Y": np.nan})
+            row = self._row_base(-1, e, team, ref, "run", event_id=eid)
+            row.update({
+                "action_type": "run", "action_outcome": None, "action_detail": None,
+                "target_player_ref": None, "inferred_intended_ref": None, "inference_confidence": None,
+                "dq_score": None, "dq_band": None, "chosen_option_pov": None, "best_option_player_ref": None, "best_option_pov": None,
+                "xt_delta": None, "movement_value": None, "opposition_pressure": None, "pitch_zone": None,
+                "not_scored": False, "not_scored_reason": None,
+                "run_type": None if pd.isna(r.type) else str(r.type), "run_area": None if pd.isna(r.area_end) else str(r.area_end),
+            })
+            out.append(row)
+        return out
+
+    def movement_values(self) -> pd.DataFrame:
+        """
+        Plaiq's off-ball movement value for each team-mate the engine rewarded at an event (schema 2.1): the rows that were
+        ``off_ball_run`` in the event table, which counted about 8 times P6's runs under a name that said runs (review AI-07).
+        ``event_id`` is the source event's id plus the player; ``source_event_id`` resolves in ``semantic_events``.
+        """
+        ev, mv = self.a.events, self.a.movement_value
+        ids = self._event_ids()
+        rows = []
+        for _, r in mv.loc[mv["run_bonus"] > RUN_BONUS_MIN].iterrows():
             idx = int(r["event_idx"])
             if idx not in ev.index:
                 continue
             e = ev.loc[idx]
             team = str(r["team"]).lower()
             ref = self._ref(team, r["jersey"])
-            if ref is None or ref == self._ref(str(e.get("Team", "")), e.get("From")):
+            if ref is None or ref == self._ref(str(e.get("Team", "")).lower(), e.get("From")):
                 continue
-            row = self._row_base(idx, e, team, ref, "run")
-            row.update({
-                "action_type": "off_ball_run", "action_outcome": None,
-                "target_player_ref": None, "inferred_intended_ref": None, "inference_confidence": None,
-                "dq_score": None, "dq_band": None, "chosen_option_pov": None, "best_option_player_ref": None, "best_option_pov": None,
-                "xt_delta": float(r["delta_xT_run"]) if pd.notna(r["delta_xT_run"]) else None,
+            t = float(e.get("Start Time [s]", np.nan))
+            start = e.get("Start Frame")
+            rows.append({
+                "schema_version": SCHEMA_VERSION, "event_id": f"{ids[idx]}_mv_{ref}", "source_event_id": ids[idx],
+                "match_id": self.match_id, "timestamp_s": round(t, 2), "minute_display": _minute(t),
+                "period": int(e["Period"]) if pd.notna(e.get("Period")) else None, "player_ref": ref, "team": team,
                 "movement_value": float(r["movement_value"]) if pd.notna(r["movement_value"]) else None,
+                "xt_delta": float(r["delta_xT_run"]) if pd.notna(r["delta_xT_run"]) else None,
                 "opposition_pressure": float(r["pressure"]) if pd.notna(r["pressure"]) else None,
-                "pitch_zone": None,
-                "not_scored": False, "not_scored_reason": None,
+                "state_id": self._context_fields_17(idx, int(start) if pd.notna(start) else None, team)["state_id"],
+                "label": "estimated",
             })
-            rows.append(row)
-
-        out = pd.DataFrame(rows, columns=list(SEMANTIC_COLUMNS))
-        return out.sort_values(["event_idx", "action_type", "event_id"], kind="stable").reset_index(drop=True)
+        out = pd.DataFrame(rows, columns=list(MOVEMENT_COLUMNS))
+        return out.sort_values(["timestamp_s", "event_id"], kind="stable").reset_index(drop=True)
 
     def _pressure(self, e: pd.Series, team: str, ref: str | None) -> float | None:
         """Pressure on the actor at the start frame, on the engine's 1 to 10 scale."""
@@ -702,6 +828,9 @@ class SemanticBuilder:
         for col, src in (("gain_median", "dq_score"), ("choice_median", "dq_v2_score"), ("adjusted_choice_median", "adjusted_choice")):
             st[col] = [None if (g := by_state.get(sid)) is None or g[src].dropna().empty else round(float(g[src].dropna().astype(float).median()), 3)
                        for sid in st["state_id"]]
+        shots = ev.loc[(ev["action_type"] == "shot") & ev["state_id"].notna()].groupby("state_id").size()
+        st["shots"] = st["state_id"].map(shots).fillna(0).astype(int)
+        st["ended_in_shot"] = st["shots"] > 0  # a shot inside this episode (schema 2.1), unlike the chain's led_to_shot
         st["team_key"] = st["team"].map(self.team_keys)
         st["opp_team_key"] = st["team"].map({"home": self.team_keys.get("away"), "away": self.team_keys.get("home")})
         st["competition"], st["season"] = self.competition, self.season
@@ -721,6 +850,8 @@ class SemanticBuilder:
         events.to_parquet(paths["semantic_events"], index=False)
         self.trajectories().to_parquet(paths["trajectories"], index=False)
         self.provenance().to_parquet(paths["event_provenance"], index=False)
+        paths["movement_values"] = out / "movement_values.parquet"
+        self.movement_values().to_parquet(paths["movement_values"], index=False)
         states = self.semantic_states(events)
         if len(states):
             paths["semantic_states"] = out / "semantic_states.parquet"
@@ -738,11 +869,12 @@ def nested_record(row: dict) -> dict:
         "timestamp_s": row["timestamp_s"],
         "minute_display": row["minute_display"],
         "period": row["period"],
-        "actor": {"player_ref": row["actor_player_ref"], "role": row["actor_role"]},
+        "actor": {"player_ref": row["actor_player_ref"], "role": row["actor_role"], "role_source": row.get("actor_role_source")},
         "team": {"team": row.get("actor_team"), "team_key": row.get("actor_team_key"),  # schema 2.0 (review SE-15)
                  "opponent_team_key": row.get("opponent_team_key"), "competition": row.get("competition"), "season": row.get("season")},
         "action": {
-            "type": row["action_type"], "outcome": row["action_outcome"], "target_player_ref": row["target_player_ref"],
+            "type": row["action_type"], "outcome": row["action_outcome"], "detail": row.get("action_detail"),
+            "run_type": row.get("run_type"), "run_area": row.get("run_area"), "target_player_ref": row["target_player_ref"],
             "inferred_intended_ref": row["inferred_intended_ref"], "inference_confidence": row["inference_confidence"],
         },
         "spatial_intelligence": {
