@@ -131,6 +131,8 @@ class ParityInputs:
         The same share within ``NEAR_BALL_M`` of the ball.
     ball_at_events_share : float or None
         Share of passes and carries whose start frame has a ball position (schema 1.2); None without events.
+    ingest : dict or None
+        The adapter's ``IngestReport`` (schema 1.2): rows dropped by reason, fallbacks, orientation per period.
     physiological_channels : tuple of str
         Heart rate, IMU and similar channels present. None are ingested today.
     fusion_tier : int
@@ -152,6 +154,7 @@ class ParityInputs:
     physiological_channels: tuple[str, ...] = ()
     fusion_tier: int = 1
     ball_at_events_share: float | None = None
+    ingest: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -446,6 +449,9 @@ def classify(inputs: ParityInputs) -> AnalyticsParityReport:
         # Present only when the provider flags estimated positions (schema 1.1).
         **({"observed_position_share": inputs.observed_share,
             "observed_near_ball_share": inputs.observed_near_ball_share} if inputs.observed_share is not None else {}),
+        # Schema 1.2: the ball at passes and carries, and what the adapter dropped and assumed (review DE-04, DE-12).
+        **({"ball_at_events_share": inputs.ball_at_events_share} if inputs.ball_at_events_share is not None else {}),
+        **({"ingest": inputs.ingest} if inputs.ingest else {}),
     }
     return AnalyticsParityReport(
         provider=inputs.provider,
@@ -540,6 +546,7 @@ def inputs_from_match(
         physiological_channels=physiological_channels,
         fusion_tier=fusion_tier,
         ball_at_events_share=None if (b := ball_at_events_share(match)) is None else round(b, 4),
+        ingest=ing.to_dict() if (ing := getattr(match, "ingest", None)) is not None else None,
     )
 
 

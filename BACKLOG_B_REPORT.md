@@ -126,3 +126,21 @@
 **Checked.** On the context goldens only `clock_s` changes, and only on SkillCorner match 1886347; every other field and the three Metrica games are unchanged (recaptured). The full suite passes.
 
 **Not done here.** One shared SkillCorner reader for the Matrix provider and the loader (they now agree on the clock and on dropping null periods, but remain two code paths), a separate football-clock column for display, and `period` as a required schema column.
+
+### 6d. What a load dropped and assumed (DE-12)
+
+**The gap.** The adapters drop records with no period, skip events with no frame, set unreadable timestamps to 0.0 and read or assume each period's direction, and none of it was counted. A worker could not tell a club what its upload lost.
+
+**What changed.** `matrix_engine.ingest.IngestReport` lists rows read, rows dropped by reason, fallbacks used and where each period's direction came from. The SkillCorner loader fills it at each of its drop points (records without a period, missing or unreadable timestamps, events without a frame or period, events with no mapped type, players without a shirt number) and attaches it as `match.ingest`. The Data check carries it in its coverage, beside the ball-at-passes share. On match 1886347 it reports 59,061 tracking records read, 19 without a period dropped, one event with no mapped type, and both periods' directions from the match file.
+
+**Not done here.** The Metrica, PFF and German league readers do not report yet, and no state changes on a count: a threshold waits for measurements of what real uploads drop. The worker's error taxonomy (input invalid, provider quirk, engine failure) belongs with the worker.
+
+### 6e. Pinned Parquet schemas and a manifest (DE-08)
+
+**The gap.** pandas inferred each file's types from its rows. On one SkillCorner match `actor_role`, `score_diff` and `physiological_context` were Arrow `null`, while counts were `int64` in one file and `double` in another. A DuckDB query over many matches would need `union_by_name` and casts, or fail. Nothing tested the files with the engine that will read them, and DuckDB was not installed.
+
+**What changed.** `plaiq_engine/parquet_schemas.py` pins one Arrow schema per table: `semantic_events`, `semantic_states`, `movement_values` and `event_provenance`. Integers are nullable `int64`, measures `double`, flags `bool` and everything else `string`. The types were inferred from Metrica game 1 and SkillCorner match 1886347 with full context, then fixed by hand. Counts the context packages can return as fractions are `double` everywhere. A fraction in an integer column fails the write.
+
+`SemanticBuilder.write` writes through the schemas and adds `manifest.json`, which lists every file with its rows and SHA-256 hash, plus the match key, schema version, engine version and field dictionary version. Trajectories are written in about eight row groups for the replay's range reads. DuckDB 2.0.0 is pinned as a development dependency (2.0.1 was a week old).
+
+**Checked.** Two matches' files read together in DuckDB without `union_by_name` (`tests/cross_engine/test_parquet_schemas.py`), and each manifest hash matches its file.

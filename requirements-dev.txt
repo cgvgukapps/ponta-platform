@@ -3,3 +3,7 @@
 # Dev and test, pinned as in PONTA-PROTOTYPE.
 pytest==9.1.1
 ruff==0.16.1
+
+# DuckDB: the planned query engine over the Parquet tables. Used by the test that reads several matches' files
+# together (review DE-08, 27 November 2026). 2.0.0 (released 21 October 2026; 2.0.1 was a week old when pinned).
+duckdb==2.0.0

@@ -19,6 +19,7 @@ prototype did after preprocessing.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from dataclasses import dataclass, field
 
@@ -99,6 +100,9 @@ class NormalisedMatch:
     #: Set by the adapter (review DE-04, 27 November 2026): the events were inferred from tracking, not logged. None on
     #: matches built before the flag existed; the Data check then falls back to the provider (SkillCorner's are).
     events_derived_from_tracking: bool | None = None
+    #: What the adapter read, dropped and assumed (``matrix_engine.ingest.IngestReport``; review DE-12). None where the
+    #: adapter does not report yet.
+    ingest: object | None = None
 
     @property
     def n_frames(self) -> int:
@@ -187,9 +191,9 @@ def load_skillcorner_match(match_dir: str, match_id: int, *, prototype_inputs: b
 
     Same step as the prototype's ``preprocess._preprocess_skillcorner``:
     ``SkillCornerAdapter.load``, which normalises the playing direction and maps
-    the dynamic events onto tracking frames. The vendor's per-period clock is
-    kept as ``time_s``; the Matrix provider's continuous rebased clock is a
-    reconciliation concern and is not applied here.
+    the dynamic events onto tracking frames. ``time_s`` is elapsed match time (review DE-09, 27 November 2026: the
+    vendor's clock restarts the second half at 45:00, which put every second-half event 78.1 s after its frame on
+    match 1886347); ``match.ingest`` says what the load dropped and assumed (review DE-12).
 
     Two corrections depart from the prototype's inputs (review backlog A, 25 November 2026): records with no period
     (pre-match, half-time, post-match) are dropped, and SkillCorner's recorded stoppages become SET PIECE rows.
@@ -200,6 +204,7 @@ def load_skillcorner_match(match_dir: str, match_id: int, *, prototype_inputs: b
     m = from_wide_frames(
         home, away, events, provider="skillcorner", match_id=str(match_id), fps=SC_FPS, pitch=pitch,
     )
+    m = dataclasses.replace(m, ingest=meta.get("ingest"))
     m = with_observed(m, meta.get("estimated_positions"))
     return with_skillcorner_metadata(m, match_dir, match_id)
 

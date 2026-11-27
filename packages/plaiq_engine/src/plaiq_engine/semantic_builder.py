@@ -158,6 +158,10 @@ MOVEMENT_COLUMNS: tuple[str, ...] = ("schema_version", "event_id", "source_event
                                      "period", "player_ref", "team", "movement_value", "xt_delta", "opposition_pressure",
                                      "state_id", "label")
 
+#: ``event_provenance`` (schema 2.0): the provider's ids behind each event; not AI-facing.
+PROVENANCE_COLUMNS: tuple[str, ...] = ("event_id", "event_idx", "match_id", "provider", "provider_match_id", "provider_event_id",
+                                       "schema_version")
+
 SEMANTIC_COLUMNS: tuple[str, ...] = (
     "schema_version", "engine_version", "event_id", "match_id", "event_idx", "timestamp_s", "minute_display", "period",
     "actor_player_ref", "actor_team", "actor_role", "actor_role_source",
@@ -860,25 +864,32 @@ class SemanticBuilder:
 
     def write(self, out_dir: str | Path) -> dict[str, Path]:
         """
-        Write ``semantic_events.parquet``, ``trajectories.parquet``, ``event_provenance.parquet`` (not AI-facing) and, with
-        P8's context, ``semantic_states.parquet``.
+        Write ``semantic_events.parquet``, ``trajectories.parquet``, ``movement_values.parquet``, ``event_provenance.parquet``
+        (not AI-facing) and, with P8's context, ``semantic_states.parquet``, each AI table through its pinned Arrow schema
+        (``parquet_schemas``, review DE-08), and ``manifest.json``: every file, its rows and hash, and the versions.
         """
+        from plaiq_engine.field_dictionary import DICTIONARY_VERSION
+        from plaiq_engine.parquet_schemas import write_manifest, write_table
+
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         paths = {"semantic_events": out / "semantic_events.parquet", "trajectories": out / "trajectories.parquet",
-                 "event_provenance": out / "event_provenance.parquet"}
+                 "event_provenance": out / "event_provenance.parquet", "movement_values": out / "movement_values.parquet"}
         events = self.semantic_events()
-        events.to_parquet(paths["semantic_events"], index=False)
-        self.trajectories().to_parquet(paths["trajectories"], index=False)
-        self.provenance().to_parquet(paths["event_provenance"], index=False)
-        paths["movement_values"] = out / "movement_values.parquet"
-        self.movement_values().to_parquet(paths["movement_values"], index=False)
+        entries = {"semantic_events": write_table(events, "semantic_events", paths["semantic_events"]),
+                   "event_provenance": write_table(self.provenance()[list(PROVENANCE_COLUMNS)], "event_provenance",
+                                                   paths["event_provenance"]),
+                   "movement_values": write_table(self.movement_values(), "movement_values", paths["movement_values"])}
+        tr = self.trajectories()
+        tr.to_parquet(paths["trajectories"], index=False, row_group_size=max(1, len(tr) // 8) if len(tr) else None)
+        entries["trajectories"] = {"file": paths["trajectories"].name, "rows": int(len(tr))}
         states = self.semantic_states(events)
         if len(states):
             paths["semantic_states"] = out / "semantic_states.parquet"
-            states.to_parquet(paths["semantic_states"], index=False)
+            entries["semantic_states"] = write_table(states, "semantic_states", paths["semantic_states"])
+        paths["manifest"] = write_manifest(out, entries, match_id=self.match_id, schema_version=SCHEMA_VERSION,
+                                           engine_version=self.engine_version, field_dictionary=DICTIONARY_VERSION)
         return paths
-
 
 def nested_record(row: dict) -> dict:
     """One flat semantic-event row in the nested JSON shape of ``ai-layer.md``."""

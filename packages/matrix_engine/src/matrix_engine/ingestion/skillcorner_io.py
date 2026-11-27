@@ -331,6 +331,7 @@ def tracking_to_wide(
     *,
     h1_home_sign: int = 1,
     period_signs: dict[int, int] | None = None,
+    stats: dict | None = None,
     normalize_direction: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -380,6 +381,8 @@ def tracking_to_wide(
         ts = rec.get("timestamp", 0.0)
         if ts is None:
             time_s = 0.0
+            if stats is not None:
+                stats["tracking_timestamp_missing"] = stats.get("tracking_timestamp_missing", 0) + 1
         else:
             try:
                 time_s = float(ts)
@@ -396,6 +399,8 @@ def tracking_to_wide(
                         time_s = float(parts[0])
                 except Exception:
                     time_s = 0.0
+                    if stats is not None:
+                        stats["tracking_timestamp_unparsable"] = stats.get("tracking_timestamp_unparsable", 0) + 1
 
         # Sign for this period: the per-period list where the match file gives one (review DE-06), else period 1 uses
         # h1_home_sign and every later period the opposite (the old rule, wrong for the second half of extra time).
@@ -528,6 +533,7 @@ def load_skillcorner_events(
     normalize_direction: bool = True,
     player_id_to_jersey: dict | None = None,
     restarts: bool = True,
+    stats: dict | None = None,
 ) -> pd.DataFrame:
     """
     Map SkillCorner dynamic_events.csv to a PLAIQ events DataFrame.
@@ -652,6 +658,8 @@ def load_skillcorner_events(
         period_id   = _int_or_none(row.get(period_col))
 
         if start_frame is None or period_id is None:
+            if stats is not None:
+                stats["events_without_frame_or_period"] = stats.get("events_without_frame_or_period", 0) + 1
             continue
         if end_frame is None:
             end_frame = start_frame
@@ -757,6 +765,8 @@ def load_skillcorner_events(
             # ----------------------------------------------------------------
             plaiq_type, subtype = _map_sc_event(end_type, start_type, pass_outcome)
             if plaiq_type is None:
+                if stats is not None:
+                    stats["events_with_no_mapped_type"] = stats.get("events_with_no_mapped_type", 0) + 1
                 continue
 
             sx, sy = _apply_team_rotation(sx_raw, sy_raw, team)
@@ -965,7 +975,13 @@ class SkillCornerAdapter:
         # they were labelled period 1 with clock 0, which stretched period 1 over the
         # break and shifted every event time (review finding DE-01, 25 November 2026).
         # The Matrix provider path already drops them (providers/skillcorner.py).
-        records = [r for r in self.load_tracking_raw() if self.prototype_inputs or r.get("period") is not None]
+        from matrix_engine.ingest import IngestReport
+
+        raw = self.load_tracking_raw()
+        records = [r for r in raw if self.prototype_inputs or r.get("period") is not None]
+        report = IngestReport(provider="skillcorner", rows_read={"tracking_records": len(raw)})
+        report.count("tracking_records_without_period", len(raw) - len(records))
+        stats: dict = {}
 
         h1_sign = meta["h1_home_sign"] if self.normalize else 1
 
@@ -976,7 +992,13 @@ class SkillCornerAdapter:
             h1_home_sign=h1_sign,
             period_signs=meta.get("period_home_signs") if self.normalize else None,
             normalize_direction=self.normalize,
+            stats=stats,
         )
+        signs = meta.get("period_home_signs") or {}
+        for p in sorted(int(x) for x in pd.unique(home_df["Period"].dropna())) if len(home_df) else []:
+            report.orientation[p] = "match file (home_team_side)" if p in signs else "assumed: ends changed at every break"
+        unknown_shirts = sum(1 for p in meta["home_players"] + meta["away_players"] if p["shirt"] == "?")
+        report.count("players_without_shirt_number", unknown_shirts)
 
         # Elapsed match time (review DE-09, 27 November 2026): SkillCorner's timestamps restart the second half at 45:00,
         # so its tracking clock overlapped the first half's stoppage time and every second-half event (timed from frame
@@ -1016,7 +1038,13 @@ class SkillCornerAdapter:
             normalize_direction=self.normalize,
             player_id_to_jersey=pid_to_jersey,
             restarts=not self.prototype_inputs,
+            stats=stats,
         )
+        for reason, n in sorted(stats.items()):
+            report.count(reason, n)
+        if stats.get("tracking_timestamp_unparsable") or stats.get("tracking_timestamp_missing"):
+            report.fallbacks.append("tracking timestamps that could not be read were set to 0.0")
+        meta["ingest"] = report
 
         # Add pitch config to meta for downstream consumers
         meta["pitch"] = pitch_config_from_sc_meta(meta)
